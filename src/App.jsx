@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 
 var API = ''
-var ZOHO_ORG = 'https://crm.zoho.com/crm/org6aborc8aa540df51/tab'
+var ZOHO_ORG = 'https://crm.zoho.com/crm/org873082811/tab'
 var c = {
   bg:'#0c0e14',sf:'#151821',sf2:'#1c2029',sf3:'#242936',
   bd:'#2a2f3d',tx:'#e2e4ed',mu:'#858999',dm:'#555a6e',
@@ -26,7 +26,7 @@ function fmtF(d){if(!d)return'—';var t=new Date(d),m=['Jan','Feb','Mar','Apr',
 function fmtDT(d){if(!d)return'—';var t=new Date(d),m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],h=t.getHours(),mn=t.getMinutes();return t.getDate()+' '+m[t.getMonth()]+' '+(h<10?'0':'')+h+':'+(mn<10?'0':'')+mn}
 function $(a,cu){if(!a)return'—';var n=parseFloat(a);if(isNaN(n))return a;return(cu||'')+' '+n.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}
 
-function zohoBookingUrl(id){return ZOHO_ORG+'/CustomModule1/'+id}
+function zohoBookingUrl(id){return ZOHO_ORG+'/CustomModule6/'+id}
 function zohoTourUrl(id){return ZOHO_ORG+'/CustomModule3/'+id}
 
 function Badge({status}){var s=gs(status);return React.createElement('span',{style:{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,background:s.bg,color:s.fg,fontFamily:mf,whiteSpace:'nowrap'}},s.i+' '+(status||'—'))}
