@@ -27,7 +27,7 @@ function fmtDT(d){if(!d)return'—';var t=new Date(d),m=['Jan','Feb','Mar','Apr'
 function $(a,cu){if(!a)return'—';var n=parseFloat(a);if(isNaN(n))return a;return(cu||'')+' '+n.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}
 
 function zohoBookingUrl(id){return ZOHO_ORG+'/CustomModule6/'+id}
-function zohoTourUrl(id){return ZOHO_ORG+'/CustomModule3/'+id}
+function zohoTourUrl(id){return ZOHO_ORG+'/CustomModule2/'+id}
 
 function Badge({status}){var s=gs(status);return React.createElement('span',{style:{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,background:s.bg,color:s.fg,fontFamily:mf,whiteSpace:'nowrap'}},s.i+' '+(status||'—'))}
 function Dot({status}){var map={'Available':c.gn,'Confirmed':c.gn,'Provisional':c.yl,'Checking':c.or,'Unavailable':c.rd,'Full':c.rd,'Deposit Paid':c.gn,'Paid in Full':c.gn,'Enquiry Sent':c.or,'Pending':c.yl};return React.createElement('div',{title:status||'?',style:{width:10,height:10,borderRadius:'50%',background:map[status]||c.dm,boxShadow:'0 0 6px '+(map[status]||c.dm)+'60',flexShrink:0}})}
