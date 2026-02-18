@@ -1,6 +1,6 @@
-var zoho = require('./_zoho');
+import { zohoApi } from './_zoho.js';
 
-module.exports = async function(req, res) {
+export default async function(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -10,8 +10,7 @@ module.exports = async function(req, res) {
   if (!tourId) return res.status(400).json({ error: 'tourId required' });
 
   try {
-    // Fetch tour record for crew info
-    var tourResult = await zoho.zohoApi('GET',
+    var tourResult = await zohoApi('GET',
       'Tours/' + tourId +
       '?fields=Tour_Name,Name,Departure_Date,End_Date,Status,' +
       'Lead_Guide1,Guide_2,Driver,Bike_Retrieve_Driver_1,Bike_Retrieve_Driver_2,' +
@@ -21,7 +20,6 @@ module.exports = async function(req, res) {
     );
     var tour = (tourResult.data || [])[0] || {};
 
-    // Fetch guest bookings for this tour
     var guestFields = [
       'First_Name','Last_Name','Email','Phone_1','Nationality1',
       'Dietary_Requirements','Medical_Conditions_Allergies',
@@ -39,7 +37,7 @@ module.exports = async function(req, res) {
 
     var guests = [];
     try {
-      var guestResult = await zoho.zohoApi('GET',
+      var guestResult = await zohoApi('GET',
         'Bookings?fields=' + guestFields +
         '&criteria=(Tour.id:equals:' + tourId + ')' +
         '&per_page=50'
@@ -81,13 +79,11 @@ module.exports = async function(req, res) {
         };
       });
     } catch(e) {
-      // No guests found — not an error
       if (e.message && e.message.indexOf('204') === -1) {
         console.error('Guest fetch error:', e.message);
       }
     }
 
-    // Build crew array from tour fields
     var crew = [];
     if (tour.Lead_Guide1) crew.push({ name: tour.Lead_Guide1, role: 'Lead Guide' });
     if (tour.Guide_2) crew.push({ name: tour.Guide_2, role: 'Guide 2' });
@@ -121,4 +117,4 @@ module.exports = async function(req, res) {
     console.error('bp-tour-detail error:', err.message);
     res.status(500).json({ error: err.message });
   }
-};
+}
