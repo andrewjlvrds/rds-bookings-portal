@@ -30,7 +30,7 @@ export default async function(req, res) {
     while (hasMore && page <= 5) {
       var result = await zohoApi('GET',
         'Lodge_Bookings?fields=' + fields +
-        '&sort_by=Check_in_Date&sort_order=asc&per_page=200&page=' + page
+        '&sort_by=Created_Time&sort_order=desc&per_page=200&page=' + page
       );
 
       var data = result.data || [];
