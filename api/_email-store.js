@@ -1,12 +1,9 @@
-var { put, list } = require('@vercel/blob');
+import { put, list } from '@vercel/blob';
 
-// Store an email in Vercel Blob storage with indexes for lookup
-async function storeEmail(emailData) {
+export async function storeEmail(emailData) {
   var bookingId = emailData.booking_id;
   var lodgeId = emailData.lodge_id;
   var messageId = emailData.message_id || ('msg_' + Date.now());
-
-  // Clean message ID for use as filename
   var safeId = messageId.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
 
   var record = {
@@ -28,39 +25,23 @@ async function storeEmail(emailData) {
     processed_at: new Date().toISOString(),
   };
 
-  // Store the full email blob
-  // Primary index: by booking ID (most common lookup)
   if (bookingId) {
-    await put(
-      'emails/booking/' + bookingId + '/' + safeId + '.json',
-      JSON.stringify(record),
-      { access: 'public', contentType: 'application/json', addRandomSuffix: false }
-    );
+    await put('emails/booking/' + bookingId + '/' + safeId + '.json',
+      JSON.stringify(record), { access: 'public', contentType: 'application/json', addRandomSuffix: false });
   }
-
-  // Secondary index: by lodge ID (for lodge-level view)
   if (lodgeId) {
-    await put(
-      'emails/lodge/' + lodgeId + '/' + safeId + '.json',
-      JSON.stringify(record),
-      { access: 'public', contentType: 'application/json', addRandomSuffix: false }
-    );
+    await put('emails/lodge/' + lodgeId + '/' + safeId + '.json',
+      JSON.stringify(record), { access: 'public', contentType: 'application/json', addRandomSuffix: false });
   }
-
-  // If no booking or lodge match, store as unmatched
   if (!bookingId && !lodgeId) {
-    await put(
-      'emails/unmatched/' + safeId + '.json',
-      JSON.stringify(record),
-      { access: 'public', contentType: 'application/json', addRandomSuffix: false }
-    );
+    await put('emails/unmatched/' + safeId + '.json',
+      JSON.stringify(record), { access: 'public', contentType: 'application/json', addRandomSuffix: false });
   }
 
   return record;
 }
 
-// Check if an email has already been stored (dedup by message_id)
-async function isEmailStored(bookingId, messageId) {
+export async function isEmailStored(bookingId, messageId) {
   if (!bookingId || !messageId) return false;
   var safeId = messageId.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
   try {
@@ -70,5 +51,3 @@ async function isEmailStored(bookingId, messageId) {
     return false;
   }
 }
-
-module.exports = { storeEmail: storeEmail, isEmailStored: isEmailStored };
