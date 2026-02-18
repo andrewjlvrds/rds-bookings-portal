@@ -1,7 +1,6 @@
-var zoho = require('./_zoho');
+import { zohoApi } from './_zoho.js';
 
-module.exports = async function(req, res) {
-  // CORS
+export default async function(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -24,26 +23,22 @@ module.exports = async function(req, res) {
       'Day_Description','Km','id'
     ].join(',');
 
-    // Fetch all lodge bookings — paginate if needed
     var allBookings = [];
     var page = 1;
     var hasMore = true;
 
     while (hasMore && page <= 5) {
-      var result = await zoho.zohoApi('GET',
+      var result = await zohoApi('GET',
         'Lodge_Bookings?fields=' + fields +
         '&sort_by=Check_in_Date&sort_order=asc&per_page=200&page=' + page
       );
 
       var data = result.data || [];
       allBookings = allBookings.concat(data);
-
-      // Check if there are more pages
       hasMore = result.info && result.info.more_records;
       page++;
     }
 
-    // Group by tour
     var tourMap = {};
     allBookings.forEach(function(bk) {
       var tourId = '';
@@ -65,14 +60,9 @@ module.exports = async function(req, res) {
       }
 
       if (!tourMap[tourId]) {
-        tourMap[tourId] = {
-          id: tourId,
-          name: tourName,
-          bookings: [],
-        };
+        tourMap[tourId] = { id: tourId, name: tourName, bookings: [] };
       }
 
-      // Extract lodge info
       var lodgeId = '';
       if (bk.Lodge) {
         lodgeId = typeof bk.Lodge === 'object' ? bk.Lodge.id : bk.Lodge;
@@ -86,23 +76,19 @@ module.exports = async function(req, res) {
       }));
     });
 
-    // Convert to array and sort tours by first booking date (upcoming first)
     var tours = Object.values(tourMap);
     tours.sort(function(a, b) {
       var aDate = a.bookings[0] ? a.bookings[0].Check_in_Date || '' : '';
       var bDate = b.bookings[0] ? b.bookings[0].Check_in_Date || '' : '';
-      // Put future tours first, then past
       var now = new Date().toISOString().split('T')[0];
       var aFuture = aDate >= now;
       var bFuture = bDate >= now;
       if (aFuture && !bFuture) return -1;
       if (!aFuture && bFuture) return 1;
-      // Within same category, sort by date (ascending for future, descending for past)
       if (aFuture) return aDate.localeCompare(bDate);
       return bDate.localeCompare(aDate);
     });
 
-    // Compute stats per tour
     tours.forEach(function(tour) {
       var bks = tour.bookings;
       tour.count = bks.length;
@@ -118,11 +104,10 @@ module.exports = async function(req, res) {
     });
 
   } catch(err) {
-    // No records = empty response
     if (err.message && (err.message.indexOf('204') > -1 || err.message.indexOf('No Content') > -1)) {
       return res.status(200).json({ tours: [], total_bookings: 0, total_tours: 0 });
     }
     console.error('bp-data error:', err.message);
     res.status(500).json({ error: err.message });
   }
-};
+}
