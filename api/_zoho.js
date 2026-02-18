@@ -1,6 +1,6 @@
 var tokenCache = { access_token: null, expires_at: 0 };
 
-async function getAccessToken() {
+export async function getAccessToken() {
   if (tokenCache.access_token && Date.now() < tokenCache.expires_at - 60000) {
     return tokenCache.access_token;
   }
@@ -34,7 +34,7 @@ async function getAccessToken() {
   return data.access_token;
 }
 
-async function zohoApi(method, path, body) {
+export async function zohoApi(method, path, body) {
   var token = await getAccessToken();
   var domain = process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.com';
   var url = domain + '/crm/v7/' + path;
@@ -61,8 +61,6 @@ async function zohoApi(method, path, body) {
   return text ? JSON.parse(text) : null;
 }
 
-async function updateRecord(module, recordId, data) {
+export async function updateRecord(module, recordId, data) {
   return zohoApi('PUT', module + '/' + recordId, { data: [data] });
 }
-
-module.exports = { getAccessToken: getAccessToken, zohoApi: zohoApi, updateRecord: updateRecord };
