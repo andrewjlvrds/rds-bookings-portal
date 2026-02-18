@@ -1,5 +1,11 @@
 import { zohoApi } from './_zoho.js';
 
+function str(v) {
+  if (!v) return '';
+  if (typeof v === 'object') return v.name || v.id || '';
+  return String(v);
+}
+
 export default async function(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -39,43 +45,43 @@ export default async function(req, res) {
     try {
       var guestResult = await zohoApi('GET',
         'Bookings?fields=' + guestFields +
-        '&criteria=(Tour.id:equals:' + tourId + ')' +
-        '&per_page=50'
+        '&criteria=(Tour:equals:' + tourId + ')' +
+        '&per_page=200'
       );
       guests = (guestResult.data || []).map(function(g) {
         var singleRoom = g.Do_you_need_a_single_room === true ||
           g.Do_you_need_a_single_room === 'true' ||
           g.Do_you_need_a_single_room === 'Yes';
         return {
-          id: g.id,
-          name: (g.First_Name || '') + ' ' + (g.Last_Name || ''),
-          first_name: g.First_Name || '',
-          last_name: g.Last_Name || '',
-          email: g.Email || '',
-          phone: g.Phone_1 || '',
-          nationality: g.Nationality1 || '',
-          dietary: g.Dietary_Requirements || '',
-          medical: g.Medical_Conditions_Allergies || '',
-          room_pref: g.Room_Preference_2 || (singleRoom ? 'Single' : ''),
+          id: g.id || '',
+          name: str(g.First_Name) + ' ' + str(g.Last_Name),
+          first_name: str(g.First_Name),
+          last_name: str(g.Last_Name),
+          email: str(g.Email),
+          phone: str(g.Phone_1),
+          nationality: str(g.Nationality1),
+          dietary: str(g.Dietary_Requirements),
+          medical: str(g.Medical_Conditions_Allergies),
+          room_pref: str(g.Room_Preference_2) || (singleRoom ? 'Single' : ''),
           single_room: singleRoom,
-          pillion: g.Pillion || g.Pillion1 || false,
-          pillion_name: g.Pillion_Name || '',
-          bike_pref: g.Motorcycle_Preference || '',
-          own_bike: g.Own_Bike_Type || '',
-          status: g.Booking_Status || '',
-          tcs_checked: g.T_s_and_C_s_checked || false,
-          damage_deposit: g.Damage_Deposit || '',
-          moto_deposit: g.Motorcycle_Deposit || '',
-          moto_refunded: g.Motorcycle_Deposit_Refunded || '',
-          insurance1: g.Travel_Insurance_1 || '',
-          insurance2: g.Travel_Insurance_2 || '',
-          insurance_details: g.Insurance_Details || '',
-          emergency: g.Emergency_Contact || '',
-          passport: g.Passport_Number || '',
-          arrival_flight: g.Arrival_Flight_Details || '',
-          departure_flight: g.Departure_Flight_Details || '',
-          tshirt: g.T_Shirt_Size || '',
-          booking_ref: g.Booking_Reference || '',
+          pillion: g.Pillion === true || g.Pillion === 'true' || g.Pillion1 === true || g.Pillion1 === 'true',
+          pillion_name: str(g.Pillion_Name),
+          bike_pref: str(g.Motorcycle_Preference),
+          own_bike: str(g.Own_Bike_Type),
+          status: str(g.Booking_Status),
+          tcs_checked: g.T_s_and_C_s_checked === true || g.T_s_and_C_s_checked === 'true' || g.T_s_and_C_s_checked === '1',
+          damage_deposit: str(g.Damage_Deposit),
+          moto_deposit: str(g.Motorcycle_Deposit),
+          moto_refunded: str(g.Motorcycle_Deposit_Refunded),
+          insurance1: str(g.Travel_Insurance_1),
+          insurance2: str(g.Travel_Insurance_2),
+          insurance_details: str(g.Insurance_Details),
+          emergency: str(g.Emergency_Contact),
+          passport: str(g.Passport_Number),
+          arrival_flight: str(g.Arrival_Flight_Details),
+          departure_flight: str(g.Departure_Flight_Details),
+          tshirt: str(g.T_Shirt_Size),
+          booking_ref: str(g.Booking_Reference),
         };
       });
     } catch(e) {
@@ -85,20 +91,26 @@ export default async function(req, res) {
     }
 
     var crew = [];
-    if (tour.Lead_Guide1) crew.push({ name: tour.Lead_Guide1, role: 'Lead Guide' });
-    if (tour.Guide_2) crew.push({ name: tour.Guide_2, role: 'Guide 2' });
-    if (tour.Driver) crew.push({ name: tour.Driver, role: 'Driver' });
-    if (tour.Bike_Retrieve_Driver_1) crew.push({ name: tour.Bike_Retrieve_Driver_1, role: 'Retrieve Driver 1' });
-    if (tour.Bike_Retrieve_Driver_2) crew.push({ name: tour.Bike_Retrieve_Driver_2, role: 'Retrieve Driver 2' });
+    var crewFields = [
+      [tour.Lead_Guide1, 'Lead Guide'],
+      [tour.Guide_2, 'Guide 2'],
+      [tour.Driver, 'Driver'],
+      [tour.Bike_Retrieve_Driver_1, 'Retrieve Driver 1'],
+      [tour.Bike_Retrieve_Driver_2, 'Retrieve Driver 2']
+    ];
+    crewFields.forEach(function(cf) {
+      var val = cf[0];
+      if (val) crew.push({ name: str(val), role: cf[1] });
+    });
 
     res.status(200).json({
       tour: {
-        id: tour.id,
-        name: tour.Tour_Name || tour.Name || '',
-        type: tour.Tour_Type || '',
-        departure: tour.Departure_Date || '',
-        end: tour.End_Date || '',
-        status: tour.Status || '',
+        id: tour.id || '',
+        name: str(tour.Tour_Name) || str(tour.Name),
+        type: str(tour.Tour_Type),
+        departure: str(tour.Departure_Date),
+        end: str(tour.End_Date),
+        status: str(tour.Status),
         max_guests: tour.Max_Guests || 0,
         num_riders: tour.Number_of_riders || 0,
         confirmed: tour.Confirmed_Bookings || 0,
