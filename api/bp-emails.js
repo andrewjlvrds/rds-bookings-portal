@@ -1,6 +1,6 @@
-var { list, get } = require('@vercel/blob');
+import { list } from '@vercel/blob';
 
-module.exports = async function(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -24,7 +24,6 @@ module.exports = async function(req, res) {
       }
     }
 
-    // Sort by email date, newest first
     emails.sort(function(a, b) {
       return new Date(b.email_date) - new Date(a.email_date);
     });
@@ -33,4 +32,4 @@ module.exports = async function(req, res) {
   } catch(err) {
     res.status(500).json({ error: err.message });
   }
-};
+}
