@@ -325,7 +325,30 @@ function LodgeDet({bk,onBack}){
 function corrTab(emails,ld,exp,setExp){
   if(ld)return React.createElement(Spin,{t:'Loading emails...'})
   if(!emails.length)return React.createElement('div',{style:{background:c.sf,borderRadius:8,border:'1px solid '+c.bd,padding:30,textAlign:'center',color:c.dm,fontSize:13}},'No emails captured yet for this booking.')
-  return React.createElement('div',null,emails.map(function(e,i){var isI=e.direction==='inbound';var isE=exp===i;return React.createElement('div',{key:i,style:{background:c.sf,border:'1px solid '+c.bd,borderRadius:8,marginBottom:8,borderLeft:'3px solid '+(isI?c.gn:c.bl)}},React.createElement('button',{onClick:function(){setExp(isE?null:i)},style:{display:'flex',width:'100%',textAlign:'left',padding:'12px 16px',background:'transparent',border:'none',cursor:'pointer',fontFamily:bf,color:c.tx,justifyContent:'space-between',alignItems:'center'}},React.createElement('div',null,React.createElement('div',{style:{fontSize:13,fontWeight:500}},e.subject||'(no subject)'),React.createElement('div',{style:{fontSize:11,color:c.dm}},e.from+' · '+fmtDT(e.date))),React.createElement('span',{style:{fontSize:10,color:c.dm}},isE?'▼':'▶')),isE?React.createElement('div',{style:{padding:'0 16px 14px'}},React.createElement('div',{style:{fontSize:12,color:c.mu,whiteSpace:'pre-wrap',lineHeight:1.6,maxHeight:400,overflow:'auto'}},e.body),e.ai_summary?React.createElement('div',{style:{marginTop:10,padding:10,borderRadius:6,background:c.pud,fontSize:12,color:c.pu}},React.createElement('div',{style:{fontWeight:600,fontSize:10,marginBottom:4}},'CLAUDE SUMMARY'),e.ai_summary):null):null)}))
+  return React.createElement('div',null,emails.map(function(e,i){
+    var isI=e.direction==='inbound'
+    var isE=exp===i
+    return React.createElement('div',{key:i,style:{background:c.sf,border:'1px solid '+c.bd,borderRadius:8,marginBottom:8,borderLeft:'3px solid '+(isI?c.gn:c.bl)}},
+      React.createElement('button',{onClick:function(){setExp(isE?null:i)},style:{display:'flex',width:'100%',textAlign:'left',padding:'12px 16px',background:'transparent',border:'none',cursor:'pointer',fontFamily:bf,color:c.tx,justifyContent:'space-between',alignItems:'center'}},
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontSize:13,fontWeight:500}},e.email_subject||'(no subject)'),
+          React.createElement('div',{style:{fontSize:11,color:c.dm}},(isI?e.email_from:e.email_to)+' · '+fmtDT(e.email_date)+(e.confidence?' · '+e.confidence:''))),
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8}},
+          React.createElement('span',{style:{fontSize:10,padding:'2px 6px',borderRadius:3,background:isI?c.gnd:c.bld,color:isI?c.gn:c.bl,fontFamily:mf,fontWeight:600}},isI?'↓ IN':'↑ OUT'),
+          React.createElement('span',{style:{fontSize:10,color:c.dm}},isE?'▼':'▶'))),
+      isE?React.createElement('div',{style:{padding:'0 16px 14px'}},
+        e.summary?React.createElement('div',{style:{marginBottom:10,padding:10,borderRadius:6,background:c.pud,fontSize:12,color:c.pu}},
+          React.createElement('div',{style:{fontWeight:600,fontSize:10,marginBottom:4}},'CLAUDE SUMMARY'),
+          e.summary):null,
+        e.extracted&&Object.values(e.extracted).some(function(v){return v})?
+          React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:6,marginTop:8}},
+            Object.entries(e.extracted).filter(function(kv){return kv[1]}).map(function(kv,j){
+              return React.createElement('span',{key:j,style:{fontSize:11,padding:'2px 8px',borderRadius:4,background:c.sf2,color:c.mu,fontFamily:mf}},kv[0].replace(/_/g,' ')+': '+kv[1])
+            })):null,
+        e.rate_validation&&e.rate_validation.warnings&&e.rate_validation.warnings.length?
+          React.createElement('div',{style:{marginTop:8,padding:8,borderRadius:6,background:c.rdd,fontSize:11,color:c.rd}},'⚠ Rate alert: '+e.rate_validation.warnings.join(', ')):null
+      ):null)
+  }))
 }
 function payTab(bk){var pys=[['Deposit',bk.Deposit_Due_Date,bk.Deposit_Amount],['2nd Payment',bk.Second_Payment_Due_Date,bk.Second_Payment_Amount],['3rd Payment',bk.Third_Payment_Due_Date,bk.Third_Payment_Amount],['4th Payment',bk.Fourth_Payment_Due_Date,bk.Fourth_Payment_Amount]].filter(function(p){return p[1]||p[2]});var cur=bk.Lodge_Currency||bk.Currency||'',now=new Date().toISOString().split('T')[0];return React.createElement('div',{style:{background:c.sf,borderRadius:8,border:'1px solid '+c.bd,overflow:'hidden'}},bk.Total_Amount?React.createElement('div',{style:{padding:'14px 18px',borderBottom:'1px solid '+c.bd,display:'flex',justifyContent:'space-between'}},React.createElement('span',{style:{fontSize:13,fontWeight:600}},'Total'),React.createElement('span',{style:{fontSize:16,fontWeight:700,fontFamily:mf}},$(bk.Total_Amount,cur))):null,!pys.length?React.createElement('div',{style:{padding:20,fontSize:12,color:c.dm}},'No payment schedule set'):pys.map(function(p,i){var od=p[1]&&p[1]<now;return React.createElement('div',{key:i,style:{padding:'12px 18px',borderBottom:i<pys.length-1?'1px solid '+c.bd:'none',display:'flex',justifyContent:'space-between',alignItems:'center'}},React.createElement('div',null,React.createElement('div',{style:{fontSize:13,fontWeight:500}},p[0]),p[1]?React.createElement('div',{style:{fontSize:11,color:od?c.rd:c.dm}},'Due: '+fmtF(p[1])+(od?' — OVERDUE':'')):null),React.createElement('span',{style:{fontFamily:mf,fontSize:14,fontWeight:600,color:od?c.rd:c.tx}},$(p[2],cur)))}))}
 function docTab(){return React.createElement('div',{style:{background:c.sf,borderRadius:8,border:'1px solid '+c.bd,padding:20}},React.createElement('div',{style:{fontSize:13,color:c.mu}},'Documents from email correspondence will appear here.'),React.createElement('div',{style:{fontSize:12,color:c.dm,marginTop:8}},'STO rates, proformas, and invoices extracted from lodge emails.'))}
