@@ -300,7 +300,7 @@ function LodgeDet({bk,onBack}){
   var [eLoad,setELoad]=useState(true)
   var [tab,setTab]=useState('correspondence')
   var [expE,setExpE]=useState(null)
-  useEffect(function(){setELoad(true);setExpE(null);setTab('correspondence');fetch(API+'/api/emails?booking_id='+bk.id).then(function(r){return r.json()}).then(function(d){setEmails(d.emails||[]);setELoad(false)}).catch(function(){setEmails([]);setELoad(false)})},[bk.id])
+  useEffect(function(){setELoad(true);setExpE(null);setTab('correspondence');fetch(API+'/api/bp-emails?booking_id='+bk.id).then(function(r){return r.json()}).then(function(d){setEmails(d.emails||[]);setELoad(false)}).catch(function(){setEmails([]);setELoad(false)})},[bk.id])
   var tabs=[{id:'correspondence',l:'Correspondence',n:emails.length},{id:'payments',l:'Payments'},{id:'documents',l:'Documents'},{id:'details',l:'Details'}]
   return React.createElement('div',null,
     React.createElement('button',{onClick:onBack,style:{background:'none',border:'none',color:c.bl,fontSize:13,cursor:'pointer',padding:'0 0 12px',fontFamily:bf}},'← Back to itinerary'),
