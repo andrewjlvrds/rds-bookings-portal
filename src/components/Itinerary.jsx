@@ -42,7 +42,7 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           booking_ids: toMark,
-          updates: { Status: 'Ready to send' },
+          updates: { Status: 'Ready to Send' },
         }),
       })
       if (!res.ok) {

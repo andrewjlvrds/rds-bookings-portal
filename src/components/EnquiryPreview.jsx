@@ -8,7 +8,7 @@ export default function EnquiryPreview({ tour, onBack }) {
   const [excluded, setExcluded] = useState({})
 
   const bookings = (tour.bookings || [])
-    .filter(b => getStatus(b) === 'Ready to send')
+    .filter(b => { const s = getStatus(b); return s === 'Ready to send' || s === 'Ready to Send' })
     .sort((a, b) => (a.Check_in_Date || '').localeCompare(b.Check_in_Date || ''))
 
   // Group bookings by lodge (same lodge, consecutive nights = one email)
