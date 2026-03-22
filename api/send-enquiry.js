@@ -125,6 +125,7 @@ export default async function(req, res) {
           });
         }
       } catch(updateErr) {
+        console.error('Zoho status update failed:', updateErr.message);
         updateErrors.push(updateErr.message);
       }
     }

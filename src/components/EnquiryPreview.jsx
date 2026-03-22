@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { getStatus, fmtDate } from '../utils/helpers'
 import { generateSubject, generateEnquiryEmail } from '../utils/emailTemplates'
 
-export default function EnquiryPreview({ tour, lodges, onBack }) {
+export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState({})
   const [excluded, setExcluded] = useState({})
@@ -83,7 +83,12 @@ export default function EnquiryPreview({ tour, lodges, onBack }) {
         if (res.ok) {
           const result = await res.json()
           if (result.email_sent) {
-            setSent(prev => ({ ...prev, [i]: 'sent' }))
+            if (result.update_errors && result.update_errors.length > 0) {
+              setSent(prev => ({ ...prev, [i]: 'sent-warn' }))
+              console.warn('Email sent but status update failed:', result.update_errors)
+            } else {
+              setSent(prev => ({ ...prev, [i]: 'sent' }))
+            }
           } else {
             setSent(prev => ({ ...prev, [i]: 'error: ' + (result.email_error || 'Email failed to send') }))
           }
@@ -102,10 +107,11 @@ export default function EnquiryPreview({ tour, lodges, onBack }) {
     }
 
     setSending(false)
+    if (onRefresh) onRefresh()
   }
 
   const allSent = activeGroups.length > 0 &&
-    lodgeGroups.every((_, i) => excluded[i] || sent[i] === 'sent')
+    lodgeGroups.every((_, i) => excluded[i] || sent[i] === 'sent' || sent[i] === 'sent-warn')
 
   return (
     <div>
@@ -184,6 +190,9 @@ export default function EnquiryPreview({ tour, lodges, onBack }) {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {status === 'sent' && (
                   <span style={{ fontSize: 12, color: 'var(--green-text)', fontWeight: 500 }}>Sent</span>
+                )}
+                {status === 'sent-warn' && (
+                  <span style={{ fontSize: 12, color: 'var(--amber-text)', fontWeight: 500 }}>Sent (status update failed)</span>
                 )}
                 {status && status.startsWith('error') && (
                   <span style={{ fontSize: 12, color: 'var(--red-text)' }}>{status}</span>

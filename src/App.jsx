@@ -173,6 +173,7 @@ export default function App() {
           tour={activeTour}
           lodges={lodges}
           onBack={() => setActiveView('itinerary')}
+          onRefresh={() => refreshData(activeTour.id)}
         />
       )
     }
