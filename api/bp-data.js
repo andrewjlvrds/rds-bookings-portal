@@ -9,7 +9,8 @@ export default async function(req, res) {
   try {
     // Step 1: Fetch all tours from the Tours module
     var tourFields = 'Name,Departure_Date,End_Date,Status,Tour_Type,' +
-      'Guide_Rooms,Max_Guests,Number_of_riders,id';
+      'Guide_Rooms,Max_Guests,Number_of_riders,' +
+      'Pax_in_Single_Rooms,Pax_in_Shared_Double_Rooms,Pax_in_Shared_Twin_Rooms,id';
 
     var allTours = [];
     try {
@@ -35,6 +36,9 @@ export default async function(req, res) {
         guide_rooms: t.Guide_Rooms || 0,
         max_guests: t.Max_Guests || 0,
         num_riders: t.Number_of_riders || 0,
+        pax_single: t.Pax_in_Single_Rooms || 0,
+        pax_twin: t.Pax_in_Shared_Twin_Rooms || 0,
+        pax_double: t.Pax_in_Shared_Double_Rooms || 0,
         bookings: [],
       };
     });

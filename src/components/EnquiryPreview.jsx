@@ -50,7 +50,7 @@ export default function EnquiryPreview({ tour, onBack }) {
       const subject = generateSubject(group.bookings[0], tour.name)
       const body = generateEnquiryEmail(
         group.bookings, tour.name, group.lodge,
-        { contactName: group.contactName, isReturning: group.isReturning }
+        { contactName: group.contactName, isReturning: group.isReturning, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
       )
 
       try {
@@ -133,7 +133,7 @@ export default function EnquiryPreview({ tour, onBack }) {
         const subject = generateSubject(group.bookings[0], tour.name)
         const body = generateEnquiryEmail(
           group.bookings, tour.name, group.lodge,
-          { contactName: group.contactName, isReturning: group.isReturning }
+          { contactName: group.contactName, isReturning: group.isReturning, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
         )
         const isExcluded = excluded[i]
         const status = sent[i]

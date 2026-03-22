@@ -66,7 +66,6 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
             {sorted.length} nights
             {tour.departure_date ? ' · Departs ' + fmtDateFull(tour.departure_date) : ''}
-            {roomConfig ? ' · Pax: ' + roomConfig : ''}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -98,6 +97,9 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
           )}
         </div>
       </div>
+
+      {/* Tour config — room requirements for enquiries */}
+      <TourConfig tour={tour} />
 
       {/* Table */}
       <div className="table-wrap">
@@ -184,6 +186,120 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
         <span><strong style={{ color: 'var(--text-primary)' }}>{enquired}</strong> enquired</span>
         <span><strong style={{ color: 'var(--text-primary)' }}>{readyToSend}</strong> ready to send</span>
         <span><strong style={{ color: 'var(--text-primary)' }}>{notStarted}</strong> not started</span>
+      </div>
+    </div>
+  )
+}
+
+function TourConfig({ tour }) {
+  const [expanded, setExpanded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [config, setConfig] = useState({
+    pax_single: tour.pax_single || 0,
+    pax_twin: tour.pax_twin || 0,
+    pax_double: tour.pax_double || 0,
+    guide_rooms: tour.guide_rooms || 0,
+    num_riders: tour.num_riders || 0,
+    max_guests: tour.max_guests || 0,
+  })
+
+  const totalPax = config.pax_single + (config.pax_twin * 2) + (config.pax_double * 2)
+  const totalRooms = config.pax_single + config.pax_twin + config.pax_double + config.guide_rooms
+  const hasConfig = totalPax > 0 || config.guide_rooms > 0
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/update-tour', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: tour.id, updates: {
+          Pax_in_Single_Rooms: config.pax_single,
+          Pax_in_Shared_Twin_Rooms: config.pax_twin,
+          Pax_in_Shared_Double_Rooms: config.pax_double,
+          Guide_Rooms: config.guide_rooms,
+          Number_of_riders: config.num_riders,
+          Max_Guests: config.max_guests,
+        }})
+      })
+      if (!res.ok) throw new Error('Failed to save')
+    } catch(err) {
+      alert('Error saving: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const Field = ({ label, field }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <label style={{ fontSize: 12, color: 'var(--text-muted)', width: 100 }}>{label}</label>
+      <input
+        type="number" min="0" value={config[field]}
+        onChange={e => setConfig(prev => ({ ...prev, [field]: parseInt(e.target.value) || 0 }))}
+        style={{
+          width: 50, fontSize: 13, padding: '3px 6px', textAlign: 'center',
+          border: '0.5px solid var(--border-default)', borderRadius: 4,
+          background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none',
+        }}
+      />
+    </div>
+  )
+
+  if (!expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        style={{
+          display: 'flex', gap: 16, marginBottom: 16,
+          padding: '10px 16px', background: hasConfig ? 'var(--bg-secondary)' : 'var(--amber-bg)',
+          borderRadius: 'var(--radius-md)', fontSize: 12,
+          color: hasConfig ? 'var(--text-muted)' : 'var(--amber-text)',
+          border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer',
+        }}
+      >
+        {hasConfig ? (
+          <>
+            <span>{totalPax} pax</span>
+            <span>{config.pax_single} single, {config.pax_twin} twin, {config.pax_double} double</span>
+            <span>{config.guide_rooms} guide room{config.guide_rooms !== 1 ? 's' : ''}</span>
+            <span>{totalRooms} rooms total</span>
+            <span style={{ marginLeft: 'auto' }}>Edit</span>
+          </>
+        ) : (
+          <span>Room configuration not set — click to configure before sending enquiries</span>
+        )}
+      </button>
+    )
+  }
+
+  return (
+    <div style={{
+      padding: 16, marginBottom: 16,
+      border: '0.5px solid var(--border-default)',
+      borderRadius: 'var(--radius-lg)',
+      background: 'var(--bg-primary)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>Room configuration</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={handleSave} disabled={saving} style={{ fontSize: 12, padding: '4px 12px' }}>
+            {saving ? 'Saving...' : 'Save to Zoho'}
+          </button>
+          <button onClick={() => setExpanded(false)} style={{
+            background: 'none', border: 'none', fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer',
+          }}>Close</button>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+        <Field label="Single rooms" field="pax_single" />
+        <Field label="Shared twin" field="pax_twin" />
+        <Field label="Shared double" field="pax_double" />
+        <Field label="Guide rooms" field="guide_rooms" />
+        <Field label="Riders" field="num_riders" />
+        <Field label="Max guests" field="max_guests" />
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+        {totalPax} pax · {totalRooms} rooms total
       </div>
     </div>
   )

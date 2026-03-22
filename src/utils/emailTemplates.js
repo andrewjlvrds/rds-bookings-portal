@@ -32,10 +32,25 @@ function buildDateTable(bookings) {
   return rows.join('\n')
 }
 
+// Build room requirements text from tour data
+function buildRoomRequirements(opts = {}) {
+  const { pax_single, pax_twin, pax_double, guide_rooms } = opts
+  const parts = []
+  if (pax_single) parts.push(pax_single + ' single room' + (pax_single > 1 ? 's' : ''))
+  if (pax_twin) parts.push(pax_twin + ' shared twin room' + (pax_twin > 1 ? 's' : ''))
+  if (pax_double) parts.push(pax_double + ' shared double room' + (pax_double > 1 ? 's' : ''))
+
+  const totalPax = (pax_single || 0) + ((pax_twin || 0) * 2) + ((pax_double || 0) * 2)
+  const roomStr = parts.length ? parts.join(', ') : 'rooms for up to 12 guests'
+  const guideStr = guide_rooms ? guide_rooms + ' guide room' + (guide_rooms > 1 ? 's' : '') + ' (staff quarters if available)' : ''
+
+  return { roomStr, guideStr, totalPax }
+}
+
 // New lodge template — first time contacting this lodge
-export function newLodgeEmail(bookings, tourName, lodgeName) {
+export function newLodgeEmail(bookings, tourName, lodgeName, tourConfig = {}) {
   const dateTable = buildDateTable(bookings)
-  const totalNights = bookings.reduce((sum, b) => sum + (b.Nights || 1), 0)
+  const { roomStr, guideStr } = buildRoomRequirements(tourConfig)
 
   return `Dear Reservations,
 
@@ -45,7 +60,7 @@ Could you please let us know if you have availability for the following dates:
 
 ${dateTable}
 
-We would need accommodation for up to 12 guests plus 3 guide rooms (staff quarters if available).
+We would need ${roomStr}${guideStr ? ', plus ' + guideStr : ''}.
 
 If available, could you please provide:
 – Your rates for the above dates
@@ -62,9 +77,10 @@ helen@ridedownsouth.com`
 }
 
 // Returning lodge template — we've stayed here before
-export function returningLodgeEmail(bookings, tourName, lodgeName, contactName) {
+export function returningLodgeEmail(bookings, tourName, lodgeName, contactName, tourConfig = {}) {
   const dateTable = buildDateTable(bookings)
   const greeting = contactName ? `Hi ${contactName},` : 'Hi there,'
+  const { roomStr, guideStr } = buildRoomRequirements(tourConfig)
 
   return `${greeting}
 
@@ -72,7 +88,7 @@ Hope you're well. We'd like to book ${lodgeName} again for our upcoming ${tourNa
 
 ${dateTable}
 
-Same setup as before — up to 12 guests plus 3 guide rooms.
+We would need ${roomStr}${guideStr ? ', plus ' + guideStr : ''}.
 
 Could you confirm availability and let us know your current rates? If we don't have an STO agreement on file yet, we'd appreciate details on any tour operator rates available.
 
@@ -85,10 +101,10 @@ helen@ridedownsouth.com`
 
 // Generate the right email based on whether we've contacted this lodge before
 export function generateEnquiryEmail(bookings, tourName, lodgeName, opts = {}) {
-  const { contactName, isReturning } = opts
+  const { contactName, isReturning, tourConfig } = opts
 
   if (isReturning) {
-    return returningLodgeEmail(bookings, tourName, lodgeName, contactName)
+    return returningLodgeEmail(bookings, tourName, lodgeName, contactName, tourConfig)
   }
-  return newLodgeEmail(bookings, tourName, lodgeName)
+  return newLodgeEmail(bookings, tourName, lodgeName, tourConfig)
 }
