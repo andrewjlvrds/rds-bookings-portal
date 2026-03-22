@@ -80,6 +80,20 @@ export default function App() {
     setActiveView('lodge-detail')
   }
 
+  const handleCreateTour = async ({ name, departure_date, tour_type }) => {
+    const response = await fetch(API + '/api/create-tour', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, departure_date, tour_type }),
+    })
+    if (!response.ok) {
+      const err = await response.json()
+      throw new Error(err.error || 'Failed to create tour')
+    }
+    // Reload data to pick up new tour
+    window.location.reload()
+  }
+
   const renderContent = () => {
     if (loading) {
       return (
@@ -164,6 +178,7 @@ export default function App() {
         onSelectTour={handleSelectTour}
         activeView={activeView}
         onSelectView={setActiveView}
+        onCreateTour={handleCreateTour}
       >
         {renderContent()}
       </Layout>

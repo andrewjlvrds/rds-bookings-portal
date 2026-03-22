@@ -53,7 +53,7 @@ function categorizeTours(tours) {
   return { newBuild, upcoming, past }
 }
 
-export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, children }) {
+export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, children }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar
@@ -62,6 +62,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
         onSelectTour={onSelectTour}
         activeView={activeView}
         onSelectView={onSelectView}
+        onCreateTour={onCreateTour}
       />
       <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', minWidth: 0 }}>
         {children}
@@ -70,9 +71,10 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
   )
 }
 
-function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView }) {
+function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour }) {
   const [showUpcoming, setShowUpcoming] = useState(false)
   const [showPast, setShowPast] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
   const { newBuild, upcoming, past } = categorizeTours(tours)
 
   return (
@@ -123,13 +125,14 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView }) 
       </div>
 
       {/* New build tours */}
-      {newBuild.length > 0 && (
+      {newBuild.length >= 0 && (
         <TourGroup
           label="New tours"
           tours={newBuild}
           activeTour={activeTour}
           onSelectTour={onSelectTour}
           onSelectView={onSelectView}
+          onAdd={onCreateTour}
         />
       )}
 
@@ -221,7 +224,28 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView }) 
   )
 }
 
-function TourGroup({ label, tours, activeTour, onSelectTour, onSelectView }) {
+function TourGroup({ label, tours, activeTour, onSelectTour, onSelectView, onAdd }) {
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newDate, setNewDate] = useState('')
+  const [newType, setNewType] = useState('FoSA 20')
+  const [saving, setSaving] = useState(false)
+
+  const handleAdd = async () => {
+    if (!newName.trim() || !newDate) return
+    setSaving(true)
+    try {
+      await onAdd({ name: newName.trim(), departure_date: newDate, tour_type: newType })
+      setAdding(false)
+      setNewName('')
+      setNewDate('')
+    } catch (err) {
+      alert('Error creating tour: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div style={{ borderTop: '0.5px solid var(--border-default)', padding: '4px 0' }}>
       <div style={{
@@ -231,9 +255,77 @@ function TourGroup({ label, tours, activeTour, onSelectTour, onSelectView }) {
         color: 'var(--text-muted)',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
       }}>
-        {label}
+        <span>{label}</span>
+        {onAdd && (
+          <button
+            onClick={() => setAdding(!adding)}
+            style={{
+              background: 'none', border: 'none', fontSize: 14,
+              color: 'var(--text-muted)', cursor: 'pointer', padding: '0 2px',
+              lineHeight: 1,
+            }}
+            title="Add tour"
+          >{adding ? '×' : '+'}</button>
+        )}
       </div>
+
+      {adding && (
+        <div style={{ padding: '4px 20px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <input
+            type="text"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            placeholder="Tour name (e.g. FoSA Oct 27)"
+            style={{
+              width: '100%', fontSize: 12, padding: '5px 8px',
+              border: '0.5px solid var(--border-default)', borderRadius: 4,
+              outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+            }}
+            autoFocus
+          />
+          <input
+            type="date"
+            value={newDate}
+            onChange={e => setNewDate(e.target.value)}
+            style={{
+              width: '100%', fontSize: 12, padding: '5px 8px',
+              border: '0.5px solid var(--border-default)', borderRadius: 4,
+              outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+            }}
+          />
+          <select
+            value={newType}
+            onChange={e => setNewType(e.target.value)}
+            style={{
+              width: '100%', fontSize: 12, padding: '5px 8px',
+              border: '0.5px solid var(--border-default)', borderRadius: 4,
+              outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+            }}
+          >
+            <option value="FoSA 20">FoSA 20</option>
+            <option value="FoSA 15">FoSA 15</option>
+            <option value="Edge 14">Edge 14</option>
+            <option value="Edge 12">Edge 12</option>
+            <option value="Custom">Custom</option>
+          </select>
+          <button
+            onClick={handleAdd}
+            disabled={saving || !newName.trim() || !newDate}
+            style={{
+              fontSize: 12, padding: '5px 12px', fontWeight: 500,
+              border: 'none', borderRadius: 4, cursor: 'pointer',
+              background: 'var(--blue-mid)', color: '#fff',
+              opacity: (!newName.trim() || !newDate || saving) ? 0.5 : 1,
+            }}
+          >
+            {saving ? 'Creating...' : 'Create tour'}
+          </button>
+        </div>
+      )}
 
       {tours.map(tour => (
         <TourItem
