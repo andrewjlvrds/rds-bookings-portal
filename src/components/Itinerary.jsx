@@ -1,12 +1,19 @@
 import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
 
-export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh }) {
+export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh }) {
   const [marking, setMarking] = useState(false)
   const [editing, setEditing] = useState(null) // { id, field, value }
   const [savingEdit, setSavingEdit] = useState(false)
 
   if (!tour) return null
+
+  // Build lodge lookup
+  const lodgeLookup = {}
+  ;(lodges || []).forEach(l => {
+    if (l.name) lodgeLookup[l.name.toLowerCase()] = l
+  })
+  const lookupLodge = (name) => name ? (lodgeLookup[name.toLowerCase()] || null) : null
 
   const allBookings = tour.bookings || []
   const active = allBookings.filter(isActiveBooking)
@@ -208,6 +215,12 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
                         title="Click to edit"
                       >{lodge}</div>
                     )}
+                    {lodge && (() => {
+                      const lr = lookupLodge(lodge)
+                      if (!lr) return <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>
+                      if (!lr.email) return <div style={{ fontSize: 10, color: 'var(--amber-text)' }}>No email</div>
+                      return <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{lr.email}</div>
+                    })()}
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{meals}</td>
                   <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, fontSize: 12 }}>

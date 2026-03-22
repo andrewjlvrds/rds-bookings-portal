@@ -2,10 +2,21 @@ import React, { useState } from 'react'
 import { getStatus, fmtDate } from '../utils/helpers'
 import { generateSubject, generateEnquiryEmail } from '../utils/emailTemplates'
 
-export default function EnquiryPreview({ tour, onBack }) {
+export default function EnquiryPreview({ tour, lodges, onBack }) {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState({})
   const [excluded, setExcluded] = useState({})
+
+  // Build lodge lookup from directory
+  const lodgeLookup = {}
+  ;(lodges || []).forEach(l => {
+    if (l.name) lodgeLookup[l.name.toLowerCase()] = l
+  })
+
+  const lookupLodge = (name) => {
+    if (!name) return null
+    return lodgeLookup[name.toLowerCase()] || null
+  }
 
   const bookings = (tour.bookings || [])
     .filter(b => { const s = getStatus(b); return s === 'Ready to send' || s === 'Ready to Send' })
@@ -17,7 +28,8 @@ export default function EnquiryPreview({ tour, onBack }) {
 
   bookings.forEach(bk => {
     const lodge = bk.Lodge_Name || bk.Name || ''
-    const email = bk.Email || bk.Lodge_Email || ''
+    const lodgeRecord = lookupLodge(lodge)
+    const email = lodgeRecord ? (lodgeRecord.email || '') : (bk.Email || bk.Lodge_Email || '')
 
     if (current && current.lodge === lodge) {
       current.bookings.push(bk)
@@ -26,8 +38,9 @@ export default function EnquiryPreview({ tour, onBack }) {
         lodge,
         email,
         bookings: [bk],
-        contactName: bk.Contact_Name || '',
-        isReturning: false, // TODO: check lodge history
+        contactName: lodgeRecord ? lodgeRecord.contact : (bk.Contact_Name || ''),
+        isReturning: false,
+        lodgeFound: !!lodgeRecord,
       }
       lodgeGroups.push(current)
     }

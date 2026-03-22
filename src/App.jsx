@@ -177,6 +177,7 @@ export default function App() {
       return (
         <EnquiryPreview
           tour={activeTour}
+          lodges={lodges}
           onBack={() => setActiveView('itinerary')}
         />
       )
@@ -200,6 +201,7 @@ export default function App() {
       return (
         <Itinerary
           tour={activeTour}
+          lodges={lodges}
           onSelectBooking={handleSelectBooking}
           onEditItinerary={() => setActiveView('edit-itinerary')}
           onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}
