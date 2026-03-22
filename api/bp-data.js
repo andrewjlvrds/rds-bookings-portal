@@ -46,19 +46,14 @@ export default async function(req, res) {
       'Number_of_guides','Single_Rooms','Shared_Twin_Rooms','Shared_Double_Rooms',
       'Guide_Rooms','Sgl_Twin_Dbl_Guides','Meals','Total_Amount','Deposit_Amount',
       'Lodge_Currency','Booking_Reference','Booking_Notes','Reservation_Comments',
-      'Lodge_Availability','Lodge','Lodge_Contact','Lodge_ID','Lodge_Email','Tour',
+      'Lodge_Availability','Lodge','Lodge_Contact','Lodge_ID','Tour',
       'Claude_Confidence','Claude_Updated_Time','Updated_by',
       'Follow_up_Date','Excursion','Excursion_booking_status','Excursion_Date','Excursion_notes',
       'Deposit_Due_Date','Second_Payment_Amount','Second_Payment_Due_Date',
       'Third_Payment_Amount','Third_Payment_Due_Date',
       'Fourth_Payment_Amount','Fourth_Payment_Due_Date',
       'Email','Contact_Name','Exchange_Rate','Currency',
-      'Day_Description','Km',
-      'Portal_Status','RDS_Reference','Lodge_Reference',
-      'Enquiry_Sent_Date','Last_Response_Date',
-      'Cancel_Free_Before','Cancellation_Policy_Text',
-      'Credit_Amount','Credit_Applied_To',
-      'id'
+      'Day_Description','Km','id'
     ].join(',');
 
     var allBookings = [];
@@ -101,7 +96,7 @@ export default async function(req, res) {
 
       var enriched = Object.assign({}, bk, {
         lodge_id: lodgeId,
-        lodge_email: bk.Lodge_Email || bk.Email || '',
+        lodge_email: bk.Email || '',
         tour_id: tourId,
         tour_name: tourName,
       });
