@@ -195,12 +195,12 @@ function TourConfig({ tour }) {
   const [expanded, setExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [config, setConfig] = useState({
-    pax_single: tour.pax_single || 0,
-    pax_twin: tour.pax_twin || 0,
-    pax_double: tour.pax_double || 0,
-    guide_rooms: tour.guide_rooms || 0,
-    num_riders: tour.num_riders || 0,
-    max_guests: tour.max_guests || 0,
+    pax_single: tour.pax_single || 8,
+    pax_twin: tour.pax_twin || 2,
+    pax_double: tour.pax_double || 1,
+    guide_rooms: tour.guide_rooms || 3,
+    num_riders: tour.num_riders || 12,
+    max_guests: tour.max_guests || 12,
   })
 
   const totalPax = config.pax_single + (config.pax_twin * 2) + (config.pax_double * 2)

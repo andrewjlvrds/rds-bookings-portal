@@ -34,14 +34,18 @@ function buildDateTable(bookings) {
 
 // Build room requirements text from tour data
 function buildRoomRequirements(opts = {}) {
-  const { pax_single, pax_twin, pax_double, guide_rooms } = opts
+  const pax_single = opts.pax_single || 8
+  const pax_twin = opts.pax_twin || 2
+  const pax_double = opts.pax_double || 1
+  const guide_rooms = opts.guide_rooms || 3
+
   const parts = []
   if (pax_single) parts.push(pax_single + ' single room' + (pax_single > 1 ? 's' : ''))
   if (pax_twin) parts.push(pax_twin + ' shared twin room' + (pax_twin > 1 ? 's' : ''))
   if (pax_double) parts.push(pax_double + ' shared double room' + (pax_double > 1 ? 's' : ''))
 
-  const totalPax = (pax_single || 0) + ((pax_twin || 0) * 2) + ((pax_double || 0) * 2)
-  const roomStr = parts.length ? parts.join(', ') : 'rooms for up to 12 guests'
+  const totalPax = pax_single + (pax_twin * 2) + (pax_double * 2)
+  const roomStr = parts.join(', ')
   const guideStr = guide_rooms ? guide_rooms + ' guide room' + (guide_rooms > 1 ? 's' : '') + ' (staff quarters if available)' : ''
 
   return { roomStr, guideStr, totalPax }
