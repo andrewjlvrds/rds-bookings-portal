@@ -8,16 +8,20 @@ export default async function(req, res) {
 
   try {
     // Step 1: Fetch all tours from the Tours module
-    var tourFields = 'Name,Departure_Date,End_Date,Start_Date,Status,Tour_Type,' +
-      'Guide_Rooms,Max_Guests,Number_of_riders,Pax_in_Single_Rooms,' +
-      'Pax_in_Shared_Double_Rooms,Pax_in_Shared_Twin_Rooms,id';
+    var tourFields = 'Name,Departure_Date,End_Date,Status,Tour_Type,' +
+      'Guide_Rooms,Max_Guests,Number_of_riders,id';
 
-    var tourResult = await zohoApi('GET',
-      'Tours?fields=' + tourFields + '&sort_by=Departure_Date&sort_order=desc&per_page=200'
-    );
-    var allTours = (tourResult && tourResult.data) || [];
+    var allTours = [];
+    try {
+      var tourResult = await zohoApi('GET',
+        'Tours?fields=' + tourFields + '&per_page=200'
+      );
+      allTours = (tourResult && tourResult.data) || [];
+    } catch(tourErr) {
+      console.error('Tours fetch error:', tourErr.message);
+      // Continue without tour data — fall back to booking-derived tours
+    }
 
-    // Build tour map from Tours module
     var tourMap = {};
     allTours.forEach(function(t) {
       tourMap[t.id] = {
@@ -25,15 +29,12 @@ export default async function(req, res) {
         name: t.Name || '',
         departure_date: t.Departure_Date || null,
         end_date: t.End_Date || null,
-        start_date: t.Start_Date || t.Departure_Date || null,
+        start_date: t.Departure_Date || null,
         tour_status: t.Status || '',
         tour_type: t.Tour_Type || '',
         guide_rooms: t.Guide_Rooms || 0,
         max_guests: t.Max_Guests || 0,
         num_riders: t.Number_of_riders || 0,
-        pax_single: t.Pax_in_Single_Rooms || 0,
-        pax_double: t.Pax_in_Shared_Double_Rooms || 0,
-        pax_twin: t.Pax_in_Shared_Twin_Rooms || 0,
         bookings: [],
       };
     });
@@ -54,9 +55,9 @@ export default async function(req, res) {
       'Email','Contact_Name','Exchange_Rate','Currency',
       'Day_Description','Km',
       'Portal_Status','RDS_Reference','Lodge_Reference',
-      'Enquiry_Sent_Date','Last_Response_Date','Template_Used',
+      'Enquiry_Sent_Date','Last_Response_Date',
       'Cancel_Free_Before','Cancellation_Policy_Text',
-      'Credit_Amount','Credit_Applied_To','Credit_Expiry',
+      'Credit_Amount','Credit_Applied_To',
       'id'
     ].join(',');
 
