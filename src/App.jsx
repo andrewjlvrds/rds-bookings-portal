@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Component } from 'react'
 import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
 import Itinerary from './components/Itinerary'
@@ -6,6 +6,35 @@ import Payments from './components/Payments'
 import './styles/global.css'
 
 const API = ''
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error, info) {
+    console.error('Portal error:', error, info)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
+          <h2 style={{ color: '#A32D2D', marginBottom: 8 }}>Something went wrong</h2>
+          <pre style={{ fontSize: 13, color: '#5F5E5A', whiteSpace: 'pre-wrap' }}>
+            {this.state.error && this.state.error.toString()}
+          </pre>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: '8px 16px', cursor: 'pointer' }}>
+            Reload
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 export default function App() {
   const [tours, setTours] = useState([])
@@ -19,8 +48,12 @@ export default function App() {
 
   useEffect(() => {
     fetch(API + '/api/bp-data')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('API returned ' + r.status)
+        return r.json()
+      })
       .then(d => {
+        console.log('API data loaded:', d.total_tours, 'tours,', d.total_bookings, 'bookings')
         const tourList = d.tours || []
         setTours(tourList)
         const all = []
@@ -29,6 +62,7 @@ export default function App() {
         setLoading(false)
       })
       .catch(err => {
+        console.error('API error:', err)
         setError(err.message)
         setLoading(false)
       })
@@ -37,6 +71,7 @@ export default function App() {
   const handleSelectTour = (tour) => {
     setActiveTour(tour)
     setActiveBooking(null)
+    setActiveView('itinerary')
   }
 
   const handleSelectBooking = (bk) => {
@@ -55,8 +90,9 @@ export default function App() {
 
     if (error) {
       return (
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--red-text)' }}>
-          Error loading data: {error}
+        <div style={{ padding: 40, textAlign: 'center' }}>
+          <div style={{ color: 'var(--red-text)', marginBottom: 8 }}>Error loading data: {error}</div>
+          <button className="btn" onClick={() => window.location.reload()}>Retry</button>
         </div>
       )
     }
@@ -99,7 +135,7 @@ export default function App() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
       <Layout
         tours={tours}
@@ -110,6 +146,6 @@ export default function App() {
       >
         {renderContent()}
       </Layout>
-    </>
+    </ErrorBoundary>
   )
 }
