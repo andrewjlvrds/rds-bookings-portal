@@ -1,5 +1,50 @@
-import React from 'react'
-import { getStatus } from '../utils/helpers'
+import React, { useState } from 'react'
+import { getStatus, isConfirmed } from '../utils/helpers'
+
+// Categorise tours into groups based on dates
+function categorizeTours(tours) {
+  const today = new Date().toISOString().split('T')[0]
+  const newBuild = []    // No enquiries made yet (EoA Nov 26 onwards, all 2027+)
+  const upcoming = []    // Future tours with some data
+  const past = []        // Completed tours
+
+  ;(tours || []).forEach(tour => {
+    if (tour.id === 'unassigned') {
+      past.push(tour)
+      return
+    }
+
+    const startDate = tour.start_date || ''
+    const endDate = tour.end_date || ''
+
+    // If tour has ended (end date in the past)
+    if (endDate && endDate < today) {
+      past.push(tour)
+      return
+    }
+
+    // If tour hasn't started yet, check if it has any booking activity
+    const bookings = tour.bookings || []
+    const hasActivity = bookings.some(b => {
+      const s = getStatus(b)
+      return s && s !== 'Not Started' && s !== ''
+    })
+
+    if (!hasActivity) {
+      newBuild.push(tour)
+    } else {
+      upcoming.push(tour)
+    }
+  })
+
+  // Sort by start date
+  const byDate = (a, b) => (a.start_date || '').localeCompare(b.start_date || '')
+  newBuild.sort(byDate)
+  upcoming.sort(byDate)
+  past.sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))
+
+  return { newBuild, upcoming, past }
+}
 
 export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, children }) {
   return (
@@ -19,6 +64,9 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
 }
 
 function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView }) {
+  const [showPast, setShowPast] = useState(false)
+  const { newBuild, upcoming, past } = categorizeTours(tours)
+
   return (
     <nav style={{
       width: 260,
@@ -66,37 +114,101 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView }) 
         />
       </div>
 
-      {/* Tour list */}
-      <div style={{
-        borderTop: '0.5px solid var(--border-default)',
-        padding: '8px 0',
-        flex: 1,
-      }}>
-        <div style={{
-          padding: '8px 20px 6px',
-          fontSize: 11,
-          fontWeight: 500,
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-        }}>
-          Tours
-        </div>
+      {/* New build tours */}
+      {newBuild.length > 0 && (
+        <TourGroup
+          label="New tours"
+          tours={newBuild}
+          activeTour={activeTour}
+          onSelectTour={onSelectTour}
+          onSelectView={onSelectView}
+        />
+      )}
 
-        {(tours || []).map(tour => (
-          <TourItem
-            key={tour.id}
-            tour={tour}
-            active={activeTour && activeTour.id === tour.id}
-            onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
-          />
-        ))}
-      </div>
+      {/* Upcoming tours with activity */}
+      {upcoming.length > 0 && (
+        <TourGroup
+          label="Upcoming"
+          tours={upcoming}
+          activeTour={activeTour}
+          onSelectTour={onSelectTour}
+          onSelectView={onSelectView}
+        />
+      )}
+
+      {/* Past tours — collapsed by default */}
+      {past.length > 0 && (
+        <div style={{ borderTop: '0.5px solid var(--border-default)' }}>
+          <button
+            onClick={() => setShowPast(!showPast)}
+            style={{
+              display: 'flex',
+              width: '100%',
+              textAlign: 'left',
+              padding: '8px 20px 6px',
+              background: 'transparent',
+              border: 'none',
+              fontSize: 11,
+              fontWeight: 500,
+              color: 'var(--text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <span>Past tours ({past.length})</span>
+            <span style={{
+              fontSize: 10,
+              transition: 'transform 0.15s',
+              transform: showPast ? 'rotate(180deg)' : 'rotate(0deg)',
+              display: 'inline-block',
+            }}>▾</span>
+          </button>
+
+          {showPast && past.map(tour => (
+            <TourItem
+              key={tour.id}
+              tour={tour}
+              active={activeTour && activeTour.id === tour.id}
+              onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
+              dimmed
+            />
+          ))}
+        </div>
+      )}
     </nav>
   )
 }
 
-function NavItem({ label, active, onClick, count }) {
+function TourGroup({ label, tours, activeTour, onSelectTour, onSelectView }) {
+  return (
+    <div style={{ borderTop: '0.5px solid var(--border-default)', padding: '4px 0' }}>
+      <div style={{
+        padding: '8px 20px 6px',
+        fontSize: 11,
+        fontWeight: 500,
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+      }}>
+        {label}
+      </div>
+
+      {tours.map(tour => (
+        <TourItem
+          key={tour.id}
+          tour={tour}
+          active={activeTour && activeTour.id === tour.id}
+          onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function NavItem({ label, active, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -119,19 +231,14 @@ function NavItem({ label, active, onClick, count }) {
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
     >
       <span>{label}</span>
-      {count !== undefined && (
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{count}</span>
-      )}
     </button>
   )
 }
 
-function TourItem({ tour, active, onClick }) {
-  const confirmed = (tour.bookings || []).filter(b => {
-    const status = getStatus(b)
-    return ['Balance Paid', 'Deposit Paid', 'Confirmed'].includes(status)
-  }).length
-  const total = (tour.bookings || []).length
+function TourItem({ tour, active, onClick, dimmed }) {
+  const bookings = tour.bookings || []
+  const confirmed = bookings.filter(b => isConfirmed(b)).length
+  const total = bookings.length
 
   return (
     <button
@@ -145,11 +252,12 @@ function TourItem({ tour, active, onClick }) {
         border: 'none',
         fontSize: 13,
         fontWeight: active ? 500 : 400,
-        color: active ? 'var(--blue-text)' : 'var(--text-primary)',
+        color: active ? 'var(--blue-text)' : dimmed ? 'var(--text-muted)' : 'var(--text-primary)',
         alignItems: 'center',
         justifyContent: 'space-between',
         transition: 'background 0.1s',
         borderRadius: 0,
+        opacity: dimmed ? 0.7 : 1,
       }}
       onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-secondary)' }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
@@ -169,3 +277,6 @@ function TourItem({ tour, active, onClick }) {
     </button>
   )
 }
+
+// Export categorize function so Dashboard can use it too
+export { categorizeTours }

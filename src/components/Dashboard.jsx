@@ -1,27 +1,32 @@
 import React from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiveBooking, today, daysBetween, getTourName, getStatus } from '../utils/helpers'
+import { categorizeTours } from './Layout'
 
 export default function Dashboard({ tours, allBookings, onSelectTour, onSelectView }) {
-  const activeBookings = allBookings.filter(isActiveBooking)
+  const { newBuild, upcoming } = categorizeTours(tours)
+  const activeTours = [...newBuild, ...upcoming]
+
+  // Only count bookings from active tours
+  const activeBookings = activeTours.flatMap(t => (t.bookings || []).filter(isActiveBooking))
 
   // Metrics
   const totalLodges = activeBookings.length
   const confirmed = activeBookings.filter(b => isConfirmed(b)).length
-  const needsAttention = computeNeedsAttention(allBookings)
+  const needsAttention = computeNeedsAttention(activeTours.flatMap(t => t.bookings || []))
 
   return (
     <div>
       <h1 style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Lodge bookings</h1>
       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-        {totalLodges} active bookings across {tours.length} tours
+        {activeTours.length} active tours · {totalLodges} bookings
       </p>
 
       {/* Metric cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 24 }}>
         <div className="metric-card">
           <div className="metric-label">Active tours</div>
-          <div className="metric-value">{tours.length}</div>
-          <div className="metric-sub">{tours.map(t => t.name).join(', ')}</div>
+          <div className="metric-value">{activeTours.length}</div>
+          <div className="metric-sub">{activeTours.map(t => t.name).join(', ')}</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Total lodges</div>
@@ -63,16 +68,35 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
       )}
 
       {/* Tours */}
-      <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>Tours</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
-        {tours.map(tour => (
-          <TourCard
-            key={tour.id}
-            tour={tour}
-            onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
-          />
-        ))}
-      </div>
+      {newBuild.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>New tours — clean build</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12, marginBottom: 24 }}>
+            {newBuild.map(tour => (
+              <TourCard
+                key={tour.id}
+                tour={tour}
+                onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {upcoming.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>Upcoming tours</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+            {upcoming.map(tour => (
+              <TourCard
+                key={tour.id}
+                tour={tour}
+                onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
