@@ -3,6 +3,8 @@ import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isC
 
 export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh }) {
   const [marking, setMarking] = useState(false)
+  const [editing, setEditing] = useState(null) // { id, field, value }
+  const [savingEdit, setSavingEdit] = useState(false)
 
   if (!tour) return null
 
@@ -54,6 +56,31 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
       alert('Error: ' + err.message)
     } finally {
       setMarking(false)
+    }
+  }
+
+  // Inline edit a booking field
+  const handleInlineSave = async () => {
+    if (!editing) return
+    setSavingEdit(true)
+    try {
+      const updates = {}
+      if (editing.field === 'lodge') {
+        updates.Lodge_Name = editing.value
+        updates.Name = editing.value + ' - ' + (editing.checkIn || '')
+      }
+      const res = await fetch('/api/update-bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_ids: [editing.id], updates }),
+      })
+      if (!res.ok) throw new Error('Failed to update')
+      setEditing(null)
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -151,7 +178,36 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{route}</div>
                   </td>
                   <td>
-                    <div style={{ fontWeight: 500 }}>{lodge}</div>
+                    {editing && editing.id === (bk.id || bk['Record Id']) && editing.field === 'lodge' ? (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          value={editing.value}
+                          onChange={e => setEditing({ ...editing, value: e.target.value })}
+                          onKeyDown={e => { if (e.key === 'Enter') handleInlineSave(); if (e.key === 'Escape') setEditing(null) }}
+                          autoFocus
+                          style={{
+                            flex: 1, fontSize: 13, fontWeight: 500, padding: '2px 6px',
+                            border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+                            outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                          }}
+                        />
+                        <button onClick={handleInlineSave} disabled={savingEdit} style={{
+                          fontSize: 11, padding: '2px 8px', border: '0.5px solid var(--border-default)',
+                          borderRadius: 4, background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--blue-text)',
+                        }}>{savingEdit ? '...' : 'Save'}</button>
+                        <button onClick={() => setEditing(null)} style={{
+                          fontSize: 11, padding: '2px 6px', border: 'none',
+                          background: 'none', cursor: 'pointer', color: 'var(--text-muted)',
+                        }}>×</button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => setEditing({ id: bk.id || bk['Record Id'], field: 'lodge', value: lodge, checkIn: checkIn })}
+                        style={{ fontWeight: 500, cursor: 'pointer' }}
+                        title="Click to edit"
+                      >{lodge}</div>
+                    )}
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{meals}</td>
                   <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, fontSize: 12 }}>
