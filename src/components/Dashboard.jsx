@@ -8,7 +8,6 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
   const totalLodges = activeBookings.length
   const confirmed = activeBookings.filter(b => isConfirmed(b['Booking Status'] || b.Booking_Status || '')).length
   const needsAttention = computeNeedsAttention(allBookings)
-  const payments = computePayments(allBookings)
 
   return (
     <div>
