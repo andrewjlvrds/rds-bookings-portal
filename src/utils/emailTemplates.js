@@ -1,5 +1,5 @@
 // Email templates for lodge enquiries
-// Sign-off: Helen Sobey (Lodge Booking Manager)
+// Sign-off: Helen Baker (Lodge Booking Manager)
 
 // Generate subject line with RDS reference
 export function generateSubject(booking, tourName) {
@@ -7,9 +7,9 @@ export function generateSubject(booking, tourName) {
   const lodge = booking.Lodge_Name || ''
   const checkIn = booking.Check_in_Date || ''
   if (rdsRef) {
-    return `Booking enquiry – ${tourName} [${rdsRef}]`
+    return 'Booking enquiry - ' + tourName + ' [' + rdsRef + ']'
   }
-  return `Booking enquiry – ${tourName} – ${checkIn}`
+  return 'Booking enquiry - ' + tourName + ' - ' + checkIn
 }
 
 // Format date for email display (e.g. "14 April 2027")
@@ -27,7 +27,7 @@ function buildDateTable(bookings) {
     const checkOut = emailDate(bk.Check_out_Date)
     const nights = bk.Nights || 1
     const meals = bk.Meals || 'BB'
-    return `  ${checkIn} – ${checkOut} (${nights} night${nights > 1 ? 's' : ''}, ${meals})`
+    return `  ${checkIn} - ${checkOut} (${nights} night${nights > 1 ? 's' : ''}, ${meals})`
   })
   return rows.join('\n')
 }
@@ -67,14 +67,14 @@ ${dateTable}
 We would need ${roomStr}${guideStr ? ', plus ' + guideStr : ''}.
 
 If available, could you please provide:
-– Your rates for the above dates
-– Your cancellation and payment terms
-– Whether you offer a tour operator or STO discount
+- Your rates for the above dates
+- Your cancellation and payment terms
+- Whether you offer a tour operator or STO discount
 
 We look forward to hearing from you.
 
 Take care,
-Helen Sobey
+Helen Baker
 Lodge Bookings
 Ride Down South
 helen@ridedownsouth.com`
@@ -97,7 +97,7 @@ We would need ${roomStr}${guideStr ? ', plus ' + guideStr : ''}.
 Could you confirm availability and let us know your current rates? If we don't have an STO agreement on file yet, we'd appreciate details on any tour operator rates available.
 
 Take care,
-Helen Sobey
+Helen Baker
 Lodge Bookings
 Ride Down South
 helen@ridedownsouth.com`

@@ -58,7 +58,7 @@ export default async function(req, res) {
     if (!bookingIds.length) return res.status(400).json({ error: 'No booking IDs' });
 
     var fromEmail = 'bookings@ridedownsouth.com';
-    var fromName = 'Helen Sobey';
+    var fromName = 'Helen Baker';
     var fromFull = fromName + ' <' + fromEmail + '>';
 
     // Send via Gmail API
