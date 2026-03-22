@@ -106,23 +106,25 @@ export default async function(req, res) {
 
     if (emailSent && bookingIds.length > 0) {
       var updateRecords = bookingIds.map(function(id) {
-        return { id: id, Status: 'Enquiry Sent' };
+        return { id: id, Status: 'Enquiry Sent', Enquiry_Sent_Date: today, Follow_up_Date: followUpDate };
       });
 
-      try {
-        updateRecords.forEach(function(r) {
-          r.Enquiry_Sent_Date = today;
-          r.Follow_up_Date = followUpDate;
-        });
-      } catch(e) {}
+      console.log('Updating', bookingIds.length, 'bookings to Enquiry Sent:', JSON.stringify(bookingIds));
 
       try {
         var updateResult = await zohoApi('PUT', 'Lodge_Bookings', { data: updateRecords });
+        console.log('Zoho update result:', JSON.stringify(updateResult));
         if (updateResult && updateResult.data) {
           updateResult.data.forEach(function(r) {
             if (r.status === 'success') updatedCount++;
-            else updateErrors.push(r.message || 'Update failed');
+            else {
+              console.error('Zoho update item failed:', JSON.stringify(r));
+              updateErrors.push(r.message || r.code || 'Update failed');
+            }
           });
+        } else {
+          console.error('Zoho update returned no data:', JSON.stringify(updateResult));
+          updateErrors.push('No data in update response');
         }
       } catch(updateErr) {
         console.error('Zoho status update failed:', updateErr.message);
