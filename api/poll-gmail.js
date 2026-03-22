@@ -1,6 +1,7 @@
 import { getGmailToken, gmailApi } from './_gmail.js';
 import { storeEmail, isEmailStored } from './_email-store.js';
 import { zohoApi } from './_zoho.js';
+import { parseEmail, extractionToZohoFields } from './_ai-parse.js';
 
 // Extract RDS reference from subject line, e.g. [RDS-FoSA-MAR27-N04]
 function extractRdsRef(subject) {
@@ -219,14 +220,43 @@ export default async function(req, res) {
           attachments: attachments,
         });
 
-        // Update Last_Response_Date on booking
-        var today = new Date().toISOString().split('T')[0];
+        // AI parse the email to extract booking data
+        var aiResult = null;
+        var zohoUpdates = { Last_Response_Date: new Date().toISOString().split('T')[0] };
+
+        if (body && body.trim().length > 10) {
+          try {
+            var bookingContext = {
+              lodge_name: matchedBooking.Lodge_Name || matchedBooking.Name || '',
+              check_in: matchedBooking.Check_in_Date || '',
+              status: matchedBooking.Status || '',
+            };
+
+            aiResult = await parseEmail(body, bookingContext);
+            console.log('AI parse result for', matchedBooking.Name || bookingId, ':', JSON.stringify(aiResult).substring(0, 500));
+
+            var fieldResult = extractionToZohoFields(aiResult);
+            // Merge AI-extracted fields into Zoho updates
+            var fieldKeys = Object.keys(fieldResult.updates);
+            for (var fk = 0; fk < fieldKeys.length; fk++) {
+              zohoUpdates[fieldKeys[fk]] = fieldResult.updates[fieldKeys[fk]];
+            }
+
+            if (fieldResult.has_flags) {
+              console.log('AI flagged fields for review:', JSON.stringify(fieldResult.flagged));
+            }
+          } catch (aiErr) {
+            console.error('AI parse failed for', bookingId, aiErr.message);
+          }
+        }
+
+        // Update Zoho with extracted fields + Last_Response_Date
         try {
-          await zohoApi('PUT', 'Lodge_Bookings', {
-            data: [{ id: bookingId, Last_Response_Date: today }]
-          });
+          zohoUpdates.id = bookingId;
+          await zohoApi('PUT', 'Lodge_Bookings', { data: [zohoUpdates] });
+          console.log('Updated booking', bookingId, 'with', Object.keys(zohoUpdates).length - 1, 'fields');
         } catch (zohoErr) {
-          console.error('Failed to update Last_Response_Date for', bookingId, zohoErr.message);
+          console.error('Failed to update booking', bookingId, zohoErr.message);
         }
 
         stored++;
@@ -237,6 +267,9 @@ export default async function(req, res) {
           matched_booking: matchedBooking.Name || matchedBooking.Lodge_Name,
           match_method: matchMethod,
           attachments: attachments.length,
+          ai_summary: aiResult ? aiResult.summary : null,
+          ai_status: aiResult && aiResult.extracted && aiResult.extracted.suggested_status ? aiResult.extracted.suggested_status.value : null,
+          fields_updated: Object.keys(zohoUpdates).length - 1,
         });
 
       } catch (msgErr) {
