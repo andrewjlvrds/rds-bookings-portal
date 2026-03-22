@@ -46,12 +46,9 @@ export default async function(req, res) {
     // Step 2: Fetch all lodge bookings
     var bookingFields = [
       'Name','Lodge_Name','Check_in_Date','Check_out_Date','Nights','Status',
-      'Pax_in_Single_Rooms','Pax_in_Shared_Double','Pax_in_Shared_Twin',
-      'Number_of_guides','Single_Rooms','Shared_Twin_Rooms','Shared_Double_Rooms',
-      'Guide_Rooms','Sgl_Twin_Dbl_Guides','Meals','Total_Amount','Deposit_Amount',
+      'Sgl_Twin_Dbl_Guides','Meals','Total_Amount','Deposit_Amount',
       'Lodge_Currency','Booking_Reference','Booking_Notes','Reservation_Comments',
-      'Lodge_Availability','Lodge','Lodge_Contact','Lodge_ID','Tour',
-      'Claude_Confidence','Claude_Updated_Time','Updated_by',
+      'Lodge_Availability','Lodge','Lodge_Contact','Tour',
       'RDS_Reference','Lodge_Reference','Cancel_Free_Before','Cancellation_Policy_Text',
       'Credit_Amount','Enquiry_Sent_Date','Last_Response_Date',
       'Follow_up_Date','Excursion','Excursion_booking_status','Excursion_Date','Excursion_notes',
@@ -59,7 +56,7 @@ export default async function(req, res) {
       'Third_Payment_Amount','Third_Payment_Due_Date',
       'Fourth_Payment_Amount','Fourth_Payment_Due_Date',
       'Email','Contact_Name','Exchange_Rate','Currency',
-      'Day_Description','Km','id'
+      'Day_Description','id'
     ].join(',');
 
     var allBookings = [];
