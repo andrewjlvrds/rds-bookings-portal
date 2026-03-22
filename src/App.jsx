@@ -90,7 +90,19 @@ export default function App() {
       const err = await response.json()
       throw new Error(err.error || 'Failed to create tour')
     }
-    // Reload data to pick up new tour
+    window.location.reload()
+  }
+
+  const handleDeleteTour = async (tourId, tourName) => {
+    if (!confirm('Delete "' + tourName + '"? This removes the tour from Zoho. Lodge bookings linked to this tour will become unassigned.')) return
+    const response = await fetch(API + '/api/delete-tour?id=' + tourId, { method: 'DELETE' })
+    if (!response.ok) {
+      const err = await response.json()
+      alert('Error: ' + (err.error || 'Failed to delete'))
+      return
+    }
+    setActiveTour(null)
+    setActiveView('dashboard')
     window.location.reload()
   }
 
@@ -155,6 +167,7 @@ export default function App() {
           tour={activeTour}
           onSelectBooking={handleSelectBooking}
           onEditItinerary={() => setActiveView('edit-itinerary')}
+          onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}
         />
       )
     }

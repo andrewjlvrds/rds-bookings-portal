@@ -1,7 +1,7 @@
 import React from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
 
-export default function Itinerary({ tour, onSelectBooking, onEditItinerary }) {
+export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDeleteTour }) {
   if (!tour) return null
 
   const allBookings = tour.bookings || []
@@ -41,12 +41,25 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary }) {
             {roomConfig ? ' · Pax: ' + roomConfig : ''}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="btn" onClick={onEditItinerary}>
             {sorted.length === 0 ? 'Create itinerary' : 'Edit itinerary'}
           </button>
           {sorted.length > 0 && (
             <button className="btn btn-primary">Enquire all ready</button>
+          )}
+          {onDeleteTour && (
+            <button
+              onClick={onDeleteTour}
+              style={{
+                background: 'none', border: 'none', fontSize: 12,
+                color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 8px',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--red-text)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+            >
+              Delete tour
+            </button>
           )}
         </div>
       </div>
