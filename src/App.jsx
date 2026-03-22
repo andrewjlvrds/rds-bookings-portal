@@ -2,6 +2,7 @@ import React, { useState, useEffect, Component } from 'react'
 import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
 import Itinerary from './components/Itinerary'
+import ItineraryEditor from './components/ItineraryEditor'
 import Payments from './components/Payments'
 import './styles/global.css'
 
@@ -120,8 +121,28 @@ export default function App() {
       return <Payments allBookings={allBookings} tours={tours} />
     }
 
+    if (activeTour && activeView === 'edit-itinerary') {
+      return (
+        <ItineraryEditor
+          tour={activeTour}
+          onBack={() => setActiveView('itinerary')}
+          onSave={() => {
+            setActiveView('itinerary')
+            // Reload data
+            window.location.reload()
+          }}
+        />
+      )
+    }
+
     if (activeTour && activeView === 'itinerary') {
-      return <Itinerary tour={activeTour} onSelectBooking={handleSelectBooking} />
+      return (
+        <Itinerary
+          tour={activeTour}
+          onSelectBooking={handleSelectBooking}
+          onEditItinerary={() => setActiveView('edit-itinerary')}
+        />
+      )
     }
 
     return (

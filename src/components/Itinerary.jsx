@@ -1,7 +1,7 @@
 import React from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
 
-export default function Itinerary({ tour, onSelectBooking }) {
+export default function Itinerary({ tour, onSelectBooking, onEditItinerary }) {
   if (!tour) return null
 
   const allBookings = tour.bookings || []
@@ -42,8 +42,12 @@ export default function Itinerary({ tour, onSelectBooking }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn">Edit itinerary</button>
-          <button className="btn btn-primary">Enquire all ready</button>
+          <button className="btn" onClick={onEditItinerary}>
+            {sorted.length === 0 ? 'Create itinerary' : 'Edit itinerary'}
+          </button>
+          {sorted.length > 0 && (
+            <button className="btn btn-primary">Enquire all ready</button>
+          )}
         </div>
       </div>
 
