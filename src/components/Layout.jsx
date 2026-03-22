@@ -1,4 +1,5 @@
 import React from 'react'
+import { getStatus } from '../utils/helpers'
 
 export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, children }) {
   return (
@@ -127,7 +128,7 @@ function NavItem({ label, active, onClick, count }) {
 
 function TourItem({ tour, active, onClick }) {
   const confirmed = (tour.bookings || []).filter(b => {
-    const status = b['Booking Status'] || b.Booking_Status || ''
+    const status = getStatus(b)
     return ['Balance Paid', 'Deposit Paid', 'Confirmed'].includes(status)
   }).length
   const total = (tour.bookings || []).length

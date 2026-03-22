@@ -67,14 +67,20 @@ export function getStatusBadge(status) {
   return STATUS_MAP[status] || { cls: 'badge-ready', label: status || '—' }
 }
 
+// Get booking status — Zoho API uses 'Status' as the API name for 'Booking Status'
+export function getStatus(bk) {
+  return bk.Status || bk['Booking Status'] || bk.Booking_Status || ''
+}
+
 // Check if a booking is "confirmed" (in a positive state)
-export function isConfirmed(status) {
+export function isConfirmed(statusOrBooking) {
+  const status = typeof statusOrBooking === 'object' ? getStatus(statusOrBooking) : statusOrBooking
   return ['Balance Paid', 'Deposit Paid', 'Confirmed', 'Availability Confirmed', 'Proforma Received'].includes(status)
 }
 
 // Check if booking is the "active" one (not an alternative that was tried and rejected)
 export function isActiveBooking(booking) {
-  const status = booking['Booking Status'] || booking.Booking_Status || ''
+  const status = getStatus(booking)
   // Z-prefixed day descriptions are alternatives
   const dayDesc = booking['Day Description'] || booking.Day_Description || ''
   if (dayDesc.startsWith('Z ') || dayDesc.startsWith('z ')) return false

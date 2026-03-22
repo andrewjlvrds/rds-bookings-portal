@@ -1,12 +1,12 @@
 import React from 'react'
-import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiveBooking, today, daysBetween, getTourName } from '../utils/helpers'
+import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiveBooking, today, daysBetween, getTourName, getStatus } from '../utils/helpers'
 
 export default function Dashboard({ tours, allBookings, onSelectTour, onSelectView }) {
   const activeBookings = allBookings.filter(isActiveBooking)
 
   // Metrics
   const totalLodges = activeBookings.length
-  const confirmed = activeBookings.filter(b => isConfirmed(b['Booking Status'] || b.Booking_Status || '')).length
+  const confirmed = activeBookings.filter(b => isConfirmed(b)).length
   const needsAttention = computeNeedsAttention(allBookings)
 
   return (
@@ -80,10 +80,10 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
 function TourCard({ tour, onClick }) {
   const bookings = (tour.bookings || []).filter(isActiveBooking)
   const total = bookings.length
-  const confirmed = bookings.filter(b => isConfirmed(b['Booking Status'] || b.Booking_Status || '')).length
-  const enquired = bookings.filter(b => (b['Booking Status'] || b.Booking_Status || '') === 'Enquiry Sent').length
-  const ready = bookings.filter(b => (b['Booking Status'] || b.Booking_Status || '') === 'Not Started').length
-  const unavail = bookings.filter(b => (b['Booking Status'] || b.Booking_Status || '') === 'Not Available').length
+  const confirmed = bookings.filter(b => isConfirmed(b)).length
+  const enquired = bookings.filter(b => (getStatus(b)) === 'Enquiry Sent').length
+  const ready = bookings.filter(b => (getStatus(b)) === 'Not Started').length
+  const unavail = bookings.filter(b => (getStatus(b)) === 'Not Available').length
 
   const pctConfirmed = total ? Math.round(confirmed / total * 100) : 0
   const pctEnquired = total ? Math.round(enquired / total * 100) : 0
@@ -174,7 +174,7 @@ function computeNeedsAttention(bookings) {
   const now = today()
 
   bookings.forEach(bk => {
-    const status = bk['Booking Status'] || bk.Booking_Status || ''
+    const status = getStatus(bk)
     const lodge = bk['Lodge Booking Name'] || bk.Lodge_Booking_Name || bk.Name || ''
     const tour = getTourName(bk)
     const dayDesc = bk['Day Description'] || bk.Day_Description || ''

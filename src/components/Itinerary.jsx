@@ -1,5 +1,5 @@
 import React from 'react'
-import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed } from '../utils/helpers'
+import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
 
 export default function Itinerary({ tour, onSelectBooking }) {
   if (!tour) return null
@@ -22,9 +22,9 @@ export default function Itinerary({ tour, onSelectBooking }) {
   })
 
   // Stats
-  const confirmed = sorted.filter(b => isConfirmed(b['Booking Status'] || b.Booking_Status || '')).length
-  const enquired = sorted.filter(b => (b['Booking Status'] || b.Booking_Status || '') === 'Enquiry Sent').length
-  const ready = sorted.filter(b => (b['Booking Status'] || b.Booking_Status || '') === 'Not Started').length
+  const confirmed = sorted.filter(b => isConfirmed(b)).length
+  const enquired = sorted.filter(b => (getStatus(b)) === 'Enquiry Sent').length
+  const ready = sorted.filter(b => (getStatus(b)) === 'Not Started').length
 
   // Get room config from first booking
   const firstBk = sorted[0]
@@ -74,7 +74,7 @@ export default function Itinerary({ tour, onSelectBooking }) {
           </thead>
           <tbody>
             {sorted.map((bk, i) => {
-              const status = bk['Booking Status'] || bk.Booking_Status || ''
+              const status = getStatus(bk)
               const badge = getStatusBadge(status)
               const lodge = (bk['Lodge Booking Name'] || bk.Lodge_Booking_Name || bk.Name || '').split(' - ')[0]
               const dayDesc = bk['Day Description'] || bk.Day_Description || ''
