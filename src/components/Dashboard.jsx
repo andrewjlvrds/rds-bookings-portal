@@ -1,5 +1,5 @@
 import React from 'react'
-import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiveBooking, today, daysBetween } from '../utils/helpers'
+import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiveBooking, today, daysBetween, getTourName } from '../utils/helpers'
 
 export default function Dashboard({ tours, allBookings, onSelectTour, onSelectView }) {
   const activeBookings = allBookings.filter(isActiveBooking)
@@ -176,7 +176,7 @@ function computeNeedsAttention(bookings) {
   bookings.forEach(bk => {
     const status = bk['Booking Status'] || bk.Booking_Status || ''
     const lodge = bk['Lodge Booking Name'] || bk.Lodge_Booking_Name || bk.Name || ''
-    const tour = bk['Tour'] || ''
+    const tour = getTourName(bk)
     const dayDesc = bk['Day Description'] || bk.Day_Description || ''
 
     // Skip alternatives

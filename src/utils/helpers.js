@@ -1,5 +1,20 @@
 // Formatting and utility functions for the RDS portal
 
+// Safely convert any value to a renderable string
+// Zoho lookup fields come as {name, id} objects
+export function str(v) {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'object') return v.name || v.id || ''
+  return String(v)
+}
+
+// Get tour name from a booking (handles Zoho object or string)
+export function getTourName(bk) {
+  const tour = bk['Tour'] || bk.Tour || ''
+  if (typeof tour === 'object') return tour.name || ''
+  return bk.tour_name || tour || ''
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export function fmtDate(d) {

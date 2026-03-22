@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { fmtDate, fmtDateFull, fmtCurrency, today, daysBetween } from '../utils/helpers'
+import { fmtDate, fmtDateFull, fmtCurrency, today, daysBetween, getTourName } from '../utils/helpers'
 
 export default function Payments({ allBookings, tours }) {
   const [filter, setFilter] = useState('all')
@@ -160,7 +160,7 @@ function extractPayments(bookings, now) {
   ;(bookings || []).forEach(bk => {
     const status = bk['Booking Status'] || bk.Booking_Status || ''
     const lodge = (bk['Lodge Booking Name'] || bk.Lodge_Booking_Name || bk.Name || '').split(' - ')[0]
-    const tour = bk['Tour'] || ''
+    const tour = getTourName(bk)
     const currency = bk['Currency'] || bk.Lodge_Currency || ''
     const ref = bk['Booking Reference'] || bk.Booking_Reference || ''
     const dayDesc = bk['Day Description'] || bk.Day_Description || ''
