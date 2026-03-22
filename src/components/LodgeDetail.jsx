@@ -6,6 +6,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
   const [loadingEmails, setLoadingEmails] = useState(true)
   const [editing, setEditing] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  const [polling, setPolling] = useState(false)
 
   const bookingId = booking.id || booking['Record Id']
   const lodgeName = (booking.Lodge_Name || booking.Name || '').split(' - ')[0]
@@ -25,7 +26,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
     : (booking.Contact_Name || '')
 
   // Fetch emails for this booking
-  useEffect(() => {
+  const fetchEmails = () => {
     setLoadingEmails(true)
     fetch('/api/bp-emails?booking_id=' + bookingId)
       .then(r => r.json())
@@ -34,7 +35,26 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         setLoadingEmails(false)
       })
       .catch(() => setLoadingEmails(false))
-  }, [bookingId])
+  }
+
+  useEffect(() => { fetchEmails() }, [bookingId])
+
+  // Check Gmail for new replies
+  const handleCheckReplies = async () => {
+    setPolling(true)
+    try {
+      const res = await fetch('/api/poll-gmail', { method: 'POST' })
+      const result = await res.json()
+      if (result.stored > 0) {
+        fetchEmails()
+        if (onRefresh) onRefresh()
+      }
+    } catch (err) {
+      console.error('Poll error:', err)
+    } finally {
+      setPolling(false)
+    }
+  }
 
   // Save inline edit
   const handleSave = async (field, value) => {
@@ -283,9 +303,19 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
       <div className="panel">
         <div className="panel-head">
           <span>Email thread</span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
-            {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
-          </span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              className="btn btn-sm"
+              onClick={handleCheckReplies}
+              disabled={polling}
+              style={{ fontSize: 11, padding: '3px 10px' }}
+            >
+              {polling ? 'Checking...' : 'Check for replies'}
+            </button>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
+              {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
+            </span>
+          </div>
         </div>
         <div className="panel-body">
           {loadingEmails ? (

@@ -1,22 +1,6 @@
 import { zohoApi } from './_zoho.js';
 import { storeEmail } from './_email-store.js';
-
-// Get Gmail access token from refresh token
-async function getGmailToken() {
-  var response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GMAIL_CLIENT_ID,
-      client_secret: process.env.GMAIL_CLIENT_SECRET,
-      refresh_token: process.env.GMAIL_REFRESH_TOKEN,
-      grant_type: 'refresh_token',
-    }).toString(),
-  });
-  var data = await response.json();
-  if (data.error) throw new Error('Gmail auth: ' + data.error);
-  return data.access_token;
-}
+import { getGmailToken } from './_gmail.js';
 
 // Build RFC 2822 email and base64url encode it
 function buildRawEmail(from, to, subject, bodyText) {
