@@ -18,22 +18,22 @@ function categorizeTours(tours) {
       return
     }
 
-    const startDate = tour.start_date || ''
-    const endDate = tour.end_date || ''
+    const depDate = tour.departure_date || tour.start_date || ''
 
-    // No bookings at all — definitely a new build
-    if (!startDate) {
+    // No departure date at all — new build
+    if (!depDate) {
       newBuild.push(tour)
       return
     }
 
     // New build: departure date on or after Nov 2026
-    if (startDate >= NEW_BUILD_CUTOFF) {
+    if (depDate >= NEW_BUILD_CUTOFF) {
       newBuild.push(tour)
       return
     }
 
-    // Past: end date before today
+    // Past: end date or departure date before today
+    const endDate = tour.end_date || ''
     if (endDate && endDate < today) {
       past.push(tour)
       return

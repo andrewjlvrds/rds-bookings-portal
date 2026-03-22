@@ -7,20 +7,57 @@ export default async function(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    var fields = [
+    // Step 1: Fetch all tours from the Tours module
+    var tourFields = 'Name,Departure_Date,End_Date,Start_Date,Status,Tour_Type,' +
+      'Guide_Rooms,Max_Guests,Number_of_riders,Pax_in_Single_Rooms,' +
+      'Pax_in_Shared_Double_Rooms,Pax_in_Shared_Twin_Rooms,id';
+
+    var tourResult = await zohoApi('GET',
+      'Tours?fields=' + tourFields + '&sort_by=Departure_Date&sort_order=desc&per_page=200'
+    );
+    var allTours = (tourResult && tourResult.data) || [];
+
+    // Build tour map from Tours module
+    var tourMap = {};
+    allTours.forEach(function(t) {
+      tourMap[t.id] = {
+        id: t.id,
+        name: t.Name || '',
+        departure_date: t.Departure_Date || null,
+        end_date: t.End_Date || null,
+        start_date: t.Start_Date || t.Departure_Date || null,
+        tour_status: t.Status || '',
+        tour_type: t.Tour_Type || '',
+        guide_rooms: t.Guide_Rooms || 0,
+        max_guests: t.Max_Guests || 0,
+        num_riders: t.Number_of_riders || 0,
+        pax_single: t.Pax_in_Single_Rooms || 0,
+        pax_double: t.Pax_in_Shared_Double_Rooms || 0,
+        pax_twin: t.Pax_in_Shared_Twin_Rooms || 0,
+        bookings: [],
+      };
+    });
+
+    // Step 2: Fetch all lodge bookings
+    var bookingFields = [
       'Name','Lodge_Name','Check_in_Date','Check_out_Date','Nights','Status',
       'Pax_in_Single_Rooms','Pax_in_Shared_Double','Pax_in_Shared_Twin',
       'Number_of_guides','Single_Rooms','Shared_Twin_Rooms','Shared_Double_Rooms',
       'Guide_Rooms','Sgl_Twin_Dbl_Guides','Meals','Total_Amount','Deposit_Amount',
       'Lodge_Currency','Booking_Reference','Booking_Notes','Reservation_Comments',
-      'Lodge_Availability','Lodge','Lodge_Contact','Lodge_ID','Tour',
+      'Lodge_Availability','Lodge','Lodge_Contact','Lodge_ID','Lodge_Email','Tour',
       'Claude_Confidence','Claude_Updated_Time','Updated_by',
       'Follow_up_Date','Excursion','Excursion_booking_status','Excursion_Date','Excursion_notes',
       'Deposit_Due_Date','Second_Payment_Amount','Second_Payment_Due_Date',
       'Third_Payment_Amount','Third_Payment_Due_Date',
       'Fourth_Payment_Amount','Fourth_Payment_Due_Date',
       'Email','Contact_Name','Exchange_Rate','Currency',
-      'Day_Description','Km','id'
+      'Day_Description','Km',
+      'Portal_Status','RDS_Reference','Lodge_Reference',
+      'Enquiry_Sent_Date','Last_Response_Date','Template_Used',
+      'Cancel_Free_Before','Cancellation_Policy_Text',
+      'Credit_Amount','Credit_Applied_To','Credit_Expiry',
+      'id'
     ].join(',');
 
     var allBookings = [];
@@ -29,17 +66,19 @@ export default async function(req, res) {
 
     while (hasMore && page <= 5) {
       var result = await zohoApi('GET',
-        'Lodge_Bookings?fields=' + fields +
+        'Lodge_Bookings?fields=' + bookingFields +
         '&sort_by=Created_Time&sort_order=desc&per_page=200&page=' + page
       );
 
-      var data = result.data || [];
+      var data = (result && result.data) || [];
       allBookings = allBookings.concat(data);
-      hasMore = result.info && result.info.more_records;
+      hasMore = result && result.info && result.info.more_records;
       page++;
     }
 
-    var tourMap = {};
+    // Step 3: Assign bookings to tours
+    var unassigned = { id: 'unassigned', name: 'Unassigned Bookings', bookings: [], departure_date: null };
+
     allBookings.forEach(function(bk) {
       var tourId = '';
       var tourName = '';
@@ -54,47 +93,62 @@ export default async function(req, res) {
         }
       }
 
-      if (!tourId) {
-        tourId = 'unassigned';
-        tourName = 'Unassigned Bookings';
-      }
-
-      if (!tourMap[tourId]) {
-        tourMap[tourId] = { id: tourId, name: tourName, bookings: [] };
-      }
-
       var lodgeId = '';
       if (bk.Lodge) {
         lodgeId = typeof bk.Lodge === 'object' ? bk.Lodge.id : bk.Lodge;
       }
 
-      tourMap[tourId].bookings.push(Object.assign({}, bk, {
+      var enriched = Object.assign({}, bk, {
         lodge_id: lodgeId,
-        lodge_email: bk.Email || '',
+        lodge_email: bk.Lodge_Email || bk.Email || '',
         tour_id: tourId,
         tour_name: tourName,
-      }));
+      });
+
+      if (tourId && tourMap[tourId]) {
+        tourMap[tourId].bookings.push(enriched);
+      } else {
+        unassigned.bookings.push(enriched);
+      }
     });
 
+    // Step 4: Build final tour list
     var tours = Object.values(tourMap);
+
+    if (unassigned.bookings.length > 0) {
+      tours.push(unassigned);
+    }
+
+    // Compute summary fields
+    tours.forEach(function(tour) {
+      var bks = tour.bookings;
+      tour.count = bks.length;
+      tour.confirmed = bks.filter(function(b) {
+        return b.Status === 'Balance Paid' || b.Status === 'Deposit Paid' ||
+               b.Status === 'Confirmed' || b.Status === 'Paid in Full';
+      }).length;
+
+      // Fall back to booking dates if tour has no departure_date
+      if (!tour.start_date && bks.length > 0) {
+        var sorted = bks.slice().sort(function(a, b) {
+          return (a.Check_in_Date || '').localeCompare(b.Check_in_Date || '');
+        });
+        tour.start_date = sorted[0].Check_in_Date || null;
+        tour.end_date = tour.end_date || sorted[sorted.length - 1].Check_out_Date || null;
+      }
+    });
+
+    // Sort: future tours first by departure date, then past
+    var now = new Date().toISOString().split('T')[0];
     tours.sort(function(a, b) {
-      var aDate = a.bookings[0] ? a.bookings[0].Check_in_Date || '' : '';
-      var bDate = b.bookings[0] ? b.bookings[0].Check_in_Date || '' : '';
-      var now = new Date().toISOString().split('T')[0];
-      var aFuture = aDate >= now;
-      var bFuture = bDate >= now;
+      var aDate = a.departure_date || a.start_date || '';
+      var bDate = b.departure_date || b.start_date || '';
+      var aFuture = aDate >= now || !aDate;
+      var bFuture = bDate >= now || !bDate;
       if (aFuture && !bFuture) return -1;
       if (!aFuture && bFuture) return 1;
       if (aFuture) return aDate.localeCompare(bDate);
       return bDate.localeCompare(aDate);
-    });
-
-    tours.forEach(function(tour) {
-      var bks = tour.bookings;
-      tour.count = bks.length;
-      tour.confirmed = bks.filter(function(b) { return b.Status === 'Confirmed' || b.Status === 'Deposit Paid' || b.Status === 'Paid in Full' }).length;
-      tour.start_date = bks.length ? bks[0].Check_in_Date : null;
-      tour.end_date = bks.length ? bks[bks.length - 1].Check_out_Date : null;
     });
 
     res.status(200).json({
