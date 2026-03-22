@@ -51,56 +51,54 @@ function buildRoomRequirements(opts = {}) {
   return { roomStr, guideStr, totalPax }
 }
 
-// New lodge template — first time contacting this lodge
+// New lodge template - first time contacting this lodge
 export function newLodgeEmail(bookings, tourName, lodgeName, tourConfig = {}) {
   const dateTable = buildDateTable(bookings)
   const { roomStr, guideStr } = buildRoomRequirements(tourConfig)
 
-  return `Dear Reservations,
+  return `Hi there,
 
-I'm writing from Ride Down South, a guided motorcycle tour operator running trips through Southern Africa. We're planning our ${tourName} departure and would like to enquire about availability at ${lodgeName}.
-
-Could you please let us know if you have availability for the following dates:
+We're Ride Down South, a guided motorcycle tour operator in Southern Africa. We'd like to check availability at ${lodgeName} for our upcoming ${tourName} departure:
 
 ${dateTable}
 
-We would need ${roomStr}${guideStr ? ', plus ' + guideStr : ''}.
+Room requirements:
+- ${roomStr}
+- ${guideStr}
 
-If available, could you please provide:
-- Your rates for the above dates
-- Your cancellation and payment terms
-- Whether you offer a tour operator or STO discount
-
-We look forward to hearing from you.
+If available, please could you send through:
+- Rates for the above dates
+- Cancellation and payment terms
+- Any tour operator / STO rates available
 
 Take care,
 Helen Baker
-Lodge Bookings
-Ride Down South
-helen@ridedownsouth.com`
+Lodge Bookings | Ride Down South
+bookings@ridedownsouth.com`
 }
 
-// Returning lodge template — we've stayed here before
+// Returning lodge template - we've stayed here before
 export function returningLodgeEmail(bookings, tourName, lodgeName, contactName, tourConfig = {}) {
   const dateTable = buildDateTable(bookings)
-  const greeting = contactName ? `Hi ${contactName},` : 'Hi there,'
+  const greeting = contactName ? ('Hi ' + contactName + ',') : 'Hi there,'
   const { roomStr, guideStr } = buildRoomRequirements(tourConfig)
 
   return `${greeting}
 
-Hope you're well. We'd like to book ${lodgeName} again for our upcoming ${tourName} departure.
+Hope you're well. We'd like to book again for our ${tourName} departure:
 
 ${dateTable}
 
-We would need ${roomStr}${guideStr ? ', plus ' + guideStr : ''}.
+Room requirements:
+- ${roomStr}
+- ${guideStr}
 
-Could you confirm availability and let us know your current rates? If we don't have an STO agreement on file yet, we'd appreciate details on any tour operator rates available.
+Please confirm availability and current rates. If we don't have an STO agreement on file, we'd appreciate any tour operator rates available.
 
 Take care,
 Helen Baker
-Lodge Bookings
-Ride Down South
-helen@ridedownsouth.com`
+Lodge Bookings | Ride Down South
+bookings@ridedownsouth.com`
 }
 
 // Generate the right email based on whether we've contacted this lodge before
