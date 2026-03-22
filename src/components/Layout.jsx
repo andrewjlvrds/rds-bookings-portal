@@ -1,12 +1,16 @@
 import React, { useState } from 'react'
 import { getStatus, isConfirmed } from '../utils/helpers'
 
-// Categorise tours into groups based on dates
+// Categorise tours into groups based on departure dates
+// New build: departing Nov 2026 onwards (our active build targets)
+// Upcoming: departing before Nov 2026, not yet completed
+// Past: completed tours
 function categorizeTours(tours) {
+  const NEW_BUILD_CUTOFF = '2026-11-01'
   const today = new Date().toISOString().split('T')[0]
-  const newBuild = []    // No enquiries made yet (EoA Nov 26 onwards, all 2027+)
-  const upcoming = []    // Future tours with some data
-  const past = []        // Completed tours
+  const newBuild = []
+  const upcoming = []
+  const past = []
 
   ;(tours || []).forEach(tour => {
     if (tour.id === 'unassigned') {
@@ -17,30 +21,33 @@ function categorizeTours(tours) {
     const startDate = tour.start_date || ''
     const endDate = tour.end_date || ''
 
-    // If tour has ended (end date in the past)
+    // No bookings at all — definitely a new build
+    if (!startDate) {
+      newBuild.push(tour)
+      return
+    }
+
+    // New build: departure date on or after Nov 2026
+    if (startDate >= NEW_BUILD_CUTOFF) {
+      newBuild.push(tour)
+      return
+    }
+
+    // Past: end date before today
     if (endDate && endDate < today) {
       past.push(tour)
       return
     }
 
-    // If tour hasn't started yet, check if it has any booking activity
-    const bookings = tour.bookings || []
-    const hasActivity = bookings.some(b => {
-      const s = getStatus(b)
-      return s && s !== 'Not Started' && s !== ''
-    })
-
-    if (!hasActivity) {
-      newBuild.push(tour)
-    } else {
-      upcoming.push(tour)
-    }
+    // Everything else is upcoming
+    upcoming.push(tour)
   })
 
-  // Sort by start date
+  // Sort new build and upcoming by start date ascending
   const byDate = (a, b) => (a.start_date || '').localeCompare(b.start_date || '')
   newBuild.sort(byDate)
   upcoming.sort(byDate)
+  // Past by start date descending (most recent first)
   past.sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))
 
   return { newBuild, upcoming, past }
