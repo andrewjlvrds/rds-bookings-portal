@@ -67,8 +67,7 @@ export default async function(req, res) {
         Tour: tourId,
       };
 
-      // Try adding new fields — Zoho ignores unrecognised fields on create
-      try { record.Portal_Status = 'Not Started'; } catch(e) {}
+      // RDS_Reference may not be active in Zoho API yet — try but don't fail
       try { record.RDS_Reference = rdsRef; } catch(e) {}
 
       try {
