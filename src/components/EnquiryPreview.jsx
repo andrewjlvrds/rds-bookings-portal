@@ -81,7 +81,12 @@ export default function EnquiryPreview({ tour, lodges, onBack }) {
         })
 
         if (res.ok) {
-          setSent(prev => ({ ...prev, [i]: 'sent' }))
+          const result = await res.json()
+          if (result.email_sent) {
+            setSent(prev => ({ ...prev, [i]: 'sent' }))
+          } else {
+            setSent(prev => ({ ...prev, [i]: 'error: ' + (result.email_error || 'Email failed to send') }))
+          }
         } else {
           const err = await res.json()
           setSent(prev => ({ ...prev, [i]: 'error: ' + (err.error || 'failed') }))

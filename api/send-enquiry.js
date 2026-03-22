@@ -55,55 +55,69 @@ export default async function(req, res) {
     var emailSent = false;
     var emailError = null;
 
-    try {
-      var emailResult = await zohoApi('POST',
-        'Lodge_Bookings/' + primaryBookingId + '/actions/send_mail',
-        emailPayload
-      );
-      emailSent = true;
-    } catch(emailErr) {
-      emailError = emailErr.message;
-      console.error('Email send failed:', emailErr.message);
+    // Retry up to 3 times with backoff for rate limits
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (attempt > 0) {
+          await new Promise(function(r) { setTimeout(r, 2000 * attempt); });
+        }
+        var emailResult = await zohoApi('POST',
+          'Lodge_Bookings/' + primaryBookingId + '/actions/send_mail',
+          emailPayload
+        );
+        emailSent = true;
+        break;
+      } catch(emailErr) {
+        emailError = emailErr.message;
+        console.error('Email send attempt ' + (attempt + 1) + ' failed:', emailErr.message);
+        // If not a rate limit error, don't retry
+        if (emailErr.message.indexOf('too many requests') === -1 &&
+            emailErr.message.indexOf('Access Denied') === -1) {
+          break;
+        }
+      }
     }
 
-    // Update all booking statuses to "Enquiry Sent" regardless of email success
-    // (if email failed, operator can resend manually)
+    // Only update status if email actually sent
     var today = new Date().toISOString().split('T')[0];
     var followUp = new Date();
     followUp.setDate(followUp.getDate() + 7);
     var followUpDate = followUp.toISOString().split('T')[0];
 
-    var updateRecords = bookingIds.map(function(id) {
-      return {
-        id: id,
-        Status: 'Enquiry Sent',
-      };
-    });
-
-    // Try to set date fields — these might fail if not in API yet
-    try {
-      updateRecords.forEach(function(r) {
-        r.Enquiry_Sent_Date = today;
-        r.Follow_up_Date = followUpDate;
-      });
-    } catch(e) {}
-
     var updatedCount = 0;
     var updateErrors = [];
 
-    try {
-      var updateResult = await zohoApi('PUT', 'Lodge_Bookings', { data: updateRecords });
-      if (updateResult && updateResult.data) {
-        updateResult.data.forEach(function(r) {
-          if (r.status === 'success') {
-            updatedCount++;
-          } else {
-            updateErrors.push(r.message || 'Update failed');
-          }
+    if (emailSent && bookingIds.length > 0) {
+      var updateRecords = bookingIds.map(function(id) {
+        return {
+          id: id,
+          Status: 'Enquiry Sent',
+        };
+      });
+
+      try {
+        updateRecords.forEach(function(r) {
+          r.Enquiry_Sent_Date = today;
+          r.Follow_up_Date = followUpDate;
         });
+      } catch(e) {}
+
+      try {
+        // Small delay to avoid rate limiting
+        await new Promise(function(r) { setTimeout(r, 1000); });
+        var updateResult = await zohoApi('PUT', 'Lodge_Bookings', { data: updateRecords });
+        if (updateResult && updateResult.data) {
+          updateResult.data.forEach(function(r) {
+            if (r.status === 'success') {
+              updatedCount++;
+            } else {
+              updateErrors.push(r.message || 'Update failed');
+            }
+          });
+        }
+      } catch(updateErr) {
+        updateErrors.push(updateErr.message);
       }
-    } catch(updateErr) {
-      updateErrors.push(updateErr.message);
     }
 
     res.status(200).json({
