@@ -64,6 +64,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
 }
 
 function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView }) {
+  const [showUpcoming, setShowUpcoming] = useState(false)
   const [showPast, setShowPast] = useState(false)
   const { newBuild, upcoming, past } = categorizeTours(tours)
 
@@ -125,15 +126,46 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView }) 
         />
       )}
 
-      {/* Upcoming tours with activity */}
+      {/* Upcoming tours with activity — collapsed by default */}
       {upcoming.length > 0 && (
-        <TourGroup
-          label="Upcoming"
-          tours={upcoming}
-          activeTour={activeTour}
-          onSelectTour={onSelectTour}
-          onSelectView={onSelectView}
-        />
+        <div style={{ borderTop: '0.5px solid var(--border-default)' }}>
+          <button
+            onClick={() => setShowUpcoming(!showUpcoming)}
+            style={{
+              display: 'flex',
+              width: '100%',
+              textAlign: 'left',
+              padding: '8px 20px 6px',
+              background: 'transparent',
+              border: 'none',
+              fontSize: 11,
+              fontWeight: 500,
+              color: 'var(--text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <span>Upcoming ({upcoming.length})</span>
+            <span style={{
+              fontSize: 10,
+              transition: 'transform 0.15s',
+              transform: showUpcoming ? 'rotate(180deg)' : 'rotate(0deg)',
+              display: 'inline-block',
+            }}>▾</span>
+          </button>
+
+          {showUpcoming && upcoming.map(tour => (
+            <TourItem
+              key={tour.id}
+              tour={tour}
+              active={activeTour && activeTour.id === tour.id}
+              onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
+            />
+          ))}
+        </div>
       )}
 
       {/* Past tours — collapsed by default */}

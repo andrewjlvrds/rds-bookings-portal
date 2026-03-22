@@ -3,10 +3,10 @@ import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiv
 import { categorizeTours } from './Layout'
 
 export default function Dashboard({ tours, allBookings, onSelectTour, onSelectView }) {
-  const { newBuild, upcoming } = categorizeTours(tours)
-  const activeTours = [...newBuild, ...upcoming]
+  const { newBuild } = categorizeTours(tours)
+  const activeTours = newBuild
 
-  // Only count bookings from active tours
+  // Only count bookings from new build tours
   const activeBookings = activeTours.flatMap(t => (t.bookings || []).filter(isActiveBooking))
 
   // Metrics
@@ -18,7 +18,7 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
     <div>
       <h1 style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Lodge bookings</h1>
       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-        {activeTours.length} active tours · {totalLodges} bookings
+        {activeTours.length} new tour{activeTours.length !== 1 ? 's' : ''} · {totalLodges} bookings
       </p>
 
       {/* Metric cards */}
@@ -70,8 +70,8 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
       {/* Tours */}
       {newBuild.length > 0 && (
         <>
-          <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>New tours — clean build</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12, marginBottom: 24 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>Tours</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
             {newBuild.map(tour => (
               <TourCard
                 key={tour.id}
@@ -83,19 +83,10 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
         </>
       )}
 
-      {upcoming.length > 0 && (
-        <>
-          <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>Upcoming tours</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
-            {upcoming.map(tour => (
-              <TourCard
-                key={tour.id}
-                tour={tour}
-                onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
-              />
-            ))}
-          </div>
-        </>
+      {newBuild.length === 0 && (
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)' }}>
+          No new tours to set up. Select a tour from the sidebar to view its itinerary.
+        </div>
       )}
     </div>
   )
