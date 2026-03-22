@@ -214,7 +214,56 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
                     {amount ? fmtCurrency(amount, currency) : '—'}
                   </td>
                   <td>
-                    <span className={'badge ' + badge.cls}>{badge.label}</span>
+                    {editing && editing.id === (bk.id || bk['Record Id']) && editing.field === 'status' ? (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <select
+                          value={editing.value}
+                          onChange={e => {
+                            const newVal = e.target.value
+                            setEditing({ ...editing, value: newVal })
+                            // Auto-save on select
+                            setSavingEdit(true)
+                            fetch('/api/update-bookings', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ booking_ids: [editing.id], updates: { Status: newVal } }),
+                            }).then(res => {
+                              if (!res.ok) throw new Error('Failed')
+                              setEditing(null)
+                              if (onRefresh) onRefresh()
+                            }).catch(err => alert('Error: ' + err.message))
+                            .finally(() => setSavingEdit(false))
+                          }}
+                          autoFocus
+                          onBlur={() => setEditing(null)}
+                          style={{
+                            fontSize: 12, padding: '2px 4px',
+                            border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+                            outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                          }}
+                        >
+                          <option value="Not Started">Not Started</option>
+                          <option value="Ready to Send">Ready to Send</option>
+                          <option value="Enquiry Sent">Enquiry Sent</option>
+                          <option value="Availability Confirmed">Availability Confirmed</option>
+                          <option value="Confirmed">Confirmed</option>
+                          <option value="Proforma Received">Proforma Received</option>
+                          <option value="Deposit Paid">Deposit Paid</option>
+                          <option value="Balance Paid">Balance Paid</option>
+                          <option value="Not Available">Not Available</option>
+                          <option value="Cancelled">Cancelled</option>
+                          <option value="Waitlisted">Waitlisted</option>
+                          <option value="Credit against booking">Credit against booking</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <span
+                        className={'badge ' + badge.cls}
+                        onClick={() => setEditing({ id: bk.id || bk['Record Id'], field: 'status', value: status })}
+                        style={{ cursor: 'pointer' }}
+                        title="Click to change status"
+                      >{badge.label}</span>
+                    )}
                   </td>
                   <td>
                     <button
