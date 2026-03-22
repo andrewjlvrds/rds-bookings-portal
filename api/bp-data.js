@@ -52,6 +52,8 @@ export default async function(req, res) {
       'Lodge_Currency','Booking_Reference','Booking_Notes','Reservation_Comments',
       'Lodge_Availability','Lodge','Lodge_Contact','Lodge_ID','Tour',
       'Claude_Confidence','Claude_Updated_Time','Updated_by',
+      'RDS_Reference','Lodge_Reference','Cancel_Free_Before','Cancellation_Policy_Text',
+      'Credit_Amount','Enquiry_Sent_Date','Last_Response_Date',
       'Follow_up_Date','Excursion','Excursion_booking_status','Excursion_Date','Excursion_notes',
       'Deposit_Due_Date','Second_Payment_Amount','Second_Payment_Due_Date',
       'Third_Payment_Amount','Third_Payment_Due_Date',

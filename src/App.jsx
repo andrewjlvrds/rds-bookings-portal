@@ -5,6 +5,7 @@ import Itinerary from './components/Itinerary'
 import ItineraryEditor from './components/ItineraryEditor'
 import EnquiryPreview from './components/EnquiryPreview'
 import Payments from './components/Payments'
+import LodgeDetail from './components/LodgeDetail'
 import './styles/global.css'
 
 const API = ''
@@ -152,20 +153,13 @@ export default function App() {
 
     if (activeView === 'lodge-detail' && activeBooking) {
       return (
-        <div>
-          <button
-            onClick={() => { setActiveBooking(null); setActiveView('itinerary') }}
-            style={{
-              background: 'none', border: 'none', color: 'var(--text-muted)',
-              fontSize: 13, padding: '0 0 12px', cursor: 'pointer',
-            }}
-          >
-            ← Back to {activeTour ? activeTour.name : 'itinerary'}
-          </button>
-          <div style={{ padding: 20, background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', textAlign: 'center', color: 'var(--text-muted)' }}>
-            Lodge detail view — coming next
-          </div>
-        </div>
+        <LodgeDetail
+          booking={activeBooking}
+          tour={activeTour}
+          lodges={lodges}
+          onBack={() => { setActiveBooking(null); setActiveView('itinerary') }}
+          onRefresh={() => refreshData(activeTour ? activeTour.id : null)}
+        />
       )
     }
 
