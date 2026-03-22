@@ -246,30 +246,42 @@ export default function ItineraryEditor({ tour, onBack, onSave }) {
                     />
                   </td>
                   <td>
-                    <input
-                      type="text"
+                    <select
                       value={n.lodge}
                       onChange={e => updateNight(i, 'lodge', e.target.value)}
                       style={{
                         width: '100%', border: 'none', background: 'transparent',
                         fontSize: 13, fontWeight: 500, padding: '2px 0', outline: 'none',
-                        color: 'var(--text-primary)',
+                        color: 'var(--text-primary)', cursor: 'pointer',
                       }}
-                      placeholder="Lodge name"
-                    />
+                    >
+                      {(n.lodges || []).map(l => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                      {n.lodge && !(n.lodges || []).includes(n.lodge) && (
+                        <option value={n.lodge}>{n.lodge}</option>
+                      )}
+                      <option value="">— none —</option>
+                    </select>
+                    {n.notes && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{n.notes}</div>
+                    )}
                   </td>
                   <td>
-                    <input
-                      type="text"
+                    <select
                       value={n.backup || ''}
                       onChange={e => updateNight(i, 'backup', e.target.value)}
                       style={{
                         width: '100%', border: 'none', background: 'transparent',
                         fontSize: 12, padding: '2px 0', outline: 'none',
-                        color: 'var(--text-muted)',
+                        color: 'var(--text-muted)', cursor: 'pointer',
                       }}
-                      placeholder="Backup lodge"
-                    />
+                    >
+                      <option value="">— none —</option>
+                      {(n.lodges || []).filter(l => l !== n.lodge).map(l => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
                   </td>
                   <td>
                     <select
