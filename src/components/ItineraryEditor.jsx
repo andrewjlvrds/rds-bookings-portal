@@ -2,11 +2,34 @@ import React, { useState, useMemo } from 'react'
 import { TEMPLATES, generateDates, generateRdsRef } from '../utils/templates'
 import { fmtDate, fmtDateFull } from '../utils/helpers'
 
-export default function ItineraryEditor({ tour, onBack, onSave }) {
+export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [nights, setNights] = useState([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  // Build a lookup map from lodge directory (case-insensitive)
+  const lodgeLookup = useMemo(() => {
+    const map = {}
+    ;(lodges || []).forEach(l => {
+      if (l.name) map[l.name.toLowerCase()] = l
+    })
+    return map
+  }, [lodges])
+
+  // Look up a lodge by name — returns { found, hasEmail, email, contact }
+  const getLodgeStatus = (lodgeName) => {
+    if (!lodgeName) return { found: false, hasEmail: false }
+    const match = lodgeLookup[lodgeName.toLowerCase()]
+    if (!match) return { found: false, hasEmail: false }
+    return {
+      found: true,
+      hasEmail: !!match.email,
+      email: match.email || '',
+      contact: match.contact || '',
+      id: match.id,
+    }
+  }
 
   // If tour already has bookings, load them as the starting point
   const existingBookings = (tour.bookings || []).length
@@ -355,6 +378,24 @@ export default function ItineraryEditor({ tour, onBack, onSave }) {
                     {n.notes && (
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{n.notes}</div>
                     )}
+                    {n.lodge && (() => {
+                      const ls = getLodgeStatus(n.lodge)
+                      if (!ls.found) return (
+                        <div style={{ fontSize: 10, color: 'var(--red-text)', marginTop: 2 }}>
+                          Not in Zoho — add to Lodges module
+                        </div>
+                      )
+                      if (!ls.hasEmail) return (
+                        <div style={{ fontSize: 10, color: 'var(--amber-text)', marginTop: 2 }}>
+                          No email on file
+                        </div>
+                      )
+                      return (
+                        <div style={{ fontSize: 10, color: 'var(--green-text)', marginTop: 2 }}>
+                          {ls.email}{ls.contact ? ' · ' + ls.contact : ''}
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td>
                     {(n.lodges || []).length > 1 ? (
@@ -433,18 +474,27 @@ export default function ItineraryEditor({ tour, onBack, onSave }) {
       )}
 
       {/* Summary */}
-      {nights.length > 0 && (
-        <div style={{
-          display: 'flex', gap: 16, marginTop: 16,
-          padding: '12px 16px', background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-md)', fontSize: 12, color: 'var(--text-muted)',
-        }}>
-          <span>{nights.length} nights total</span>
-          <span>{nights.filter(n => n.pre_tour).length} pre-tour</span>
-          <span>{new Set(nights.map(n => n.lodge)).size} unique lodges</span>
-          <span>{nights.filter(n => !n.lodge).length} lodges to assign</span>
-        </div>
-      )}
+      {nights.length > 0 && (() => {
+        const withLodge = nights.filter(n => n.lodge)
+        const connected = withLodge.filter(n => getLodgeStatus(n.lodge).hasEmail).length
+        const noMatch = withLodge.filter(n => !getLodgeStatus(n.lodge).found).length
+        const noEmail = withLodge.filter(n => getLodgeStatus(n.lodge).found && !getLodgeStatus(n.lodge).hasEmail).length
+
+        return (
+          <div style={{
+            display: 'flex', gap: 16, marginTop: 16,
+            padding: '12px 16px', background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)', fontSize: 12, color: 'var(--text-muted)',
+          }}>
+            <span>{nights.length} nights</span>
+            <span>{new Set(nights.map(n => n.lodge).filter(Boolean)).size} unique lodges</span>
+            <span style={{ color: connected > 0 ? 'var(--green-text)' : undefined }}>{connected} connected</span>
+            {noMatch > 0 && <span style={{ color: 'var(--red-text)' }}>{noMatch} not in Zoho</span>}
+            {noEmail > 0 && <span style={{ color: 'var(--amber-text)' }}>{noEmail} no email</span>}
+            {nights.filter(n => !n.lodge).length > 0 && <span>{nights.filter(n => !n.lodge).length} unassigned</span>}
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -41,6 +41,7 @@ class ErrorBoundary extends Component {
 export default function App() {
   const [tours, setTours] = useState([])
   const [allBookings, setAllBookings] = useState([])
+  const [lodges, setLodges] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -58,11 +59,11 @@ export default function App() {
       .then(d => {
         const tourList = d.tours || []
         setTours(tourList)
+        setLodges(d.lodges || [])
         const all = []
         tourList.forEach(t => { all.push(...(t.bookings || [])) })
         setAllBookings(all)
 
-        // Re-select the active tour with fresh data
         if (keepTourId) {
           const freshTour = tourList.find(t => t.id === keepTourId)
           if (freshTour) setActiveTour(freshTour)
@@ -78,9 +79,10 @@ export default function App() {
         return r.json()
       })
       .then(d => {
-        console.log('API data loaded:', d.total_tours, 'tours,', d.total_bookings, 'bookings')
+        console.log('API data loaded:', d.total_tours, 'tours,', d.total_bookings, 'bookings,', (d.lodges || []).length, 'lodges')
         const tourList = d.tours || []
         setTours(tourList)
+        setLodges(d.lodges || [])
         const all = []
         tourList.forEach(t => { all.push(...(t.bookings || [])) })
         setAllBookings(all)
@@ -184,6 +186,7 @@ export default function App() {
       return (
         <ItineraryEditor
           tour={activeTour}
+          lodges={lodges}
           onBack={() => setActiveView('itinerary')}
           onSave={() => {
             setActiveView('itinerary')

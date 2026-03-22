@@ -147,10 +147,50 @@ export default async function(req, res) {
       return bDate.localeCompare(aDate);
     });
 
+    // Step 5: Fetch all lodges for the directory
+    var allLodges = [];
+    try {
+      var lodgeFields = 'Name,Email,Preferred_Email,Email_Reservations_2,Email_Accounts,' +
+        'Secondary_Email,Contact_First_Name,Phone,Country,Status,Lodge_Currency,' +
+        'STO_Discount,STO_Valid_From,STO_Valid_To,Guide_Room_Policy,id';
+
+      var lodgePage = 1;
+      var lodgeMore = true;
+      while (lodgeMore && lodgePage <= 3) {
+        var lodgeResult = await zohoApi('GET',
+          'Lodges?fields=' + lodgeFields + '&per_page=200&page=' + lodgePage
+        );
+        var lodgeData = (lodgeResult && lodgeResult.data) || [];
+        allLodges = allLodges.concat(lodgeData);
+        lodgeMore = lodgeResult && lodgeResult.info && lodgeResult.info.more_records;
+        lodgePage++;
+      }
+    } catch(lodgeErr) {
+      console.error('Lodges fetch error:', lodgeErr.message);
+    }
+
+    // Build lodge directory: name → { email, id, etc }
+    var lodgeDirectory = allLodges.map(function(l) {
+      return {
+        id: l.id,
+        name: l.Name || '',
+        email: l.Preferred_Email || l.Email || '',
+        email2: l.Email_Reservations_2 || l.Secondary_Email || '',
+        contact: l.Contact_First_Name || '',
+        country: l.Country || '',
+        status: l.Status || '',
+        currency: l.Lodge_Currency || '',
+        sto_discount: l.STO_Discount || '',
+        guide_room_policy: l.Guide_Room_Policy || '',
+      };
+    });
+
     res.status(200).json({
       tours: tours,
+      lodges: lodgeDirectory,
       total_bookings: allBookings.length,
       total_tours: tours.length,
+      total_lodges: lodgeDirectory.length,
     });
 
   } catch(err) {
