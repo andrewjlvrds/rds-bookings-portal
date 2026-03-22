@@ -1,4 +1,5 @@
 import { zohoApi } from './_zoho.js';
+import { storeEmail } from './_email-store.js';
 
 // Get Gmail access token from refresh token
 async function getGmailToken() {
@@ -125,6 +126,28 @@ export default async function(req, res) {
         }
       } catch(updateErr) {
         updateErrors.push(updateErr.message);
+      }
+    }
+
+    // Store sent email in blob for email thread display
+    if (emailSent) {
+      for (var bi = 0; bi < bookingIds.length; bi++) {
+        try {
+          await storeEmail({
+            booking_id: bookingIds[bi],
+            message_id: gmailMessageId,
+            type: 'enquiry',
+            direction: 'outbound',
+            email_from: 'bookings@ridedownsouth.com',
+            email_to: to,
+            email_subject: subject,
+            email_content: emailBody,
+            email_date: new Date().toISOString(),
+            gmail_thread_id: gmailThreadId,
+          });
+        } catch(storeErr) {
+          console.error('Failed to store email for booking', bookingIds[bi], storeErr.message);
+        }
       }
     }
 

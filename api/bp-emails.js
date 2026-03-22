@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     }
 
     emails.sort(function(a, b) {
-      return new Date(b.email_date) - new Date(a.email_date);
+      return new Date(b.date || b.email_date || 0) - new Date(a.date || a.email_date || 0);
     });
 
     res.status(200).json({ success: true, emails: emails, count: emails.length });
