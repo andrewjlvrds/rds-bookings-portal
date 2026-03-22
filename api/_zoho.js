@@ -53,6 +53,20 @@ export async function zohoApi(method, path, body) {
 
   var response = await fetch(url, options);
 
+  // Retry once on rate limit (429 or LIMIT_EXCEEDED in 400)
+  if (response.status === 429 || response.status === 400) {
+    var peek = await response.text();
+    if (response.status === 429 || peek.indexOf('LIMIT_EXCEEDED') > -1) {
+      await new Promise(function(r) { setTimeout(r, 2000); });
+      token = await getAccessToken();
+      options.headers['Authorization'] = 'Zoho-oauthtoken ' + token;
+      response = await fetch(url, options);
+    } else {
+      // Not a rate limit — throw original error
+      throw new Error('Zoho API error: ' + response.status + ' ' + peek);
+    }
+  }
+
   // 204 = no content (empty results)
   if (response.status === 204) return { data: [] };
 
