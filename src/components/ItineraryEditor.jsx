@@ -38,35 +38,55 @@ export default function ItineraryEditor({ tour, onBack, onSave }) {
     setSaved(false)
   }
 
-  // Remove a night
-  const removeNight = (idx) => {
-    setNights(prev => prev.filter((_, i) => i !== idx))
-    setSaved(false)
-  }
-
-  // Add a night after index
+  // Add a night after index — shifts all subsequent dates forward
   const addNightAfter = (idx) => {
     const prev = nights[idx]
-    const newDate = new Date(prev.date)
-    newDate.setDate(newDate.getDate() + 1)
 
     const newNight = {
       id: 'new_' + Date.now(),
       day: prev.day + 1,
       night_number: prev.night_number + 1,
-      date: newDate.toISOString().split('T')[0],
+      date: '', // will be set below
       route: '',
       lodge: '',
       backup: '',
       meals: 'BB',
       region: prev.region,
+      lodges: [], // no preferences — free text
       editing: true,
     }
 
     const updated = [...nights]
     updated.splice(idx + 1, 0, newNight)
-    // Renumber
-    updated.forEach((n, i) => { n.night_number = i + 1 })
+
+    // Recalculate all dates from departure date
+    const dep = new Date(departureDate)
+    updated.forEach((n, i) => {
+      n.night_number = i + 1
+      n.day = i + 1
+      const d = new Date(dep)
+      d.setDate(d.getDate() + i)
+      n.date = d.toISOString().split('T')[0]
+    })
+
+    setNights(updated)
+    setSaved(false)
+  }
+
+  // Remove a night — shifts all subsequent dates back
+  const removeNight = (idx) => {
+    const updated = nights.filter((_, i) => i !== idx)
+
+    // Recalculate all dates from departure date
+    const dep = new Date(departureDate)
+    updated.forEach((n, i) => {
+      n.night_number = i + 1
+      n.day = i + 1
+      const d = new Date(dep)
+      d.setDate(d.getDate() + i)
+      n.date = d.toISOString().split('T')[0]
+    })
+
     setNights(updated)
     setSaved(false)
   }
@@ -246,42 +266,87 @@ export default function ItineraryEditor({ tour, onBack, onSave }) {
                     />
                   </td>
                   <td>
-                    <select
-                      value={n.lodge}
-                      onChange={e => updateNight(i, 'lodge', e.target.value)}
-                      style={{
-                        width: '100%', border: 'none', background: 'transparent',
-                        fontSize: 13, fontWeight: 500, padding: '2px 0', outline: 'none',
-                        color: 'var(--text-primary)', cursor: 'pointer',
-                      }}
-                    >
-                      {(n.lodges || []).map(l => (
-                        <option key={l} value={l}>{l}</option>
-                      ))}
-                      {n.lodge && !(n.lodges || []).includes(n.lodge) && (
-                        <option value={n.lodge}>{n.lodge}</option>
-                      )}
-                      <option value="">— none —</option>
-                    </select>
+                    {(n.lodges || []).length > 0 ? (
+                      <div>
+                        <select
+                          value={(n.lodges || []).includes(n.lodge) ? n.lodge : '__custom'}
+                          onChange={e => {
+                            if (e.target.value === '__custom') return
+                            updateNight(i, 'lodge', e.target.value)
+                          }}
+                          style={{
+                            width: '100%', border: 'none', background: 'transparent',
+                            fontSize: 13, fontWeight: 500, padding: '2px 0', outline: 'none',
+                            color: 'var(--text-primary)', cursor: 'pointer',
+                          }}
+                        >
+                          {(n.lodges || []).map(l => (
+                            <option key={l} value={l}>{l}</option>
+                          ))}
+                          <option value="__custom">Other (type below)</option>
+                          <option value="">— none —</option>
+                        </select>
+                        {!(n.lodges || []).includes(n.lodge) && n.lodge && (
+                          <input
+                            type="text"
+                            value={n.lodge}
+                            onChange={e => updateNight(i, 'lodge', e.target.value)}
+                            style={{
+                              width: '100%', border: '0.5px solid var(--border-default)',
+                              borderRadius: 4, fontSize: 12, padding: '3px 6px', outline: 'none',
+                              color: 'var(--text-primary)', marginTop: 2,
+                            }}
+                            placeholder="Type lodge name"
+                            autoFocus
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={n.lodge}
+                        onChange={e => updateNight(i, 'lodge', e.target.value)}
+                        style={{
+                          width: '100%', border: 'none', background: 'transparent',
+                          fontSize: 13, fontWeight: 500, padding: '2px 0', outline: 'none',
+                          color: 'var(--text-primary)',
+                        }}
+                        placeholder="Type lodge name"
+                      />
+                    )}
                     {n.notes && (
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{n.notes}</div>
                     )}
                   </td>
                   <td>
-                    <select
-                      value={n.backup || ''}
-                      onChange={e => updateNight(i, 'backup', e.target.value)}
-                      style={{
-                        width: '100%', border: 'none', background: 'transparent',
-                        fontSize: 12, padding: '2px 0', outline: 'none',
-                        color: 'var(--text-muted)', cursor: 'pointer',
-                      }}
-                    >
-                      <option value="">— none —</option>
-                      {(n.lodges || []).filter(l => l !== n.lodge).map(l => (
-                        <option key={l} value={l}>{l}</option>
-                      ))}
-                    </select>
+                    {(n.lodges || []).length > 1 ? (
+                      <select
+                        value={n.backup || ''}
+                        onChange={e => updateNight(i, 'backup', e.target.value)}
+                        style={{
+                          width: '100%', border: 'none', background: 'transparent',
+                          fontSize: 12, padding: '2px 0', outline: 'none',
+                          color: 'var(--text-muted)', cursor: 'pointer',
+                        }}
+                      >
+                        <option value="">— none —</option>
+                        {(n.lodges || []).filter(l => l !== n.lodge).map(l => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={n.backup || ''}
+                        onChange={e => updateNight(i, 'backup', e.target.value)}
+                        style={{
+                          width: '100%', border: 'none', background: 'transparent',
+                          fontSize: 12, padding: '2px 0', outline: 'none',
+                          color: 'var(--text-muted)',
+                        }}
+                        placeholder="Backup lodge"
+                      />
+                    )}
                   </td>
                   <td>
                     <select
