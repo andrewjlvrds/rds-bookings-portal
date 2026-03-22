@@ -14,6 +14,24 @@ export default function ItineraryEditor({ tour, onBack, onSave }) {
   // Departure date from tour
   const departureDate = tour.departure_date || ''
 
+  // Start with a blank itinerary (one empty night)
+  const handleStartBlank = () => {
+    const dep = new Date(departureDate)
+    setNights([{
+      id: 'new_0',
+      day: 1,
+      night_number: 1,
+      date: dep.toISOString().split('T')[0],
+      route: '',
+      lodge: '',
+      backup: '',
+      meals: 'BB',
+      region: '',
+      lodges: [],
+    }])
+    setSaved(false)
+  }
+
   // Apply a template
   const handleApplyTemplate = (templateKey) => {
     const template = TEMPLATES[templateKey]
@@ -213,10 +231,30 @@ export default function ItineraryEditor({ tour, onBack, onSave }) {
               >
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>{tmpl.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {tmpl.nights.length} nights · Based on {tmpl.source_tour}
+                  {tmpl.nights.length} nights
                 </div>
               </button>
             ))}
+            <button
+              onClick={handleStartBlank}
+              style={{
+                display: 'block',
+                textAlign: 'left',
+                padding: 16,
+                border: '0.5px dashed var(--border-default)',
+                borderRadius: 'var(--radius-lg)',
+                background: 'transparent',
+                cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue-mid)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-default)' }}
+            >
+              <div style={{ fontWeight: 500, marginBottom: 4 }}>Start from scratch</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Blank itinerary — add nights manually
+              </div>
+            </button>
           </div>
         </div>
       )}

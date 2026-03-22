@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
 
-export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady }) {
+export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh }) {
   const [marking, setMarking] = useState(false)
 
   if (!tour) return null
@@ -18,7 +18,7 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
   const confirmed = sorted.filter(b => isConfirmed(b)).length
   const enquired = sorted.filter(b => getStatus(b) === 'Enquiry Sent').length
   const notStarted = sorted.filter(b => getStatus(b) === 'Not Started').length
-  const readyToSend = sorted.filter(b => getStatus(b) === 'Ready to send').length
+  const readyToSend = sorted.filter(b => { const s = getStatus(b); return s === 'Ready to send' || s === 'Ready to Send' }).length
 
   const firstBk = sorted[0]
   const roomConfig = firstBk ? (firstBk['Sgl/Twin/Dbl/Guides'] || firstBk.Sgl_Twin_Dbl_Guides || '') : ''
@@ -49,7 +49,7 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
         const err = await res.json()
         throw new Error(err.error || 'Failed to update')
       }
-      window.location.reload()
+      if (onRefresh) onRefresh()
     } catch (err) {
       alert('Error: ' + err.message)
     } finally {

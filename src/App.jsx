@@ -48,6 +48,29 @@ export default function App() {
   const [activeView, setActiveView] = useState('dashboard')
   const [activeBooking, setActiveBooking] = useState(null)
 
+  // Refresh data from API without losing current view
+  const refreshData = (keepTourId) => {
+    fetch(API + '/api/bp-data')
+      .then(r => {
+        if (!r.ok) throw new Error('API returned ' + r.status)
+        return r.json()
+      })
+      .then(d => {
+        const tourList = d.tours || []
+        setTours(tourList)
+        const all = []
+        tourList.forEach(t => { all.push(...(t.bookings || [])) })
+        setAllBookings(all)
+
+        // Re-select the active tour with fresh data
+        if (keepTourId) {
+          const freshTour = tourList.find(t => t.id === keepTourId)
+          if (freshTour) setActiveTour(freshTour)
+        }
+      })
+      .catch(err => console.error('Refresh error:', err))
+  }
+
   useEffect(() => {
     fetch(API + '/api/bp-data')
       .then(r => {
@@ -91,7 +114,7 @@ export default function App() {
       const err = await response.json()
       throw new Error(err.error || 'Failed to create tour')
     }
-    window.location.reload()
+    refreshData()
   }
 
   const handleDeleteTour = async (tourId, tourName) => {
@@ -104,7 +127,7 @@ export default function App() {
     }
     setActiveTour(null)
     setActiveView('dashboard')
-    window.location.reload()
+    refreshData()
   }
 
   const renderContent = () => {
@@ -164,8 +187,7 @@ export default function App() {
           onBack={() => setActiveView('itinerary')}
           onSave={() => {
             setActiveView('itinerary')
-            // Reload data
-            window.location.reload()
+            refreshData(activeTour.id)
           }}
         />
       )
@@ -179,6 +201,7 @@ export default function App() {
           onEditItinerary={() => setActiveView('edit-itinerary')}
           onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}
           onEnquireReady={() => setActiveView('enquiry-preview')}
+          onRefresh={() => refreshData(activeTour.id)}
         />
       )
     }

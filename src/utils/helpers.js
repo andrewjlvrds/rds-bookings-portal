@@ -54,6 +54,7 @@ const STATUS_MAP = {
   'Proforma Received': { cls: 'badge-confirmed', label: 'Proforma received' },
   'Enquiry Sent': { cls: 'badge-enquired', label: 'Enquired' },
   'Ready to send': { cls: 'badge-ready', label: 'Ready to send' },
+  'Ready to Send': { cls: 'badge-ready', label: 'Ready to send' },
   'Not Started': { cls: 'badge-draft', label: 'Not started' },
   'Not Available': { cls: 'badge-unavailable', label: 'Unavailable' },
   'Cancelled': { cls: 'badge-unavailable', label: 'Cancelled' },
