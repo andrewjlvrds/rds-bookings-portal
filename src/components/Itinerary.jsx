@@ -248,7 +248,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                             .finally(() => setSavingEdit(false))
                           }}
                           autoFocus
-                          onBlur={() => setEditing(null)}
+                          onBlur={() => setTimeout(() => setEditing(null), 200)}
                           style={{
                             fontSize: 12, padding: '2px 4px',
                             border: '0.5px solid var(--blue-mid)', borderRadius: 4,
