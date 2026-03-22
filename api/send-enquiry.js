@@ -1,5 +1,40 @@
 import { zohoApi } from './_zoho.js';
 
+// Get Gmail access token from refresh token
+async function getGmailToken() {
+  var response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GMAIL_CLIENT_ID,
+      client_secret: process.env.GMAIL_CLIENT_SECRET,
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+      grant_type: 'refresh_token',
+    }).toString(),
+  });
+  var data = await response.json();
+  if (data.error) throw new Error('Gmail auth: ' + data.error);
+  return data.access_token;
+}
+
+// Build RFC 2822 email and base64url encode it
+function buildRawEmail(from, to, subject, bodyText) {
+  var boundary = 'boundary_' + Date.now();
+  var raw = [
+    'From: ' + from,
+    'To: ' + to,
+    'Subject: ' + subject,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    bodyText,
+  ].join('\r\n');
+
+  // Base64url encode
+  return Buffer.from(raw).toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 export default async function(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -18,67 +53,48 @@ export default async function(req, res) {
     var bookingIds = body.booking_ids || [];
     var lodgeName = body.lodge_name || '';
 
-    if (!to) {
-      return res.status(400).json({ error: 'No recipient email' });
-    }
-    if (!emailBody) {
-      return res.status(400).json({ error: 'No email body' });
-    }
-    if (!bookingIds.length) {
-      return res.status(400).json({ error: 'No booking IDs' });
-    }
+    if (!to) return res.status(400).json({ error: 'No recipient email' });
+    if (!emailBody) return res.status(400).json({ error: 'No email body' });
+    if (!bookingIds.length) return res.status(400).json({ error: 'No booking IDs' });
 
-    // Send email via Zoho CRM send_mail action on the first booking record
-    // This links the email thread to the booking record in Zoho
-    // Replies from the lodge will appear on this record
-    var primaryBookingId = bookingIds[0];
-    var fromEmail = process.env.SEND_FROM_EMAIL || 'bookings@ridedownsouth.com';
-    var fromName = process.env.SEND_FROM_NAME || 'Helen Sobey';
+    var fromEmail = 'bookings@ridedownsouth.com';
+    var fromName = 'Helen Sobey';
+    var fromFull = fromName + ' <' + fromEmail + '>';
 
-    // Convert plain text body to HTML (preserve line breaks)
-    var htmlBody = emailBody
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br>');
-
-    var emailPayload = {
-      data: [{
-        from: { user_name: fromName, email: fromEmail },
-        to: [{ user_name: lodgeName || to, email: to }],
-        subject: subject,
-        content: htmlBody,
-        mail_format: 'html',
-      }]
-    };
-
+    // Send via Gmail API
     var emailSent = false;
     var emailError = null;
+    var gmailMessageId = null;
+    var gmailThreadId = null;
 
-    // Retry up to 3 times with backoff for rate limits
-    for (var attempt = 0; attempt < 3; attempt++) {
-      try {
-        if (attempt > 0) {
-          await new Promise(function(r) { setTimeout(r, 2000 * attempt); });
-        }
-        var emailResult = await zohoApi('POST',
-          'Lodge_Bookings/' + primaryBookingId + '/actions/send_mail',
-          emailPayload
-        );
+    try {
+      var token = await getGmailToken();
+      var raw = buildRawEmail(fromFull, to, subject, emailBody);
+
+      var gmailRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ raw: raw }),
+      });
+
+      var gmailData = await gmailRes.json();
+
+      if (gmailData.id) {
         emailSent = true;
-        break;
-      } catch(emailErr) {
-        emailError = emailErr.message;
-        console.error('Email send attempt ' + (attempt + 1) + ' failed:', emailErr.message);
-        // If not a rate limit error, don't retry
-        if (emailErr.message.indexOf('too many requests') === -1 &&
-            emailErr.message.indexOf('Access Denied') === -1) {
-          break;
-        }
+        gmailMessageId = gmailData.id;
+        gmailThreadId = gmailData.threadId;
+      } else {
+        emailError = gmailData.error ? gmailData.error.message : 'Gmail send failed';
       }
+    } catch(emailErr) {
+      emailError = emailErr.message;
+      console.error('Gmail send failed:', emailErr.message);
     }
 
-    // Only update status if email actually sent
+    // Update booking status if email sent
     var today = new Date().toISOString().split('T')[0];
     var followUp = new Date();
     followUp.setDate(followUp.getDate() + 7);
@@ -89,10 +105,7 @@ export default async function(req, res) {
 
     if (emailSent && bookingIds.length > 0) {
       var updateRecords = bookingIds.map(function(id) {
-        return {
-          id: id,
-          Status: 'Enquiry Sent',
-        };
+        return { id: id, Status: 'Enquiry Sent' };
       });
 
       try {
@@ -103,16 +116,11 @@ export default async function(req, res) {
       } catch(e) {}
 
       try {
-        // Small delay to avoid rate limiting
-        await new Promise(function(r) { setTimeout(r, 1000); });
         var updateResult = await zohoApi('PUT', 'Lodge_Bookings', { data: updateRecords });
         if (updateResult && updateResult.data) {
           updateResult.data.forEach(function(r) {
-            if (r.status === 'success') {
-              updatedCount++;
-            } else {
-              updateErrors.push(r.message || 'Update failed');
-            }
+            if (r.status === 'success') updatedCount++;
+            else updateErrors.push(r.message || 'Update failed');
           });
         }
       } catch(updateErr) {
@@ -124,6 +132,8 @@ export default async function(req, res) {
       success: true,
       email_sent: emailSent,
       email_error: emailError,
+      gmail_message_id: gmailMessageId,
+      gmail_thread_id: gmailThreadId,
       bookings_updated: updatedCount,
       update_errors: updateErrors,
     });
