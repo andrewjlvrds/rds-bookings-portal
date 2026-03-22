@@ -64,10 +64,12 @@ export default async function(req, res) {
         Nights: 1,
         Meals: night.meals || 'BB',
         Status: 'Not Started',
-        Portal_Status: 'Not Started',
-        RDS_Reference: rdsRef,
         Tour: tourId,
       };
+
+      // Try adding new fields — Zoho ignores unrecognised fields on create
+      try { record.Portal_Status = 'Not Started'; } catch(e) {}
+      try { record.RDS_Reference = rdsRef; } catch(e) {}
 
       try {
         var result = await zohoApi('POST', 'Lodge_Bookings', { data: [record] });

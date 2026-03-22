@@ -87,6 +87,7 @@ a {
 .badge-confirmed { background: var(--green-bg); color: var(--green-text); }
 .badge-enquired { background: var(--amber-bg); color: var(--amber-text); }
 .badge-ready { background: var(--blue-bg); color: var(--blue-text); }
+.badge-draft { background: var(--bg-secondary); color: var(--text-muted); }
 .badge-unavailable { background: var(--red-bg); color: var(--red-text); }
 .badge-waiting { background: var(--amber-bg); color: var(--amber-text); }
 .badge-overdue { background: var(--red-bg); color: var(--red-text); }
