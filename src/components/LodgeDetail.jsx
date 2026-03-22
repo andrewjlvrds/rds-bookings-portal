@@ -286,7 +286,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             rdsRef={rdsRef}
             tourName={tour ? tour.name : ''}
             lastSubject={emails.length > 0 ? (emails[0].subject || emails[0].email_subject || '') : ''}
-            onSent={() => { fetchEmails(); if (onRefresh) onRefresh() }}
+            onSent={() => { setTimeout(() => { fetchEmails(); if (onRefresh) onRefresh() }, 1000) }}
           />
         </div>
       </div>

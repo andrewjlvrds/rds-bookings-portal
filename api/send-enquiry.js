@@ -124,7 +124,7 @@ export default async function(req, res) {
           await storeEmail({
             booking_id: bookingIds[bi],
             message_id: gmailMessageId,
-            type: 'enquiry',
+            type: isReply ? 'reply' : 'enquiry',
             direction: 'outbound',
             email_from: 'bookings@ridedownsouth.com',
             email_to: to,
