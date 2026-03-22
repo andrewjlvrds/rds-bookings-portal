@@ -16,7 +16,6 @@ export default async function(req, res) {
     var subject = body.subject || '';
     var emailBody = body.body || '';
     var bookingIds = body.booking_ids || [];
-    var tourName = body.tour_name || '';
     var lodgeName = body.lodge_name || '';
 
     if (!to) {
@@ -25,67 +24,93 @@ export default async function(req, res) {
     if (!emailBody) {
       return res.status(400).json({ error: 'No email body' });
     }
-
-    // Send email via Zoho CRM email API
-    // We'll send from Helen's configured email in Zoho
-    var emailResult = null;
-
-    // Option 1: Use Zoho CRM send mail API (requires a record to attach to)
-    // For now, we'll use a simple approach: send via the first booking record
-    if (bookingIds.length > 0) {
-      try {
-        emailResult = await zohoApi('POST',
-          'Lodge_Bookings/' + bookingIds[0] + '/actions/send_mail',
-          {
-            data: [{
-              from: { user_name: 'Helen Sobey', email: 'helen@ridedownsouth.com' },
-              to: [{ user_name: lodgeName, email: to }],
-              subject: subject,
-              content: emailBody.replace(/\n/g, '<br>'),
-              mail_format: 'html',
-            }]
-          }
-        );
-      } catch(emailErr) {
-        console.error('Zoho email send error:', emailErr.message);
-        // Fall back: just update the status, log the error
-        emailResult = { error: emailErr.message };
-      }
+    if (!bookingIds.length) {
+      return res.status(400).json({ error: 'No booking IDs' });
     }
 
-    // Update booking statuses to "Enquiry Sent"
+    // Send email via Zoho CRM send_mail action on the first booking record
+    // This links the email thread to the booking record in Zoho
+    // Replies from the lodge will appear on this record
+    var primaryBookingId = bookingIds[0];
+    var fromEmail = process.env.SEND_FROM_EMAIL || 'bookings@ridedownsouth.com';
+    var fromName = process.env.SEND_FROM_NAME || 'Helen Sobey';
+
+    // Convert plain text body to HTML (preserve line breaks)
+    var htmlBody = emailBody
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+
+    var emailPayload = {
+      data: [{
+        from: { user_name: fromName, email: fromEmail },
+        to: [{ user_name: lodgeName || to, email: to }],
+        subject: subject,
+        content: htmlBody,
+        mail_format: 'html',
+      }]
+    };
+
+    var emailSent = false;
+    var emailError = null;
+
+    try {
+      var emailResult = await zohoApi('POST',
+        'Lodge_Bookings/' + primaryBookingId + '/actions/send_mail',
+        emailPayload
+      );
+      emailSent = true;
+    } catch(emailErr) {
+      emailError = emailErr.message;
+      console.error('Email send failed:', emailErr.message);
+    }
+
+    // Update all booking statuses to "Enquiry Sent" regardless of email success
+    // (if email failed, operator can resend manually)
     var today = new Date().toISOString().split('T')[0];
+    var followUp = new Date();
+    followUp.setDate(followUp.getDate() + 7);
+    var followUpDate = followUp.toISOString().split('T')[0];
+
+    var updateRecords = bookingIds.map(function(id) {
+      return {
+        id: id,
+        Status: 'Enquiry Sent',
+      };
+    });
+
+    // Try to set date fields — these might fail if not in API yet
+    try {
+      updateRecords.forEach(function(r) {
+        r.Enquiry_Sent_Date = today;
+        r.Follow_up_Date = followUpDate;
+      });
+    } catch(e) {}
+
+    var updatedCount = 0;
     var updateErrors = [];
 
-    if (bookingIds.length > 0) {
-      var records = bookingIds.map(function(id) {
-        return {
-          id: id,
-          Status: 'Enquiry Sent',
-          Enquiry_Sent_Date: today,
-          Follow_up_Date: getFollowUpDate(today, 7),
-        };
-      });
-
-      try {
-        var updateResult = await zohoApi('PUT', 'Lodge_Bookings', { data: records });
-        if (updateResult && updateResult.data) {
-          updateResult.data.forEach(function(r) {
-            if (r.status !== 'success') {
-              updateErrors.push(r.message || 'Update failed');
-            }
-          });
-        }
-      } catch(updateErr) {
-        updateErrors.push(updateErr.message);
+    try {
+      var updateResult = await zohoApi('PUT', 'Lodge_Bookings', { data: updateRecords });
+      if (updateResult && updateResult.data) {
+        updateResult.data.forEach(function(r) {
+          if (r.status === 'success') {
+            updatedCount++;
+          } else {
+            updateErrors.push(r.message || 'Update failed');
+          }
+        });
       }
+    } catch(updateErr) {
+      updateErrors.push(updateErr.message);
     }
 
     res.status(200).json({
       success: true,
-      email_sent: !emailResult || !emailResult.error,
-      email_error: emailResult && emailResult.error ? emailResult.error : null,
-      bookings_updated: bookingIds.length - updateErrors.length,
+      email_sent: emailSent,
+      email_error: emailError,
+      bookings_updated: updatedCount,
       update_errors: updateErrors,
     });
 
@@ -93,10 +118,4 @@ export default async function(req, res) {
     console.error('send-enquiry error:', err.message);
     res.status(500).json({ error: err.message });
   }
-}
-
-function getFollowUpDate(fromDate, days) {
-  var d = new Date(fromDate);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
 }
