@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
 import Itinerary from './components/Itinerary'
 import ItineraryEditor from './components/ItineraryEditor'
+import EnquiryPreview from './components/EnquiryPreview'
 import Payments from './components/Payments'
 import './styles/global.css'
 
@@ -147,6 +148,15 @@ export default function App() {
       return <Payments allBookings={allBookings} tours={tours} />
     }
 
+    if (activeTour && activeView === 'enquiry-preview') {
+      return (
+        <EnquiryPreview
+          tour={activeTour}
+          onBack={() => setActiveView('itinerary')}
+        />
+      )
+    }
+
     if (activeTour && activeView === 'edit-itinerary') {
       return (
         <ItineraryEditor
@@ -168,6 +178,7 @@ export default function App() {
           onSelectBooking={handleSelectBooking}
           onEditItinerary={() => setActiveView('edit-itinerary')}
           onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}
+          onEnquireReady={() => setActiveView('enquiry-preview')}
         />
       )
     }

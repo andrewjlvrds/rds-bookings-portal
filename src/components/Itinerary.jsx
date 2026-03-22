@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
 
-export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDeleteTour }) {
+export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady }) {
   const [marking, setMarking] = useState(false)
 
   if (!tour) return null
@@ -79,7 +79,7 @@ export default function Itinerary({ tour, onSelectBooking, onEditItinerary, onDe
             </button>
           )}
           {readyToSend > 0 && (
-            <button className="btn btn-primary">
+            <button className="btn btn-primary" onClick={onEnquireReady}>
               Enquire all ready ({readyToSend})
             </button>
           )}
