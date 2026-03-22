@@ -262,23 +262,32 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             </span>
           </div>
         </div>
-        <div className="panel-body">
+        <div className="panel-body" style={{ padding: 0 }}>
           {loadingEmails ? (
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '12px 0' }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>
               Loading emails...
             </div>
           ) : emails.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '12px 0' }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>
               No emails recorded for this booking yet.
-              {status === 'Enquiry Sent' && ' The sent enquiry will appear here once email tracking is connected.'}
             </div>
           ) : (
             <div>
               {emails.map((em, i) => (
-                <EmailMessage key={em.id || i} email={em} isLast={i === emails.length - 1} />
+                <EmailRow key={em.id || i} email={em} />
               ))}
             </div>
           )}
+          {/* Reply composer */}
+          <ReplyComposer
+            bookingId={bookingId}
+            lodgeEmail={lodgeEmail}
+            lodgeName={lodgeName}
+            rdsRef={rdsRef}
+            tourName={tour ? tour.name : ''}
+            lastSubject={emails.length > 0 ? (emails[0].subject || emails[0].email_subject || '') : ''}
+            onSent={() => { fetchEmails(); if (onRefresh) onRefresh() }}
+          />
         </div>
       </div>
     </div>
@@ -357,72 +366,168 @@ function EditableCell({ value, display, field, type, onEdit }) {
   )
 }
 
-function EmailMessage({ email, isLast }) {
+function EmailRow({ email }) {
   const [expanded, setExpanded] = useState(false)
   const isOutbound = email.direction === 'outbound'
   const date = email.date || email.email_date || ''
   const from = email.from || email.email_from || ''
-  const to = email.to || email.email_to || ''
   const subject = email.subject || email.email_subject || ''
   const body = email.body || email.email_content || ''
+  const attachments = email.attachments || []
 
-  // Truncate body preview
-  const preview = body.length > 200 ? body.substring(0, 200) + '...' : body
+  // First line of body as preview
+  const firstLine = body.split('\n').filter(l => l.trim())[0] || ''
+  const preview = firstLine.length > 120 ? firstLine.substring(0, 120) + '...' : firstLine
 
   return (
-    <div style={{
-      padding: '12px 0',
-      borderBottom: isLast ? 'none' : '0.5px solid var(--border-light)',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-        <div>
-          <span style={{
-            fontSize: 12, fontWeight: 500,
-            color: isOutbound ? 'var(--blue-text)' : 'var(--text-primary)',
-          }}>
-            {isOutbound ? 'Sent' : 'Received'}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
-            {from}
-          </span>
-        </div>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          {date ? fmtDateFull(date) : ''}
-        </span>
-      </div>
-      {subject && (
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
-          {subject}
-        </div>
-      )}
+    <div style={{ borderBottom: '0.5px solid var(--border-light)' }}>
+      {/* Collapsed row */}
       <div
         onClick={() => setExpanded(!expanded)}
         style={{
-          fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
-          whiteSpace: 'pre-wrap', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 14px', cursor: 'pointer', fontSize: 12,
         }}
       >
-        {expanded ? body : preview}
-      </div>
-      {body.length > 200 && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          style={{
-            background: 'none', border: 'none', fontSize: 11,
-            color: 'var(--blue-text)', cursor: 'pointer', padding: '4px 0 0',
-          }}
-        >
-          {expanded ? 'Show less' : 'Show more'}
-        </button>
-      )}
-      {email.ai_summary && (
-        <div style={{
-          marginTop: 6, padding: '6px 8px', background: 'var(--blue-bg)',
-          borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--blue-text)',
+        <span style={{
+          fontWeight: 500, fontSize: 11, width: 52, flexShrink: 0,
+          color: isOutbound ? 'var(--blue-text)' : 'var(--green-text)',
         }}>
-          AI summary: {email.ai_summary}
+          {isOutbound ? 'Sent' : 'Received'}
+        </span>
+        <span style={{ color: 'var(--text-muted)', width: 180, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {isOutbound ? 'to lodge' : from.split('<')[0].trim() || from}
+        </span>
+        <span style={{ color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {expanded ? subject : preview}
+        </span>
+        {attachments.length > 0 && (
+          <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
+            {attachments.length} file{attachments.length > 1 ? 's' : ''}
+          </span>
+        )}
+        <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
+          {date ? fmtDate(date) : ''}
+        </span>
+      </div>
+
+      {/* Expanded body */}
+      {expanded && (
+        <div style={{ padding: '0 14px 12px 76px' }}>
+          {subject && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+              {subject}
+            </div>
+          )}
+          <div style={{
+            fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
+            whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto',
+          }}>
+            {body}
+          </div>
+          {attachments.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+              Attachments: {attachments.map(a => a.filename || a).join(', ')}
+            </div>
+          )}
+          {email.ai_summary && (
+            <div style={{
+              marginTop: 6, padding: '4px 8px', background: 'var(--blue-bg)',
+              borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--blue-text)',
+            }}>
+              AI: {email.ai_summary}
+            </div>
+          )}
         </div>
       )}
+    </div>
+  )
+}
+
+function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, lastSubject, onSent }) {
+  const [open, setOpen] = useState(false)
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const subject = lastSubject && lastSubject.startsWith('Re:')
+    ? lastSubject
+    : 'Re: ' + (lastSubject || 'Booking enquiry - ' + tourName + (rdsRef ? ' [' + rdsRef + ']' : ''))
+
+  const handleSend = async () => {
+    if (!body.trim()) return
+    setSending(true)
+    try {
+      const fullBody = body.trim() + '\n\nTake care,\nHelen Baker\nLodge Bookings | Ride Down South\nbookings@ridedownsouth.com'
+      const res = await fetch('/api/send-enquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: lodgeEmail,
+          subject: subject,
+          body: fullBody,
+          booking_ids: [bookingId],
+          lodge_name: lodgeName,
+          is_reply: true,
+        }),
+      })
+      const result = await res.json()
+      if (result.email_sent) {
+        setBody('')
+        setOpen(false)
+        if (onSent) onSent()
+      } else {
+        alert('Send failed: ' + (result.email_error || 'Unknown error'))
+      }
+    } catch (err) {
+      alert('Error: ' + err.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <div style={{ padding: '10px 14px' }}>
+        <button
+          className="btn btn-sm"
+          onClick={() => setOpen(true)}
+          style={{ fontSize: 12 }}
+        >
+          Reply to {lodgeName}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '12px 14px', borderTop: '0.5px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+        To: {lodgeEmail || 'No email'} · Subject: {subject}
+      </div>
+      <textarea
+        value={body}
+        onChange={e => setBody(e.target.value)}
+        placeholder="Type your reply..."
+        autoFocus
+        rows={5}
+        style={{
+          width: '100%', fontSize: 13, lineHeight: 1.5, padding: '8px 10px',
+          border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+          outline: 'none', resize: 'vertical', fontFamily: 'var(--font-sans)',
+          background: 'var(--bg-primary)', color: 'var(--text-primary)',
+        }}
+      />
+      <div style={{ fontSize: 11, color: 'var(--text-hint)', margin: '4px 0 8px' }}>
+        Sign-off added automatically (Helen Baker, Ride Down South)
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={sending || !body.trim()}>
+          {sending ? 'Sending...' : 'Send reply'}
+        </button>
+        <button className="btn btn-sm" onClick={() => setOpen(false)} disabled={sending}>
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }

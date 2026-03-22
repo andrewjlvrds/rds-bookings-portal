@@ -37,6 +37,7 @@ export default async function(req, res) {
     var emailBody = body.body || '';
     var bookingIds = body.booking_ids || [];
     var lodgeName = body.lodge_name || '';
+    var isReply = body.is_reply || false;
 
     if (!to) return res.status(400).json({ error: 'No recipient email' });
     if (!emailBody) return res.status(400).json({ error: 'No email body' });
@@ -88,7 +89,7 @@ export default async function(req, res) {
     var updatedCount = 0;
     var updateErrors = [];
 
-    if (emailSent && bookingIds.length > 0) {
+    if (emailSent && bookingIds.length > 0 && !isReply) {
       var updateRecords = bookingIds.map(function(id) {
         return { id: id, Status: 'Enquiry Sent', Enquiry_Sent_Date: today, Follow_up_Date: followUpDate };
       });
