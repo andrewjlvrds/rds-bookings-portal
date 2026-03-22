@@ -181,7 +181,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         <div className="panel">
           <div className="panel-head">Booking details</div>
           <div className="panel-body">
-            <DetailRows rows={[
+            <DetailRows onEdit={handleSave} rows={[
               { label: 'Lodge', value: lodgeName },
               { label: 'Contact', value: lodgeContact || '—' },
               { label: 'Email', value: lodgeEmail ? <a href={'mailto:' + lodgeEmail}>{lodgeEmail}</a> : '—' },
@@ -190,9 +190,10 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
               { label: 'Nights', value: nights || '—' },
               { label: 'Meals', value: meals || '—' },
               { label: 'RDS reference', value: rdsRef || '—' },
-              { label: 'Lodge reference', value: lodgeRef || '—' },
-              { label: 'Total', value: total ? fmtCurrency(total, currency) : '—' },
-              ...(credit > 0 ? [{ label: 'Credit applied', value: fmtCurrency(credit, currency) }] : []),
+              { label: 'Lodge reference', value: lodgeRef || '—', field: 'Lodge_Reference', raw: lodgeRef },
+              { label: 'Total', value: total ? fmtCurrency(total, currency) : '—', field: 'Total_Amount', type: 'number', raw: total || '' },
+              { label: 'Currency', value: currency || '—', field: 'Lodge_Currency', raw: currency },
+              ...(credit > 0 ? [{ label: 'Credit applied', value: fmtCurrency(credit, currency), field: 'Credit_Amount', type: 'number', raw: credit }] : []),
             ]} />
 
             {/* Dates row */}
@@ -222,78 +223,22 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         <div className="panel">
           <div className="panel-head">Payments & cancellation</div>
           <div className="panel-body">
-            {payments.length > 0 ? (
-              <div>
-                {/* Total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 12, borderBottom: '0.5px solid var(--border-light)' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Total</span>
-                  <span style={{ fontSize: 14, fontWeight: 500 }}>{fmtCurrency(total, currency)}</span>
-                </div>
-
-                {/* Payment items */}
-                {payments.map((p, i) => {
-                  const overdue = p.due && p.due < today && !['Balance Paid', 'Deposit Paid'].includes(status)
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '8px 0',
-                        borderBottom: i < payments.length - 1 ? '0.5px solid var(--border-light)' : 'none',
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: 13 }}>{p.label}</div>
-                        {p.due && (
-                          <div style={{ fontSize: 11, color: overdue ? 'var(--red-text)' : 'var(--text-muted)', marginTop: 1 }}>
-                            Due {fmtDateFull(p.due)}
-                            {overdue && ' — overdue'}
-                          </div>
-                        )}
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtCurrency(p.amount, currency)}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                No payment schedule set
-              </div>
-            )}
+            <DetailRows onEdit={handleSave} rows={[
+              { label: 'Total', value: total ? fmtCurrency(total, currency) : '—', field: 'Total_Amount', type: 'number', raw: total || '' },
+              { label: 'Deposit', value: deposit ? fmtCurrency(deposit, currency) : '—', field: 'Deposit_Amount', type: 'number', raw: deposit || '' },
+              { label: 'Deposit due', value: booking.Deposit_Due_Date ? fmtDateFull(booking.Deposit_Due_Date) : '—', field: 'Deposit_Due_Date', type: 'date', raw: booking.Deposit_Due_Date || '' },
+              { label: '2nd payment', value: booking.Second_Payment_Amount ? fmtCurrency(booking.Second_Payment_Amount, currency) : '—', field: 'Second_Payment_Amount', type: 'number', raw: booking.Second_Payment_Amount || '' },
+              { label: '2nd due', value: booking.Second_Payment_Due_Date ? fmtDateFull(booking.Second_Payment_Due_Date) : '—', field: 'Second_Payment_Due_Date', type: 'date', raw: booking.Second_Payment_Due_Date || '' },
+              { label: '3rd payment', value: booking.Third_Payment_Amount ? fmtCurrency(booking.Third_Payment_Amount, currency) : '—', field: 'Third_Payment_Amount', type: 'number', raw: booking.Third_Payment_Amount || '' },
+              { label: '3rd due', value: booking.Third_Payment_Due_Date ? fmtDateFull(booking.Third_Payment_Due_Date) : '—', field: 'Third_Payment_Due_Date', type: 'date', raw: booking.Third_Payment_Due_Date || '' },
+            ]} />
 
             {/* Cancellation */}
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: '0.5px solid var(--border-light)' }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                Cancellation
-              </div>
-              {cancelBefore ? (
-                <div style={{ fontSize: 13, marginBottom: 4 }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Free cancel before: </span>
-                  <span style={{
-                    fontWeight: 500,
-                    color: cancelBefore < today ? 'var(--red-text)' : 'var(--green-text)',
-                  }}>
-                    {fmtDateFull(cancelBefore)}
-                  </span>
-                  {cancelBefore < today && (
-                    <span style={{ fontSize: 11, color: 'var(--red-text)', marginLeft: 6 }}>Passed</span>
-                  )}
-                </div>
-              ) : (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No free cancellation date set</div>
-              )}
-              {cancelPolicy && (
-                <div style={{
-                  fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
-                  padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)',
-                  lineHeight: 1.5, whiteSpace: 'pre-wrap',
-                }}>
-                  {cancelPolicy}
-                </div>
-              )}
+              <DetailRows onEdit={handleSave} rows={[
+                { label: 'Free cancel before', value: cancelBefore ? fmtDateFull(cancelBefore) : '—', field: 'Cancel_Free_Before', type: 'date', raw: cancelBefore },
+                { label: 'Cancel policy', value: cancelPolicy || '—', field: 'Cancellation_Policy_Text', raw: cancelPolicy },
+              ]} />
             </div>
           </div>
         </div>
@@ -340,15 +285,74 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
   )
 }
 
-function DetailRows({ rows }) {
+function DetailRows({ rows, onEdit }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '6px 12px' }}>
       {rows.map((r, i) => (
         <React.Fragment key={i}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.label}</div>
-          <div style={{ fontSize: 13 }}>{r.value}</div>
+          {r.field && onEdit ? (
+            <EditableCell value={r.raw !== undefined ? r.raw : ''} display={r.value} field={r.field} type={r.type || 'text'} onEdit={onEdit} />
+          ) : (
+            <div style={{ fontSize: 13 }}>{r.value}</div>
+          )}
         </React.Fragment>
       ))}
+    </div>
+  )
+}
+
+function EditableCell({ value, display, field, type, onEdit }) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(value != null ? String(value) : '')
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    if (editValue === String(value || '')) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    try {
+      var saveVal = editValue
+      if (type === 'number') saveVal = parseFloat(editValue) || 0
+      await onEdit(field, saveVal)
+      setEditing(false)
+    } catch (err) {
+      alert('Error: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <input
+          type={type === 'date' ? 'date' : type === 'number' ? 'number' : 'text'}
+          value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false) }}
+          onBlur={() => setTimeout(handleSave, 150)}
+          autoFocus
+          disabled={saving}
+          style={{
+            fontSize: 13, padding: '2px 6px', width: '100%',
+            border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+            outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+          }}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      onClick={() => { setEditValue(value != null ? String(value) : ''); setEditing(true) }}
+      style={{ fontSize: 13, cursor: 'pointer', borderBottom: '1px dashed var(--border-default)', display: 'inline', paddingBottom: 1 }}
+      title="Click to edit"
+    >
+      {display || '—'}
     </div>
   )
 }
