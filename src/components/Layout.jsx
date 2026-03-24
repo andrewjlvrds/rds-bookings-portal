@@ -2,11 +2,10 @@ import React, { useState } from 'react'
 import { getStatus, isConfirmed } from '../utils/helpers'
 
 // Categorise tours into groups based on departure dates
-// New build: departing Nov 2026 onwards (our active build targets)
-// Upcoming: departing before Nov 2026, not yet completed
-// Past: completed tours
+// New tours: not yet departing (departure > today) and no bookings confirmed
+// Upcoming: departing soon, has bookings or activity
+// Past: completed tours (end date before today)
 function categorizeTours(tours) {
-  const NEW_BUILD_CUTOFF = '2026-11-01'
   const today = new Date().toISOString().split('T')[0]
   const newBuild = []
   const upcoming = []
@@ -26,21 +25,32 @@ function categorizeTours(tours) {
       return
     }
 
-    // New build: departure date on or after Nov 2026
-    if (depDate >= NEW_BUILD_CUTOFF) {
-      newBuild.push(tour)
-      return
+    // Determine completion date: end_date, or estimate from departure + booking count
+    let completionDate = tour.end_date || ''
+    if (!completionDate && depDate) {
+      // Estimate: departure date + number of bookings (nights), or +21 days as fallback
+      const bookingCount = (tour.bookings || []).length
+      const estDays = bookingCount > 0 ? bookingCount : 21
+      const est = new Date(depDate)
+      est.setDate(est.getDate() + estDays)
+      completionDate = est.toISOString().split('T')[0]
     }
 
-    // Past: end date or departure date before today
-    const endDate = tour.end_date || ''
-    if (endDate && endDate < today) {
+    // Past: completion date before today
+    if (completionDate && completionDate < today) {
       past.push(tour)
       return
     }
 
-    // Everything else is upcoming
-    upcoming.push(tour)
+    // Has bookings with activity — upcoming
+    const hasBookings = (tour.bookings || []).length > 0
+    if (hasBookings) {
+      upcoming.push(tour)
+      return
+    }
+
+    // Future tour with no bookings yet — new build
+    newBuild.push(tour)
   })
 
   // Sort new build and upcoming by start date ascending

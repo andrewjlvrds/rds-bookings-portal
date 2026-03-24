@@ -178,6 +178,67 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {sorted.length > 0 && (
+            <>
+              <button className="btn" onClick={() => {
+                const headers = ['Night', 'Date', 'Route', 'Lodge', 'Meals', 'Amount', 'Status']
+                const rows = sorted.map((bk, i) => {
+                  const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
+                  const dayDesc = bk.Day_Description || bk['Day Description'] || ''
+                  const routeMatch = dayDesc.match(/Day\s*\d+:\s*(.+)/)
+                  const route = routeMatch ? routeMatch[1] : dayDesc
+                  const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
+                  const amount = bk.Total_Amount || bk['Total Amount'] || ''
+                  const currency = bk.Currency || bk.Lodge_Currency || ''
+                  const status = getStatus(bk)
+                  return [i + 1, checkIn, route, lodge, bk.Meals || '', amount ? currency + ' ' + amount : '', status]
+                })
+                const csv = [headers, ...rows].map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n')
+                const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = (tour.name || 'itinerary').replace(/\s+/g, '_') + '.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              }} title="Download as CSV (Excel)">↓ Excel</button>
+              <button className="btn" onClick={() => {
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>${tour.name} — Itinerary</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#222; padding:20px; }
+h1 { font-size:16px; font-weight:600; margin-bottom:2px; }
+.sub { font-size:11px; color:#666; margin-bottom:14px; }
+table { width:100%; border-collapse:collapse; margin-top:8px; }
+th { text-align:left; font-size:10px; font-weight:600; color:#666; text-transform:uppercase; letter-spacing:0.5px; padding:6px 8px; border-bottom:1.5px solid #333; }
+td { padding:7px 8px; border-bottom:0.5px solid #ddd; vertical-align:top; }
+tr:last-child td { border-bottom:1.5px solid #333; }
+.lodge { font-weight:500; }
+.footer { margin-top:14px; font-size:9px; color:#999; }
+@media print { body { padding:0; } }
+</style></head><body>
+<h1>${tour.name}</h1>
+<div class="sub">${tour.departure_date ? 'Departure: ' + fmtDateFull(tour.departure_date) : ''}</div>
+<table><thead><tr><th>Night</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr></thead><tbody>
+${sorted.map((bk, i) => {
+  const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
+  const dayDesc = bk.Day_Description || bk['Day Description'] || ''
+  const routeMatch = dayDesc.match(/Day\s*\d+:\s*(.+)/)
+  const route = routeMatch ? routeMatch[1] : dayDesc
+  const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
+  return '<tr><td>' + (i+1) + '</td><td>' + fmtDate(checkIn) + '</td><td>' + route + '</td><td class="lodge">' + lodge + '</td><td>' + (bk.Meals || '') + '</td></tr>'
+}).join('')}
+</tbody></table>
+<div class="footer">Ride Down South · ${tour.name} · Generated ${new Date().toLocaleDateString()}</div>
+</body></html>`
+                const win = window.open('', '_blank')
+                win.document.write(html)
+                win.document.close()
+                setTimeout(() => win.print(), 300)
+              }} title="Print / Save as PDF">↓ PDF</button>
+            </>
+          )}
           <button className="btn" onClick={onEditItinerary}>
             {sorted.length === 0 ? 'Create itinerary' : 'Edit itinerary'}
           </button>
