@@ -1,12 +1,35 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { TEMPLATES, generateDates, generateRdsRef } from '../utils/templates'
 import { fmtDate, fmtDateFull } from '../utils/helpers'
 
 export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   const [selectedTemplate, setSelectedTemplate] = useState(null)
-  const [nights, setNights] = useState([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [pushing, setPushing] = useState(false)
+  const [pushed, setPushed] = useState(false)
+
+  // Draft key for localStorage
+  const draftKey = 'itinerary_draft_' + tour.id
+
+  // Load initial state: draft from localStorage, or empty
+  const [nights, setNights] = useState(() => {
+    try {
+      const draft = localStorage.getItem(draftKey)
+      if (draft) return JSON.parse(draft)
+    } catch (e) {}
+    return []
+  })
+
+  // Track whether we have unsaved local changes
+  const [dirty, setDirty] = useState(false)
+
+  // Auto-save draft to localStorage whenever nights change
+  useEffect(() => {
+    if (nights.length > 0) {
+      localStorage.setItem(draftKey, JSON.stringify(nights))
+    }
+  }, [nights, draftKey])
 
   // Build lodge list for fuzzy matching
   const lodgeList = useMemo(() => {
@@ -63,6 +86,45 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   // Departure date from tour
   const departureDate = tour.departure_date || ''
 
+  // Load existing bookings from Zoho into the editor
+  const handleLoadExisting = () => {
+    const bookings = (tour.bookings || []).slice().sort((a, b) => {
+      const dA = a.Check_in_Date || a['Check-in'] || ''
+      const dB = b.Check_in_Date || b['Check-in'] || ''
+      return dA.localeCompare(dB)
+    })
+
+    const loaded = bookings.map((bk, i) => {
+      const dayDesc = bk.Day_Description || bk['Day Description'] || ''
+      const nightMatch = dayDesc.match(/Day\s*(\d+)/)
+      const dayNum = nightMatch ? parseInt(nightMatch[1]) : i + 1
+      const routeMatch = dayDesc.match(/Day\s*\d+:\s*(.+)/)
+      const route = routeMatch ? routeMatch[1] : dayDesc
+
+      const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
+      const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
+
+      return {
+        id: bk.id || bk['Record Id'] || 'existing_' + i,
+        zoho_id: bk.id || bk['Record Id'] || '',
+        day: dayNum,
+        night_number: i + 1,
+        date: checkIn,
+        route: route,
+        lodge: lodge,
+        backup: '',
+        meals: bk.Meals || bk['Meals'] || 'BB',
+        km: '',
+        region: '',
+        lodges: [],
+      }
+    })
+
+    setNights(loaded)
+    setDirty(false)
+    setPushed(false)
+  }
+
   // Start with a blank itinerary (one empty night)
   const handleStartBlank = () => {
     const dep = new Date(departureDate)
@@ -78,7 +140,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
       region: '',
       lodges: [],
     }])
-    setSaved(false)
+    setDirty(true)
+    setPushed(false)
   }
 
   // Apply a template
@@ -96,13 +159,15 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
       meals: n.meals || 'BB',
       editing: false,
     })))
-    setSaved(false)
+    setDirty(true)
+    setPushed(false)
   }
 
   // Edit a night's lodge
   const updateNight = (idx, field, value) => {
     setNights(prev => prev.map((n, i) => i === idx ? { ...n, [field]: value } : n))
-    setSaved(false)
+    setDirty(true)
+    setPushed(false)
   }
 
   // Add a night after index — shifts all subsequent dates forward
@@ -137,7 +202,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
     })
 
     setNights(updated)
-    setSaved(false)
+    setDirty(true)
+    setPushed(false)
   }
 
   // Remove a night — shifts all subsequent dates back
@@ -155,13 +221,23 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
     })
 
     setNights(updated)
-    setSaved(false)
+    setDirty(true)
+    setPushed(false)
   }
 
-  // Save to Zoho (create lodge bookings)
-  const handleSave = async () => {
+  // Clear draft from localStorage
+  const handleClear = () => {
+    setNights([])
+    localStorage.removeItem(draftKey)
+    setDirty(false)
+    setPushed(false)
+  }
+
+  // Push to Zoho (create lodge bookings) — the big commit
+  const handlePushToZoho = async () => {
     if (!tour.id || tour.id === 'unassigned') return
-    setSaving(true)
+    if (!confirm('Push ' + nights.length + ' nights to Zoho? This will create lodge bookings.')) return
+    setPushing(true)
 
     try {
       const response = await fetch('/api/create-itinerary', {
@@ -191,12 +267,13 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
       }
 
       const result = await response.json()
-      setSaved(true)
+      setPushed(true)
+      localStorage.removeItem(draftKey)
       if (onSave) onSave(result)
     } catch (err) {
-      alert('Error saving itinerary: ' + err.message)
+      alert('Error pushing to Zoho: ' + err.message)
     } finally {
-      setSaving(false)
+      setPushing(false)
     }
   }
 
@@ -304,16 +381,17 @@ ${nights.map(n => `<tr>
           </div>
         </div>
         {nights.length > 0 && (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {dirty && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Draft auto-saved</span>}
             <button className="btn" onClick={handleDownloadExcel} title="Download as CSV (Excel)">↓ Excel</button>
             <button className="btn" onClick={handleDownloadPDF} title="Print / Save as PDF">↓ PDF</button>
-            <button className="btn" onClick={() => setNights([])}>Clear</button>
+            <button className="btn" onClick={handleClear}>Clear</button>
             <button
               className="btn btn-primary"
-              onClick={handleSave}
-              disabled={saving || saved || !departureDate}
+              onClick={handlePushToZoho}
+              disabled={pushing || pushed || !departureDate}
             >
-              {saving ? 'Saving...' : saved ? 'Saved' : 'Save to Zoho (' + nights.length + ' nights)'}
+              {pushing ? 'Pushing...' : pushed ? 'Pushed to Zoho' : 'Push to Zoho (' + nights.length + ' nights)'}
             </button>
           </div>
         )}
@@ -335,16 +413,35 @@ ${nights.map(n => `<tr>
           padding: 16, background: 'var(--blue-bg)', borderRadius: 'var(--radius-lg)',
           color: 'var(--blue-text)', fontSize: 13, marginBottom: 16,
         }}>
-          This tour already has {existingBookings} lodge booking{existingBookings > 1 ? 's' : ''} in Zoho.
-          Applying a template will create additional bookings — it won't replace existing ones.
+          This tour has {existingBookings} lodge booking{existingBookings > 1 ? 's' : ''} in Zoho.
         </div>
       )}
 
       {/* Template selection */}
       {nights.length === 0 && departureDate && (
         <div style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>Choose a template</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>Choose how to start</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {existingBookings > 0 && (
+              <button
+                onClick={handleLoadExisting}
+                style={{
+                  display: 'block',
+                  textAlign: 'left',
+                  padding: 16,
+                  border: '1.5px solid var(--blue-mid)',
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--blue-bg)',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s',
+                }}
+              >
+                <div style={{ fontWeight: 500, marginBottom: 4, color: 'var(--blue-text)' }}>Edit existing itinerary</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Load {existingBookings} bookings from Zoho
+                </div>
+              </button>
+            )}
             {Object.entries(TEMPLATES).map(([key, tmpl]) => (
               <button
                 key={key}
