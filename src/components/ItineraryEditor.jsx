@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { TEMPLATES, generateDates, generateRdsRef } from '../utils/templates'
+import { TEMPLATES, generateDates, generateRdsRef, getAllTemplates, saveCustomTemplate, deleteCustomTemplate } from '../utils/templates'
 import { fmtDate, fmtDateFull } from '../utils/helpers'
 
 export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
@@ -8,6 +8,13 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   const [saved, setSaved] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushed, setPushed] = useState(false)
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateCode, setTemplateCode] = useState('')
+  const [templateRefresh, setTemplateRefresh] = useState(0)
+
+  // All templates (built-in + custom)
+  const allTemplates = useMemo(() => getAllTemplates(), [templateRefresh])
 
   // Draft key for localStorage
   const draftKey = 'itinerary_draft_' + tour.id
@@ -146,7 +153,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 
   // Apply a template
   const handleApplyTemplate = (templateKey) => {
-    const template = TEMPLATES[templateKey]
+    const template = allTemplates[templateKey]
     if (!template || !departureDate) return
 
     setSelectedTemplate(templateKey)
@@ -277,6 +284,39 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
     }
   }
 
+  // Save current itinerary as a reusable template
+  const handleSaveAsTemplate = () => {
+    if (!templateName.trim()) return
+    const key = 'custom-' + templateName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    const template = {
+      name: templateName.trim(),
+      code: templateCode.trim() || templateName.trim().split(' ')[0],
+      tour_type: templateCode.trim() || '',
+      custom: true,
+      nights: nights.map(n => ({
+        day: n.day,
+        route: n.route || '',
+        region: n.region || '',
+        meals: n.meals || 'BB',
+        km: n.km || '',
+        notes: n.notes || '',
+        lodges: [n.lodge, n.backup].filter(Boolean),
+      })),
+    }
+    saveCustomTemplate(key, template)
+    setShowSaveTemplate(false)
+    setTemplateName('')
+    setTemplateCode('')
+    setTemplateRefresh(prev => prev + 1)
+  }
+
+  // Delete a custom template
+  const handleDeleteTemplate = (key) => {
+    if (!confirm('Delete template "' + allTemplates[key].name + '"?')) return
+    deleteCustomTemplate(key)
+    setTemplateRefresh(prev => prev + 1)
+  }
+
   // Download as CSV (opens in Excel)
   const handleDownloadExcel = () => {
     const headers = ['Night', 'Date', 'Route', 'Km', 'Lodge', 'Backup', 'Meals']
@@ -383,6 +423,9 @@ ${nights.map(n => `<tr>
         {nights.length > 0 && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {dirty && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Draft auto-saved</span>}
+            <button className="btn" onClick={() => setShowSaveTemplate(!showSaveTemplate)} title="Save as reusable template">
+              {showSaveTemplate ? '× Template' : '💾 Template'}
+            </button>
             <button className="btn" onClick={handleDownloadExcel} title="Download as CSV (Excel)">↓ Excel</button>
             <button className="btn" onClick={handleDownloadPDF} title="Print / Save as PDF">↓ PDF</button>
             <button className="btn" onClick={handleClear}>Clear</button>
@@ -396,6 +439,50 @@ ${nights.map(n => `<tr>
           </div>
         )}
       </div>
+
+      {/* Save as template form */}
+      {showSaveTemplate && nights.length > 0 && (
+        <div style={{
+          padding: 16, marginBottom: 16,
+          border: '0.5px solid var(--border-default)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-secondary)',
+          display: 'flex', gap: 8, alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Save as template:</span>
+          <input
+            type="text"
+            value={templateName}
+            onChange={e => setTemplateName(e.target.value)}
+            placeholder="Template name (e.g. Western Cape 10-day)"
+            style={{
+              flex: 1, fontSize: 12, padding: '5px 8px',
+              border: '0.5px solid var(--border-default)', borderRadius: 4,
+              outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+            }}
+            autoFocus
+          />
+          <input
+            type="text"
+            value={templateCode}
+            onChange={e => setTemplateCode(e.target.value)}
+            placeholder="Code (e.g. WC10)"
+            style={{
+              width: 100, fontSize: 12, padding: '5px 8px',
+              border: '0.5px solid var(--border-default)', borderRadius: 4,
+              outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+            }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={handleSaveAsTemplate}
+            disabled={!templateName.trim()}
+            style={{ fontSize: 12, padding: '5px 12px', whiteSpace: 'nowrap' }}
+          >
+            Save template
+          </button>
+        </div>
+      )}
 
       {/* No departure date warning */}
       {!departureDate && (
@@ -442,28 +529,46 @@ ${nights.map(n => `<tr>
                 </div>
               </button>
             )}
-            {Object.entries(TEMPLATES).map(([key, tmpl]) => (
-              <button
-                key={key}
-                onClick={() => handleApplyTemplate(key)}
-                style={{
-                  display: 'block',
-                  textAlign: 'left',
-                  padding: 16,
-                  border: '0.5px solid var(--border-default)',
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'var(--bg-primary)',
-                  cursor: 'pointer',
-                  transition: 'border-color 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue-mid)' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-default)' }}
-              >
-                <div style={{ fontWeight: 500, marginBottom: 4 }}>{tmpl.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {tmpl.nights.length} nights
-                </div>
-              </button>
+            {Object.entries(allTemplates).map(([key, tmpl]) => (
+              <div key={key} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => handleApplyTemplate(key)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: 16,
+                    border: tmpl.custom ? '0.5px solid var(--green-border, var(--border-default))' : '0.5px solid var(--border-default)',
+                    borderRadius: 'var(--radius-lg)',
+                    background: 'var(--bg-primary)',
+                    cursor: 'pointer',
+                    transition: 'border-color 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue-mid)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-default)' }}
+                >
+                  <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                    {tmpl.name}
+                    {tmpl.custom && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>custom</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {tmpl.nights.length} nights{tmpl.code ? ' · ' + tmpl.code : ''}
+                  </div>
+                </button>
+                {tmpl.custom && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(key) }}
+                    title="Delete template"
+                    style={{
+                      position: 'absolute', top: 8, right: 8,
+                      background: 'none', border: 'none', fontSize: 12,
+                      color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 6px',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--red-text)' }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+                  >×</button>
+                )}
+              </div>
             ))}
             <button
               onClick={handleStartBlank}

@@ -119,3 +119,28 @@ export function generateRdsRef(tourCode, departureDate, nightNum) {
   const nightStr = String(nightNum).padStart(2, '0')
   return 'RDS-' + tourCode + '-' + monthStr + yearStr + '-N' + nightStr
 }
+
+// Custom template storage (localStorage)
+const CUSTOM_TEMPLATES_KEY = 'rds_custom_templates'
+
+export function getCustomTemplates() {
+  try {
+    return JSON.parse(localStorage.getItem(CUSTOM_TEMPLATES_KEY) || '{}')
+  } catch (e) { return {} }
+}
+
+export function saveCustomTemplate(key, template) {
+  const all = getCustomTemplates()
+  all[key] = template
+  localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(all))
+}
+
+export function deleteCustomTemplate(key) {
+  const all = getCustomTemplates()
+  delete all[key]
+  localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(all))
+}
+
+export function getAllTemplates() {
+  return { ...TEMPLATES, ...getCustomTemplates() }
+}
