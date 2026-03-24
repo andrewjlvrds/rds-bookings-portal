@@ -179,6 +179,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
             meals: n.meals,
             region: n.region,
             day: n.day,
+            km: n.km || '',
             pre_tour: n.pre_tour || false,
           })),
         }),
@@ -197,6 +198,87 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  // Download as CSV (opens in Excel)
+  const handleDownloadExcel = () => {
+    const headers = ['Night', 'Date', 'Route', 'Km', 'Lodge', 'Backup', 'Meals']
+    const rows = nights.map(n => [
+      n.pre_tour ? 'Pre' : n.day,
+      n.date,
+      n.route || '',
+      n.km || '',
+      n.lodge || '',
+      n.backup || '',
+      n.meals || '',
+    ])
+    const totalKm = nights.reduce((sum, n) => sum + (parseInt(n.km) || 0), 0)
+    rows.push(['', '', 'TOTAL', totalKm + ' km', '', '', ''])
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(','))
+      .join('\n')
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = (tour.name || 'itinerary').replace(/\s+/g, '_') + '_itinerary.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Download as printable PDF (opens print dialog)
+  const handleDownloadPDF = () => {
+    const totalKm = nights.reduce((sum, n) => sum + (parseInt(n.km) || 0), 0)
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>${tour.name} — Itinerary</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #222; padding: 20px; }
+  h1 { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+  .sub { font-size: 11px; color: #666; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th { text-align: left; font-size: 10px; font-weight: 600; color: #666; text-transform: uppercase;
+       letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1.5px solid #333; }
+  td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
+  tr:last-child td { border-bottom: 1.5px solid #333; }
+  .night { font-weight: 500; width: 40px; }
+  .date { width: 70px; color: #555; }
+  .route { }
+  .km { width: 50px; color: #888; text-align: right; }
+  .lodge { font-weight: 500; }
+  .backup { color: #888; font-size: 10px; }
+  .meals { width: 40px; color: #888; }
+  .notes { font-size: 9px; color: #888; margin-top: 2px; }
+  .total { font-weight: 600; background: #f5f5f5; }
+  .footer { margin-top: 14px; font-size: 9px; color: #999; }
+  @media print { body { padding: 0; } }
+</style>
+</head><body>
+<h1>${tour.name}</h1>
+<div class="sub">Departure: ${departureDate ? fmtDateFull(departureDate) : 'TBC'}${tour.tour_type ? ' · ' + tour.tour_type : ''}</div>
+<table>
+<thead><tr><th>Night</th><th>Date</th><th>Route</th><th>Km</th><th>Lodge</th><th>Meals</th></tr></thead>
+<tbody>
+${nights.map(n => `<tr>
+  <td class="night">${n.pre_tour ? 'Pre' : n.day}</td>
+  <td class="date">${fmtDate(n.date)}</td>
+  <td class="route">${n.route || ''}${n.notes ? '<div class="notes">' + n.notes + '</div>' : ''}</td>
+  <td class="km">${n.km || ''}</td>
+  <td><div class="lodge">${n.lodge || ''}</div>${n.backup ? '<div class="backup">Backup: ' + n.backup + '</div>' : ''}</td>
+  <td class="meals">${n.meals || ''}</td>
+</tr>`).join('')}
+<tr class="total"><td></td><td></td><td>Total</td><td class="km">${totalKm} km</td><td></td><td></td></tr>
+</tbody></table>
+<div class="footer">Ride Down South · ${tour.name} · Generated ${new Date().toLocaleDateString()}</div>
+</body></html>`
+
+    const win = window.open('', '_blank')
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => win.print(), 300)
   }
 
   return (
@@ -223,6 +305,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
         </div>
         {nights.length > 0 && (
           <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" onClick={handleDownloadExcel} title="Download as CSV (Excel)">↓ Excel</button>
+            <button className="btn" onClick={handleDownloadPDF} title="Print / Save as PDF">↓ PDF</button>
             <button className="btn" onClick={() => setNights([])}>Clear</button>
             <button
               className="btn btn-primary"
@@ -350,6 +434,17 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
                         color: 'var(--text-primary)',
                       }}
                       placeholder="Route description"
+                    />
+                    <input
+                      type="text"
+                      value={n.km || ''}
+                      onChange={e => updateNight(i, 'km', e.target.value)}
+                      style={{
+                        width: 80, border: 'none', background: 'transparent',
+                        fontSize: 11, padding: '1px 0', outline: 'none',
+                        color: 'var(--text-muted)',
+                      }}
+                      placeholder="km"
                     />
                   </td>
                   <td>
