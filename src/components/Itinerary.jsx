@@ -5,6 +5,31 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [marking, setMarking] = useState(false)
   const [editing, setEditing] = useState(null) // { id, field, value }
   const [savingEdit, setSavingEdit] = useState(false)
+  const [editingDate, setEditingDate] = useState(false)
+  const [newDate, setNewDate] = useState(tour.departure_date || '')
+  const [savingDate, setSavingDate] = useState(false)
+
+  const handleSaveDate = async () => {
+    if (!newDate || newDate === tour.departure_date) {
+      setEditingDate(false)
+      return
+    }
+    setSavingDate(true)
+    try {
+      const res = await fetch('/api/update-tour', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: tour.id, updates: { Departure_Date: newDate } }),
+      })
+      if (!res.ok) throw new Error('Failed to update departure date')
+      setEditingDate(false)
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    } finally {
+      setSavingDate(false)
+    }
+  }
 
   if (!tour) return null
 
@@ -99,7 +124,57 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
           <h1 style={{ fontSize: 18, fontWeight: 500 }}>{tour.name}</h1>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
             {sorted.length} nights
-            {tour.departure_date ? ' · Departs ' + fmtDateFull(tour.departure_date) : ''}
+            {tour.departure_date ? (
+              editingDate ? (
+                <span style={{ marginLeft: 4 }}>
+                  · Departs{' '}
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={e => setNewDate(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveDate(); if (e.key === 'Escape') setEditingDate(false) }}
+                    style={{
+                      fontSize: 13, padding: '1px 4px',
+                      border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+                      outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleSaveDate}
+                    disabled={savingDate}
+                    style={{
+                      fontSize: 11, marginLeft: 4, padding: '2px 8px',
+                      border: 'none', borderRadius: 4, cursor: 'pointer',
+                      background: 'var(--blue-mid)', color: '#fff',
+                    }}
+                  >{savingDate ? '...' : 'Save'}</button>
+                  <button
+                    onClick={() => { setEditingDate(false); setNewDate(tour.departure_date || '') }}
+                    style={{
+                      fontSize: 11, marginLeft: 2, padding: '2px 6px',
+                      border: 'none', background: 'none', cursor: 'pointer',
+                      color: 'var(--text-muted)',
+                    }}
+                  >Cancel</button>
+                </span>
+              ) : (
+                <span
+                  onClick={() => { setNewDate(tour.departure_date || ''); setEditingDate(true) }}
+                  style={{ cursor: 'pointer', marginLeft: 4 }}
+                  title="Click to change departure date"
+                >
+                  · Departs {fmtDateFull(tour.departure_date)}
+                </span>
+              )
+            ) : (
+              <span
+                onClick={() => { setNewDate(''); setEditingDate(true) }}
+                style={{ cursor: 'pointer', color: 'var(--amber-text)', marginLeft: 4 }}
+              >
+                · No departure date — click to set
+              </span>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
