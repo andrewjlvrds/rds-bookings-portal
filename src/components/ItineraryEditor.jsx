@@ -263,6 +263,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
             region: n.region,
             day: n.day,
             km: n.km || '',
+            route_notes: n.route_notes || '',
             pre_tour: n.pre_tour || false,
           })),
         }),
@@ -299,6 +300,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
         region: n.region || '',
         meals: n.meals || 'BB',
         km: n.km || '',
+        route_notes: n.route_notes || '',
         notes: n.notes || '',
         lodges: [n.lodge, n.backup].filter(Boolean),
       })),
@@ -319,18 +321,19 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 
   // Download as CSV (opens in Excel)
   const handleDownloadExcel = () => {
-    const headers = ['Night', 'Date', 'Route', 'Km', 'Lodge', 'Backup', 'Meals']
+    const headers = ['Night', 'Date', 'Route', 'Km', 'Route Notes', 'Lodge', 'Backup', 'Meals']
     const rows = nights.map(n => [
       n.pre_tour ? 'Pre' : n.day,
       n.date,
       n.route || '',
-      n.km || '',
+      n.km ? n.km + ' km' : '',
+      n.route_notes || '',
       n.lodge || '',
       n.backup || '',
       n.meals || '',
     ])
     const totalKm = nights.reduce((sum, n) => sum + (parseInt(n.km) || 0), 0)
-    rows.push(['', '', 'TOTAL', totalKm + ' km', '', '', ''])
+    rows.push(['', '', 'TOTAL', totalKm + ' km', '', '', '', ''])
 
     const csvContent = [headers, ...rows]
       .map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(','))
@@ -369,6 +372,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   .backup { color: #888; font-size: 10px; }
   .meals { width: 40px; color: #888; }
   .notes { font-size: 9px; color: #888; margin-top: 2px; }
+  .route-notes { font-size: 9px; color: #888; font-style: italic; margin-top: 2px; }
   .total { font-weight: 600; background: #f5f5f5; }
   .footer { margin-top: 14px; font-size: 9px; color: #999; }
   @media print { body { padding: 0; } }
@@ -382,7 +386,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 ${nights.map(n => `<tr>
   <td class="night">${n.pre_tour ? 'Pre' : n.day}</td>
   <td class="date">${fmtDate(n.date)}</td>
-  <td class="route">${n.route || ''}${n.notes ? '<div class="notes">' + n.notes + '</div>' : ''}</td>
+  <td class="route">${n.route || ''}${n.km ? '<div class="notes">' + n.km + ' km</div>' : ''}${n.route_notes ? '<div class="route-notes">' + n.route_notes + '</div>' : ''}${n.notes ? '<div class="notes">' + n.notes + '</div>' : ''}</td>
   <td class="km">${n.km || ''}</td>
   <td><div class="lodge">${n.lodge || ''}</div>${n.backup ? '<div class="backup">Backup: ' + n.backup + '</div>' : ''}</td>
   <td class="meals">${n.meals || ''}</td>
@@ -637,16 +641,30 @@ ${nights.map(n => `<tr>
                       }}
                       placeholder="Route description"
                     />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                      <input
+                        type="text"
+                        value={n.km || ''}
+                        onChange={e => updateNight(i, 'km', e.target.value.replace(/[^0-9/.]/g, ''))}
+                        style={{
+                          width: 40, border: 'none', background: 'transparent',
+                          fontSize: 11, padding: '1px 0', outline: 'none',
+                          color: 'var(--text-muted)', textAlign: 'right',
+                        }}
+                        placeholder="—"
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>km</span>
+                    </div>
                     <input
                       type="text"
-                      value={n.km || ''}
-                      onChange={e => updateNight(i, 'km', e.target.value)}
+                      value={n.route_notes || ''}
+                      onChange={e => updateNight(i, 'route_notes', e.target.value)}
                       style={{
-                        width: 80, border: 'none', background: 'transparent',
-                        fontSize: 11, padding: '1px 0', outline: 'none',
-                        color: 'var(--text-muted)',
+                        width: '100%', border: 'none', background: 'transparent',
+                        fontSize: 10, padding: '1px 0', outline: 'none',
+                        color: 'var(--text-muted)', fontStyle: 'italic',
                       }}
-                      placeholder="km"
+                      placeholder="Route notes"
                     />
                   </td>
                   <td>
