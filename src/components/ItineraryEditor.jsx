@@ -8,19 +8,44 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  // Build a lookup map from lodge directory (case-insensitive)
-  const lodgeLookup = useMemo(() => {
-    const map = {}
-    ;(lodges || []).forEach(l => {
-      if (l.name) map[l.name.toLowerCase()] = l
-    })
-    return map
+  // Build lodge list for fuzzy matching
+  const lodgeList = useMemo(() => {
+    return (lodges || []).filter(l => l.name).map(l => ({
+      ...l,
+      _lower: l.name.toLowerCase().trim(),
+      _words: l.name.toLowerCase().trim().split(/\s+/),
+    }))
   }, [lodges])
 
-  // Look up a lodge by name — returns { found, hasEmail, email, contact }
+  // Fuzzy lodge lookup — tries exact match first, then substring, then word overlap
   const getLodgeStatus = (lodgeName) => {
     if (!lodgeName) return { found: false, hasEmail: false }
-    const match = lodgeLookup[lodgeName.toLowerCase()]
+    const q = lodgeName.toLowerCase().trim()
+    if (!q) return { found: false, hasEmail: false }
+
+    // 1. Exact match
+    let match = lodgeList.find(l => l._lower === q)
+
+    // 2. One contains the other (either direction)
+    if (!match) match = lodgeList.find(l => l._lower.includes(q) || q.includes(l._lower))
+
+    // 3. Word overlap — at least 2 words in common, or all query words found
+    if (!match) {
+      const qWords = q.split(/\s+/).filter(w => w.length > 2)
+      if (qWords.length > 0) {
+        let best = null, bestScore = 0
+        for (const l of lodgeList) {
+          const hits = qWords.filter(w => l._lower.includes(w)).length
+          const score = hits / Math.max(qWords.length, l._words.length)
+          if (hits >= 2 && score > bestScore) {
+            best = l
+            bestScore = score
+          }
+        }
+        if (best) match = best
+      }
+    }
+
     if (!match) return { found: false, hasEmail: false }
     return {
       found: true,
@@ -28,6 +53,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
       email: match.email || '',
       contact: match.contact || '',
       id: match.id,
+      matchedName: match.name,
     }
   }
 
@@ -380,6 +406,9 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
                     )}
                     {n.lodge && (() => {
                       const ls = getLodgeStatus(n.lodge)
+                      const fuzzyNote = ls.found && ls.matchedName && ls.matchedName.toLowerCase() !== n.lodge.toLowerCase().trim()
+                        ? ' (matched: ' + ls.matchedName + ')'
+                        : ''
                       if (!ls.found) return (
                         <div style={{ fontSize: 10, color: 'var(--red-text)', marginTop: 2 }}>
                           Not in Zoho — add to Lodges module
@@ -387,12 +416,12 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
                       )
                       if (!ls.hasEmail) return (
                         <div style={{ fontSize: 10, color: 'var(--amber-text)', marginTop: 2 }}>
-                          No email on file
+                          No email on file{fuzzyNote}
                         </div>
                       )
                       return (
                         <div style={{ fontSize: 10, color: 'var(--green-text)', marginTop: 2 }}>
-                          {ls.email}{ls.contact ? ' · ' + ls.contact : ''}
+                          {ls.email}{ls.contact ? ' · ' + ls.contact : ''}{fuzzyNote}
                         </div>
                       )
                     })()}
