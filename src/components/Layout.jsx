@@ -381,6 +381,13 @@ function TourItem({ tour, active, onClick, dimmed }) {
   const confirmed = bookings.filter(b => isConfirmed(b)).length
   const total = bookings.length
 
+  // Check for draft
+  let hasDraft = false
+  try {
+    const draft = localStorage.getItem('itinerary_draft_' + tour.id)
+    if (draft && JSON.parse(draft).length > 0) hasDraft = true
+  } catch (e) {}
+
   return (
     <button
       onClick={onClick}
@@ -403,8 +410,11 @@ function TourItem({ tour, active, onClick, dimmed }) {
       onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-secondary)' }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
     >
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
         {tour.name}
+        {hasDraft && total === 0 && (
+          <span style={{ fontSize: 9, color: 'var(--amber-text)', fontWeight: 500 }}>draft</span>
+        )}
       </span>
       <span style={{
         fontSize: 11,
