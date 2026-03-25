@@ -194,7 +194,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
           {sorted.length > 0 && (
             <>
               <button className="btn" onClick={() => {
-                const headers = ['Night', 'Date', 'Route', 'Lodge', 'Meals', 'Amount', 'Status']
+                const headers = ['Day', 'Date', 'Route', 'Lodge', 'Meals', 'Amount', 'Status']
                 const rows = sorted.map((bk, i) => {
                   const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
                   const dayDesc = bk.Day_Description || bk['Day Description'] || ''
@@ -233,7 +233,7 @@ tr:last-child td { border-bottom:1.5px solid #333; }
 </style></head><body>
 <h1>${tour.name}</h1>
 <div class="sub">${tour.departure_date ? 'Departure: ' + fmtDateFull(tour.departure_date) : ''}</div>
-<table><thead><tr><th>Night</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr></thead><tbody>
+<table><thead><tr><th>Day</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr></thead><tbody>
 ${sorted.map((bk, i) => {
   const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
   const dayDesc = bk.Day_Description || bk['Day Description'] || ''
@@ -310,7 +310,7 @@ ${sorted.map((bk, i) => {
           </colgroup>
           <thead>
             <tr>
-              <th>Night</th>
+              <th>Day</th>
               <th>Date</th>
               <th>Route</th>
               <th>Lodge</th>
@@ -706,7 +706,7 @@ function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefre
             <col style={{ width: '10%' }} />
           </colgroup>
           <thead>
-            <tr><th>Night</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr>
+            <tr><th>Day</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr>
           </thead>
           <tbody>
             {draftNights.map((n, i) => {

@@ -383,7 +383,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 
   // Download as CSV (opens in Excel)
   const handleDownloadExcel = () => {
-    const headers = ['Night', 'Date', 'Route', 'Km', 'Route Notes', 'Lodge', 'Backup', 'Meals']
+    const headers = ['Day', 'Date', 'Route', 'Km', 'Route Notes', 'Lodge', 'Backup', 'Meals']
     const rows = nights.map(n => [
       n.pre_tour ? 'Pre' : n.day,
       n.date,
@@ -443,7 +443,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 <h1>${tour.name}</h1>
 <div class="sub">Departure: ${departureDate ? fmtDateFull(departureDate) : 'TBC'}${tour.tour_type ? ' · ' + tour.tour_type : ''}</div>
 <table>
-<thead><tr><th>Night</th><th>Date</th><th>Route</th><th>Km</th><th>Lodge</th><th>Meals</th></tr></thead>
+<thead><tr><th>Day</th><th>Date</th><th>Route</th><th>Km</th><th>Lodge</th><th>Meals</th></tr></thead>
 <tbody>
 ${nights.map(n => `<tr>
   <td class="night">${n.pre_tour ? 'Pre' : n.day}</td>
@@ -706,18 +706,16 @@ ${nights.map(n => `<tr>
             <colgroup>
               <col style={{ width: 50 }} />
               <col style={{ width: 80 }} />
-              <col style={{ width: '28%' }} />
               <col style={{ width: '30%' }} />
-              <col style={{ width: 80 }} />
-              <col style={{ width: 60 }} />
+              <col style={{ width: '35%' }} />
+              <col style={{ width: 100 }} />
             </colgroup>
             <thead>
               <tr>
-                <th>Night</th>
+                <th>Day</th>
                 <th>Date</th>
                 <th>Route</th>
                 <th>Lodge</th>
-                <th></th>
                 <th></th>
               </tr>
             </thead>
@@ -806,12 +804,11 @@ ${nights.map(n => `<tr>
                       }}>×</button>
                     </div>
                   </td>
-                  <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{n.meals || 'BB'}</td>
                 </tr>
                 {/* Expanded detail panel */}
                 {expandedNight === i && (
                   <tr>
-                    <td colSpan={6} style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderBottom: '0.5px solid var(--border-default)' }}>
+                    <td colSpan={5} style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderBottom: '0.5px solid var(--border-default)' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12 }}>
                         <div>
                           <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Backup lodge</label>
