@@ -233,7 +233,35 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   }
 
   // Clear draft from localStorage
+  // Backup a draft before deleting (keeps for 24hrs)
+  const backupDraft = (data) => {
+    if (!data || data.length === 0) return
+    const backup = {
+      data: data,
+      deleted_at: Date.now(),
+      tour_id: tour.id,
+      tour_name: tour.name,
+    }
+    localStorage.setItem('itinerary_backup_' + tour.id, JSON.stringify(backup))
+  }
+
+  // Restore from backup if available
+  const getBackup = () => {
+    try {
+      const raw = localStorage.getItem('itinerary_backup_' + tour.id)
+      if (!raw) return null
+      const backup = JSON.parse(raw)
+      // Expire after 24 hours
+      if (Date.now() - backup.deleted_at > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem('itinerary_backup_' + tour.id)
+        return null
+      }
+      return backup
+    } catch (e) { return null }
+  }
+
   const handleClear = () => {
+    backupDraft(nights)
     setNights([])
     localStorage.removeItem(draftKey)
     setDirty(false)
@@ -511,6 +539,31 @@ ${nights.map(n => `<tr>
       {/* Template selection */}
       {nights.length === 0 && departureDate && (
         <div style={{ marginBottom: 24 }}>
+          {/* Undo delete banner */}
+          {(() => {
+            const backup = getBackup()
+            if (!backup) return null
+            const hoursAgo = Math.round((Date.now() - backup.deleted_at) / (1000 * 60 * 60))
+            return (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 16px', marginBottom: 12,
+                background: 'var(--amber-bg)', borderRadius: 'var(--radius-md)',
+                fontSize: 12, color: 'var(--amber-text)',
+              }}>
+                <span>Deleted draft ({backup.data.length} nights, {hoursAgo < 1 ? 'just now' : hoursAgo + 'h ago'})</span>
+                <button
+                  onClick={() => {
+                    setNights(backup.data)
+                    setDirty(true)
+                    localStorage.removeItem('itinerary_backup_' + tour.id)
+                  }}
+                  className="btn"
+                  style={{ fontSize: 12, padding: '4px 12px' }}
+                >Restore</button>
+              </div>
+            )
+          })()}
           <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>Choose how to start</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
             {existingBookings > 0 && (

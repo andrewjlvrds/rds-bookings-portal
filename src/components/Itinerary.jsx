@@ -653,7 +653,12 @@ function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefre
   }
 
   const handleDeleteDraft = () => {
-    if (!confirm('Delete this draft? This cannot be undone.')) return
+    if (!confirm('Delete this draft? You can undo within 24 hours.')) return
+    // Backup before deleting
+    try {
+      const backup = { data: draftNights, deleted_at: Date.now(), tour_id: tour.id, tour_name: tour.name }
+      localStorage.setItem('itinerary_backup_' + tour.id, JSON.stringify(backup))
+    } catch (e) {}
     localStorage.removeItem('itinerary_draft_' + tour.id)
     window.location.reload()
   }
