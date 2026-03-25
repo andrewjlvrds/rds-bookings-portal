@@ -721,7 +721,8 @@ ${nights.map(n => `<tr>
             </thead>
             <tbody>
               {nights.map((n, i) => (
-                <tr key={n.id} style={n.pre_tour ? { opacity: 0.6 } : {}}>
+                <React.Fragment key={n.id}>
+                <tr style={n.pre_tour ? { opacity: 0.6 } : {}}>
                   <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
                     {n.pre_tour ? 'Pre' : n.day}
                   </td>
@@ -841,74 +842,101 @@ ${nights.map(n => `<tr>
                     </div>
                   </td>
                 </tr>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Detail panel for expanded night */}
+      {/* Detail panel for expanded night — mirrors LodgeDetail layout */}
       {expandedNight !== null && nights[expandedNight] && (() => {
         const n = nights[expandedNight]
         const i = expandedNight
+        const ls = n.lodge ? getLodgeStatus(n.lodge) : { found: false, hasEmail: false }
+        const checkOut = (() => { const d = new Date(n.date); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] })()
+
+        const Field = ({ label, value, field, type }) => (
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '0.5px solid var(--border-light, #eee)' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 120 }}>{label}</span>
+            {field ? (
+              <input type={type || 'text'} value={value || ''} onChange={e => updateNight(i, field, e.target.value)}
+                style={{ fontSize: 12, fontWeight: 500, border: 'none', background: 'transparent', outline: 'none', color: 'var(--text-primary)', textAlign: 'right', flex: 1, marginLeft: 8 }}
+                placeholder="—" />
+            ) : (
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{value || '—'}</span>
+            )}
+          </div>
+        )
+
         return (
-          <div style={{
-            padding: 16, marginTop: -1,
-            border: '0.5px solid var(--border-default)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--bg-primary)',
-            marginBottom: 16,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <span style={{ fontSize: 14, fontWeight: 500 }}>Day {n.day} — {n.lodge || 'No lodge'}</span>
+          <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-primary)', marginBottom: 16, overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '0.5px solid var(--border-default)' }}>
+              <div>
+                <span style={{ fontSize: 15, fontWeight: 500 }}>{n.lodge || 'No lodge assigned'}</span>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  Day {n.day}: {n.route || ''} · {fmtDateFull(n.date)} – {fmtDateFull(checkOut)} · 1 night
+                </div>
+              </div>
               <button onClick={() => setExpandedNight(null)} style={{
                 background: 'none', border: 'none', fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer',
-              }}>Close</button>
+              }}>Close ×</button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12 }}>
-              <div>
-                <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Backup lodge</label>
-                {(n.lodges || []).length > 1 ? (
-                  <select value={n.backup || ''} onChange={e => updateNight(i, 'backup', e.target.value)}
-                    style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-                    <option value="">— none —</option>
-                    {(n.lodges || []).filter(l => l !== n.lodge).map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                ) : (
-                  <input type="text" value={n.backup || ''} onChange={e => updateNight(i, 'backup', e.target.value)}
-                    placeholder="Backup lodge" style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
-                )}
-              </div>
-              <div>
-                <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Meals</label>
-                <select value={n.meals} onChange={e => updateNight(i, 'meals', e.target.value)}
-                  style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-                  <option value="BB">BB</option>
-                  <option value="DBB">DBB</option>
-                  <option value="HB">HB</option>
-                  <option value="FB">FB</option>
-                  <option value="SC">SC</option>
-                  <option value="RO">RO</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Km</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input type="text" value={n.km || ''} onChange={e => updateNight(i, 'km', e.target.value.replace(/[^0-9/.]/g, ''))}
-                    placeholder="—" style={{ width: 60, fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)', textAlign: 'right' }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>km</span>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+              {/* Left panel — Booking details */}
+              <div style={{ padding: 16, borderRight: '0.5px solid var(--border-default)' }}>
+                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10, color: 'var(--text-muted)' }}>Booking details</div>
+                <Field label="Lodge" value={n.lodge} />
+                <Field label="Backup lodge" value={n.backup} field="backup" />
+                <Field label="Contact" value={ls.contact || ''} />
+                <Field label="Email" value={ls.email || ''} />
+                <Field label="Check-in" value={fmtDateFull(n.date)} />
+                <Field label="Check-out" value={fmtDateFull(checkOut)} />
+                <Field label="Nights" value="1" />
+                <Field label="Meals" value={n.meals} field="meals" />
+                <Field label="Km" value={n.km} field="km" />
+                <Field label="RDS reference" value="" />
+                <Field label="Lodge reference" value={n.lodge_ref || ''} field="lodge_ref" />
+                <Field label="Total" value={n.total || ''} field="total" />
+                <Field label="Currency" value={n.currency || ''} field="currency" />
+
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light, #eee)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Enquiry dates</div>
+                  <Field label="Enquiry sent" value={n.enquiry_sent || ''} />
+                  <Field label="Last response" value={n.last_response || ''} />
+                  <Field label="Follow up" value={n.follow_up || ''} />
                 </div>
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Route notes</label>
-                <input type="text" value={n.route_notes || ''} onChange={e => updateNight(i, 'route_notes', e.target.value)}
-                  placeholder="Route notes" style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
-              </div>
-              {n.notes && (
-                <div style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  {n.notes}
+
+              {/* Right panel — Payments & cancellation */}
+              <div style={{ padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10, color: 'var(--text-muted)' }}>Payments & cancellation</div>
+                <Field label="Total" value={n.total || ''} field="total" />
+                <Field label="Deposit" value={n.deposit || ''} field="deposit" />
+                <Field label="Deposit due" value={n.deposit_due || ''} field="deposit_due" />
+                <Field label="2nd payment" value={n.payment_2 || ''} field="payment_2" />
+                <Field label="2nd due" value={n.payment_2_due || ''} field="payment_2_due" />
+                <Field label="3rd payment" value={n.payment_3 || ''} field="payment_3" />
+                <Field label="3rd due" value={n.payment_3_due || ''} field="payment_3_due" />
+
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light, #eee)' }}>
+                  <Field label="Free cancel before" value={n.cancel_before || ''} field="cancel_before" />
+                  <Field label="Cancel policy" value={n.cancel_policy || ''} field="cancel_policy" />
                 </div>
-              )}
+
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light, #eee)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Route</div>
+                  <Field label="Km" value={n.km} field="km" />
+                  <div style={{ padding: '6px 0' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Route notes</span>
+                    <input type="text" value={n.route_notes || ''} onChange={e => updateNight(i, 'route_notes', e.target.value)}
+                      placeholder="—" style={{ width: '100%', fontSize: 12, border: 'none', background: 'transparent', outline: 'none', color: 'var(--text-primary)', marginTop: 2 }} />
+                  </div>
+                  {n.notes && <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', padding: '4px 0' }}>{n.notes}</div>}
+                </div>
+              </div>
             </div>
           </div>
         )
