@@ -286,69 +286,13 @@ ${sorted.map((bk, i) => {
 
       {/* Draft itinerary preview (when no Zoho bookings but draft exists) */}
       {!hasZohoBookings && hasDraft && (
-        <div>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
-            padding: '10px 16px', background: 'var(--amber-bg)',
-            borderRadius: 'var(--radius-md)', fontSize: 12, color: 'var(--amber-text)',
-          }}>
-            <strong>Draft</strong> — this itinerary has not been pushed to Zoho yet
-          </div>
-          <div className="table-wrap">
-            <table style={{ tableLayout: 'fixed' }}>
-              <colgroup>
-                <col style={{ width: 50 }} />
-                <col style={{ width: 80 }} />
-                <col style={{ width: '25%' }} />
-                <col style={{ width: '30%' }} />
-                <col style={{ width: '10%' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>Night</th>
-                  <th>Date</th>
-                  <th>Route</th>
-                  <th>Lodge</th>
-                  <th>Meals</th>
-                </tr>
-              </thead>
-              <tbody>
-                {draftNights.map((n, i) => {
-                  const lodge = n.lodge || ''
-                  const lr = lookupLodge(lodge)
-                  return (
-                    <tr key={n.id || i}>
-                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{n.pre_tour ? 'Pre' : n.day}</td>
-                      <td>{fmtDate(n.date)}</td>
-                      <td>
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{n.route || ''}</div>
-                        {n.km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{n.km} km</div>}
-                        {n.route_notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>{n.route_notes}</div>}
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>{lodge}</div>
-                        {lodge && lr && lr.email && <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{lr.email}</div>}
-                        {lodge && lr && !lr.email && <div style={{ fontSize: 10, color: 'var(--amber-text)' }}>No email</div>}
-                        {lodge && !lr && <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>}
-                        {n.backup && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Backup: {n.backup}</div>}
-                      </td>
-                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{n.meals || ''}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div style={{
-            display: 'flex', gap: 16, marginTop: 16,
-            padding: '12px 16px', background: 'var(--bg-secondary)',
-            borderRadius: 'var(--radius-md)', fontSize: 12, color: 'var(--text-muted)',
-          }}>
-            <span>{draftNights.length} nights</span>
-            <span>{new Set(draftNights.map(n => n.lodge).filter(Boolean)).size} lodges</span>
-            <span style={{ color: 'var(--amber-text)' }}>Draft — not in Zoho</span>
-          </div>
-        </div>
+        <DraftPreview
+          tour={tour}
+          draftNights={draftNights}
+          lookupLodge={lookupLodge}
+          onEditItinerary={onEditItinerary}
+          onRefresh={onRefresh}
+        />
       )}
 
       {/* Zoho bookings table */}
@@ -638,6 +582,129 @@ function TourConfig({ tour }) {
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
         {totalPax} pax · {totalRooms} rooms total
+      </div>
+    </div>
+  )
+}
+
+function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefresh }) {
+  const [pushing, setPushing] = useState(false)
+
+  const handlePushToZoho = async () => {
+    if (!confirm('Push ' + draftNights.length + ' nights to Zoho? This will create lodge bookings.')) return
+    setPushing(true)
+    try {
+      const response = await fetch('/api/create-itinerary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tour_id: tour.id,
+          tour_name: tour.name,
+          departure_date: tour.departure_date,
+          nights: draftNights.map(n => ({
+            date: n.date,
+            route: n.route,
+            lodge: n.lodge,
+            backup: n.backup,
+            meals: n.meals,
+            region: n.region,
+            day: n.day,
+            km: n.km || '',
+            route_notes: n.route_notes || '',
+            pre_tour: n.pre_tour || false,
+          })),
+        }),
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'Failed')
+      }
+      localStorage.removeItem('itinerary_draft_' + tour.id)
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    } finally {
+      setPushing(false)
+    }
+  }
+
+  const handleDeleteDraft = () => {
+    if (!confirm('Delete this draft? This cannot be undone.')) return
+    localStorage.removeItem('itinerary_draft_' + tour.id)
+    window.location.reload()
+  }
+
+  return (
+    <div>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 12, padding: '10px 16px', background: 'var(--amber-bg)',
+        borderRadius: 'var(--radius-md)', fontSize: 12,
+      }}>
+        <span style={{ color: 'var(--amber-text)' }}>
+          <strong>Draft</strong> — {draftNights.length} nights, not yet in Zoho
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={onEditItinerary} style={{ fontSize: 12, padding: '4px 12px' }}>
+            Edit
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={handlePushToZoho}
+            disabled={pushing}
+            style={{ fontSize: 12, padding: '4px 12px' }}
+          >
+            {pushing ? 'Pushing...' : 'Push to Zoho'}
+          </button>
+          <button
+            onClick={handleDeleteDraft}
+            style={{
+              background: 'none', border: 'none', fontSize: 11,
+              color: 'var(--text-muted)', cursor: 'pointer',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--red-text)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+          >Delete draft</button>
+        </div>
+      </div>
+      <div className="table-wrap">
+        <table style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: 50 }} />
+            <col style={{ width: 80 }} />
+            <col style={{ width: '25%' }} />
+            <col style={{ width: '30%' }} />
+            <col style={{ width: '10%' }} />
+          </colgroup>
+          <thead>
+            <tr><th>Night</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr>
+          </thead>
+          <tbody>
+            {draftNights.map((n, i) => {
+              const lodge = n.lodge || ''
+              const lr = lookupLodge(lodge)
+              return (
+                <tr key={n.id || i}>
+                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>{n.pre_tour ? 'Pre' : n.day}</td>
+                  <td>{fmtDate(n.date)}</td>
+                  <td>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{n.route || ''}</div>
+                    {n.km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{n.km} km</div>}
+                    {n.route_notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>{n.route_notes}</div>}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 500 }}>{lodge}</div>
+                    {lodge && lr && lr.email && <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{lr.email}</div>}
+                    {lodge && lr && !lr.email && <div style={{ fontSize: 10, color: 'var(--amber-text)' }}>No email</div>}
+                    {lodge && !lr && <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>}
+                    {n.backup && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Backup: {n.backup}</div>}
+                  </td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{n.meals || ''}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )
