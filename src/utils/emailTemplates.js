@@ -56,7 +56,9 @@ export function newLodgeEmail(bookings, tourName, lodgeName, tourConfig = {}) {
   const dateTable = buildDateTable(bookings)
   const { roomStr, guideStr } = buildRoomRequirements(tourConfig)
   const refs = bookings.map(b => b.RDS_Reference).filter(Boolean)
-  const refLine = refs.length ? '\nRef: ' + refs.join(', ') : ''
+  const refStr = refs.join(', ')
+  const refRequest = refStr ? '\nPlease quote our booking ref ' + refStr + ' in your reply.' : ''
+  const refLine = refStr ? '\nRef: ' + refStr : ''
 
   return `Hi there,
 
@@ -72,7 +74,7 @@ If available, please could you send through:
 - Rates for the above dates
 - Cancellation and payment terms
 - Any tour operator / STO rates available
-
+${refRequest}
 Take care,
 Helen Baker
 Lodge Bookings | Ride Down South
@@ -85,7 +87,9 @@ export function returningLodgeEmail(bookings, tourName, lodgeName, contactName, 
   const greeting = contactName ? ('Hi ' + contactName + ',') : 'Hi there,'
   const { roomStr, guideStr } = buildRoomRequirements(tourConfig)
   const refs = bookings.map(b => b.RDS_Reference).filter(Boolean)
-  const refLine = refs.length ? '\nRef: ' + refs.join(', ') : ''
+  const refStr = refs.join(', ')
+  const refRequest = refStr ? '\nPlease quote our booking ref ' + refStr + ' in your reply.' : ''
+  const refLine = refStr ? '\nRef: ' + refStr : ''
 
   return `${greeting}
 
@@ -98,7 +102,7 @@ Room requirements:
 - ${guideStr}
 
 Please confirm availability and current rates. If we don't have an STO agreement on file, we'd appreciate any tour operator rates available.
-
+${refRequest}
 Take care,
 Helen Baker
 Lodge Bookings | Ride Down South
