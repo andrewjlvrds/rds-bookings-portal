@@ -86,8 +86,8 @@ export function isActiveBooking(booking) {
   // Z-prefixed day descriptions are alternatives
   const dayDesc = booking['Day Description'] || booking.Day_Description || ''
   if (dayDesc.startsWith('Z ') || dayDesc.startsWith('z ')) return false
-  // Not Available with no amount = tried and rejected
-  if (status === 'Not Available' || status === 'Cancelled' || status === 'Not suitable' || status === 'Closed for Renovations') return false
+  // Hide cancelled/unsuitable, but keep "Not Available" visible for swap workflow
+  if (status === 'Cancelled' || status === 'Not suitable' || status === 'Closed for Renovations') return false
   return true
 }
 

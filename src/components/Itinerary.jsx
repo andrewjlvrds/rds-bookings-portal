@@ -303,12 +303,10 @@ ${sorted.map((bk, i) => {
           <colgroup>
             <col style={{ width: 50 }} />
             <col style={{ width: 80 }} />
-            <col style={{ width: '22%' }} />
-            <col style={{ width: '24%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: 100 }} />
-            <col style={{ width: 110 }} />
-            <col style={{ width: 70 }} />
+            <col style={{ width: '28%' }} />
+            <col style={{ width: '30%' }} />
+            <col style={{ width: 120 }} />
+            <col style={{ width: 60 }} />
           </colgroup>
           <thead>
             <tr>
@@ -316,8 +314,6 @@ ${sorted.map((bk, i) => {
               <th>Date</th>
               <th>Route</th>
               <th>Lodge</th>
-              <th>Meals</th>
-              <th>Amount</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -329,9 +325,6 @@ ${sorted.map((bk, i) => {
               const lodge = (bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || '').split(' - ')[0]
               const dayDesc = bk['Day Description'] || bk.Day_Description || ''
               const checkIn = bk['Check-in'] || bk.Check_in_Date || ''
-              const amount = bk['Total Amount'] || bk.Total_Amount
-              const currency = bk['Currency'] || bk.Lodge_Currency || ''
-              const meals = bk['Meals'] || bk.Meals || ''
 
               const nightMatch = dayDesc.match(/Day\s*(\d+)/)
               const nightNum = nightMatch ? nightMatch[1] : String(i + 1).padStart(2, '0')
@@ -340,7 +333,7 @@ ${sorted.map((bk, i) => {
               const route = routeMatch ? routeMatch[1] : dayDesc
 
               return (
-                <tr key={bk['Record Id'] || bk.id || i}>
+                <tr key={bk['Record Id'] || bk.id || i} style={status === 'Not Available' ? { opacity: 0.6 } : {}}>
                   <td style={{ fontVariantNumeric: 'tabular-nums' }}>{nightNum}</td>
                   <td>{fmtDate(checkIn)}</td>
                   <td>
@@ -374,7 +367,7 @@ ${sorted.map((bk, i) => {
                       <div
                         onClick={() => setEditing({ id: bk.id || bk['Record Id'], field: 'lodge', value: lodge, checkIn: checkIn })}
                         style={{ fontWeight: 500, cursor: 'pointer' }}
-                        title="Click to edit"
+                        title="Click to edit lodge"
                       >{lodge}</div>
                     )}
                     {lodge && (() => {
@@ -383,61 +376,92 @@ ${sorted.map((bk, i) => {
                       if (!lr.email) return <div style={{ fontSize: 10, color: 'var(--amber-text)' }}>No email</div>
                       return <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{lr.email}</div>
                     })()}
-                  </td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{meals}</td>
-                  <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500, fontSize: 12 }}>
-                    {amount ? fmtCurrency(amount, currency) : '—'}
+                    {(bk.Previously_Tried || bk['Previously Tried'] || '') && (
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                        Tried: {bk.Previously_Tried || bk['Previously Tried']}
+                      </div>
+                    )}
                   </td>
                   <td>
                     {editing && editing.id === (bk.id || bk['Record Id']) && editing.field === 'status' ? (
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <select
-                          value={editing.value}
-                          onChange={e => {
-                            const newVal = e.target.value
-                            setEditing({ ...editing, value: newVal })
-                            // Auto-save on select
-                            setSavingEdit(true)
-                            fetch('/api/update-bookings', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ booking_ids: [editing.id], updates: { Status: newVal } }),
-                            }).then(res => {
-                              if (!res.ok) throw new Error('Failed')
-                              setEditing(null)
-                              if (onRefresh) onRefresh()
-                            }).catch(err => alert('Error: ' + err.message))
-                            .finally(() => setSavingEdit(false))
-                          }}
-                          autoFocus
-                          onBlur={() => setTimeout(() => setEditing(null), 200)}
-                          style={{
-                            fontSize: 12, padding: '2px 4px',
-                            border: '0.5px solid var(--blue-mid)', borderRadius: 4,
-                            outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
-                          }}
-                        >
-                          <option value="Not Started">Not Started</option>
-                          <option value="Ready to Send">Ready to Send</option>
-                          <option value="Enquiry Sent">Enquiry Sent</option>
-                          <option value="Availability Confirmed">Availability Confirmed</option>
-                          <option value="Confirmed">Confirmed</option>
-                          <option value="Proforma Received">Proforma Received</option>
-                          <option value="Deposit Paid">Deposit Paid</option>
-                          <option value="Balance Paid">Balance Paid</option>
-                          <option value="Not Available">Not Available</option>
-                          <option value="Cancelled">Cancelled</option>
-                          <option value="Waitlisted">Waitlisted</option>
-                          <option value="Credit against booking">Credit against booking</option>
-                        </select>
-                      </div>
+                      <select
+                        value={editing.value}
+                        onChange={e => {
+                          const newVal = e.target.value
+                          setEditing({ ...editing, value: newVal })
+                          setSavingEdit(true)
+                          fetch('/api/update-bookings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ booking_ids: [editing.id], updates: { Status: newVal } }),
+                          }).then(res => {
+                            if (!res.ok) throw new Error('Failed')
+                            setEditing(null)
+                            if (onRefresh) onRefresh()
+                          }).catch(err => alert('Error: ' + err.message))
+                          .finally(() => setSavingEdit(false))
+                        }}
+                        autoFocus
+                        onBlur={() => setTimeout(() => setEditing(null), 200)}
+                        style={{
+                          fontSize: 12, padding: '2px 4px',
+                          border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+                          outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                        }}
+                      >
+                        <option value="Not Started">Not Started</option>
+                        <option value="Ready to Send">Ready to Send</option>
+                        <option value="Enquiry Sent">Enquiry Sent</option>
+                        <option value="Availability Confirmed">Availability Confirmed</option>
+                        <option value="Confirmed">Confirmed</option>
+                        <option value="Proforma Received">Proforma Received</option>
+                        <option value="Deposit Paid">Deposit Paid</option>
+                        <option value="Balance Paid">Balance Paid</option>
+                        <option value="Not Available">Not Available</option>
+                        <option value="Cancelled">Cancelled</option>
+                        <option value="Waitlisted">Waitlisted</option>
+                        <option value="Credit against booking">Credit against booking</option>
+                      </select>
                     ) : (
-                      <span
-                        className={'badge ' + badge.cls}
-                        onClick={() => setEditing({ id: bk.id || bk['Record Id'], field: 'status', value: status })}
-                        style={{ cursor: 'pointer' }}
-                        title="Click to change status"
-                      >{badge.label}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
+                        <span
+                          className={'badge ' + badge.cls}
+                          onClick={() => setEditing({ id: bk.id || bk['Record Id'], field: 'status', value: status })}
+                          style={{ cursor: 'pointer' }}
+                          title="Click to change status"
+                        >{badge.label}</span>
+                        {status === 'Not Available' && (
+                          <button
+                            onClick={() => {
+                              const newLodge = prompt('Enter backup lodge name:', '')
+                              if (!newLodge) return
+                              const prevTried = [bk.Previously_Tried || bk['Previously Tried'] || '', lodge].filter(Boolean).join(', ')
+                              fetch('/api/update-bookings', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  booking_ids: [bk.id || bk['Record Id']],
+                                  updates: {
+                                    Lodge_Name: newLodge,
+                                    Name: newLodge + ' - ' + checkIn,
+                                    Status: 'Not Started',
+                                    Previously_Tried: prevTried,
+                                  },
+                                }),
+                              }).then(res => {
+                                if (!res.ok) throw new Error('Failed')
+                                if (onRefresh) onRefresh()
+                              }).catch(err => alert('Error: ' + err.message))
+                            }}
+                            style={{
+                              fontSize: 10, padding: '2px 8px',
+                              border: '0.5px solid var(--border-default)', borderRadius: 4,
+                              background: 'var(--bg-primary)', cursor: 'pointer',
+                              color: 'var(--amber-text)',
+                            }}
+                          >↻ Try backup</button>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td>
