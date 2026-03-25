@@ -826,11 +826,6 @@ ${nights.map(n => `<tr>
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button
-                        onClick={() => setExpandedNight(expandedNight === i ? null : i)}
-                        className="btn btn-sm"
-                        style={{ fontSize: 11, padding: '3px 8px' }}
-                      >{expandedNight === i ? 'Close' : 'View'}</button>
                       <button onClick={() => addNightAfter(i)} title="Add day" style={{
                         background: 'none', border: '0.5px solid var(--border-default)',
                         borderRadius: 4, fontSize: 11, padding: '2px 6px', cursor: 'pointer', color: 'var(--text-muted)',
