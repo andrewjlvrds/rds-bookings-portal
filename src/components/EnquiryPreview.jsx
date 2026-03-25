@@ -6,6 +6,7 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState({})
   const [excluded, setExcluded] = useState({})
+  const [sender, setSender] = useState('Andrew')
 
   // Build lodge lookup from directory
   const lodgeLookup = {}
@@ -63,7 +64,7 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
       const subject = generateSubject(group.bookings[0], tour.name)
       const body = generateEnquiryEmail(
         group.bookings, tour.name, group.lodge,
-        { contactName: group.contactName, isReturning: group.isReturning, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
+        { contactName: group.contactName, isReturning: group.isReturning, sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
       )
 
       try {
@@ -132,7 +133,27 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
             {activeGroups.length} email{activeGroups.length !== 1 ? 's' : ''} to send · {bookings.length} bookings
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 0, marginRight: 8 }}>
+            <button
+              onClick={() => setSender('Andrew')}
+              style={{
+                fontSize: 12, padding: '4px 10px', border: 'none', cursor: 'pointer',
+                background: sender === 'Andrew' ? 'var(--blue-bg)' : 'var(--bg-secondary)',
+                color: sender === 'Andrew' ? 'var(--blue-text)' : 'var(--text-muted)',
+                borderRadius: '4px 0 0 4px', fontWeight: 500,
+              }}
+            >Andrew</button>
+            <button
+              onClick={() => setSender('Helen')}
+              style={{
+                fontSize: 12, padding: '4px 10px', border: 'none', cursor: 'pointer',
+                background: sender === 'Helen' ? 'var(--blue-bg)' : 'var(--bg-secondary)',
+                color: sender === 'Helen' ? 'var(--blue-text)' : 'var(--text-muted)',
+                borderRadius: '0 4px 4px 0', fontWeight: 500,
+              }}
+            >Helen</button>
+          </div>
           {allSent ? (
             <button className="btn btn-primary" onClick={onBack}>Done</button>
           ) : (
@@ -157,7 +178,7 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
         const subject = generateSubject(group.bookings[0], tour.name)
         const body = generateEnquiryEmail(
           group.bookings, tour.name, group.lodge,
-          { contactName: group.contactName, isReturning: group.isReturning, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
+          { contactName: group.contactName, isReturning: group.isReturning, sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
         )
         const isExcluded = excluded[i]
         const status = sent[i]

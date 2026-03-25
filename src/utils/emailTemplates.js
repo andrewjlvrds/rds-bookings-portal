@@ -20,24 +20,22 @@ function emailDate(dateStr) {
 
 // Build the enquiry email body
 export function generateEnquiryEmail(bookings, tourName, lodgeName, opts = {}) {
-  const { tourConfig = {} } = opts
+  const { tourConfig = {}, sender = 'Andrew' } = opts
   const pax_single = tourConfig.pax_single || 8
   const pax_twin = tourConfig.pax_twin || 2
   const pax_double = tourConfig.pax_double || 1
   const guide_rooms = tourConfig.guide_rooms || 3
   const totalPax = pax_single + (pax_twin * 2) + (pax_double * 2)
-  const numGuides = guide_rooms // assume 1 guide per guide room
+  const numGuides = guide_rooms
 
-  // Date info from first/last booking
   const first = bookings[0]
   const last = bookings[bookings.length - 1]
   const checkIn = emailDate(first.Check_in_Date)
   const checkOut = emailDate(last.Check_out_Date)
   const totalNights = bookings.reduce((sum, b) => sum + (parseInt(b.Nights) || 1), 0)
 
-  // Excursion info
-  const excursion = first.Excursion || ''
-  const excursionDate = first.Excursion_Date ? emailDate(first.Excursion_Date) : ''
+  const excursion = first.Excursion || first.excursion || ''
+  const excursionDate = (first.Excursion_Date || first.excursion_date) ? emailDate(first.Excursion_Date || first.excursion_date) : ''
 
   const refs = bookings.map(b => b.RDS_Reference).filter(Boolean)
   const refStr = refs.join(', ')
@@ -59,24 +57,15 @@ Room requirements:
 * Guide room${guide_rooms > 1 ? 's' : ''}: ${numGuides} guide${numGuides > 1 ? 's' : ''} in ${guide_rooms} room${guide_rooms > 1 ? 's' : ''}`
 
   if (excursion) {
-    body += `\n\nExcursion: ${excursion} for ${totalPax} pax` + (excursionDate ? ` on ${excursionDate}` : '')
+    body += '\n\nExcursion: ' + excursion + ' for ' + totalPax + ' pax' + (excursionDate ? ' on ' + excursionDate : '')
   }
 
-  body += `
-
-Can you please let us know what you have available and let us know which meals are included.
-If you haven't already sent us your updated STO rates, please include those with your quote.
-${refRequest}
-Thanks so much,
-
-Andrew
-Ride Down South
-bookings@ridedownsouth.com${refLine}`
+  body += refRequest + '\n\n\n\nThanks,\n\n' + sender + '\nRide Down South\nbookings@ridedownsouth.com' + refLine
 
   return body
 }
 
-// Keep these exports for backward compatibility
+// Backward compat
 export function newLodgeEmail(bookings, tourName, lodgeName, tourConfig = {}) {
   return generateEnquiryEmail(bookings, tourName, lodgeName, { tourConfig })
 }
