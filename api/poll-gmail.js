@@ -3,10 +3,10 @@ import { storeEmail, isEmailStored } from './_email-store.js';
 import { zohoApi } from './_zoho.js';
 import { parseEmail, extractionToZohoFields } from './_ai-parse.js';
 
-// Extract RDS reference from subject line, e.g. [RDS-FoSA-MAR27-N04]
-function extractRdsRef(subject) {
-  if (!subject) return null;
-  var match = subject.match(/\[?(RDS-[A-Za-z0-9\-]+)\]?/);
+// Extract RDS reference from text, e.g. RDS-FoSA-Mar26-CanyonVillage-26/04/03
+function extractRdsRef(text) {
+  if (!text) return null;
+  var match = text.match(/\[?(RDS-[A-Za-z0-9\-\/]+)\]?/);
   return match ? match[1] : null;
 }
 
@@ -171,7 +171,7 @@ export default async function(req, res) {
 
         // 2. Match by RDS reference in body (quoted reply text)
         if (!matchedBooking && body) {
-          var bodyRefs = body.match(/RDS-[A-Za-z0-9\-]+/g) || [];
+          var bodyRefs = body.match(/RDS-[A-Za-z0-9\-\/]+/g) || [];
           for (var br = 0; br < bodyRefs.length; br++) {
             var bodyRef = bodyRefs[br].toLowerCase();
             if (refMap[bodyRef]) {

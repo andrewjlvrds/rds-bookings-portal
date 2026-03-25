@@ -111,13 +111,17 @@ export function generateDates(template, departureDate) {
 }
 
 // Generate RDS reference for a booking
-export function generateRdsRef(tourCode, departureDate, nightNum) {
+export function generateRdsRef(tourCode, departureDate, lodgeName, checkInDate) {
   const d = new Date(departureDate)
-  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const monthStr = months[d.getMonth()]
   const yearStr = String(d.getFullYear()).slice(-2)
-  const nightStr = String(nightNum).padStart(2, '0')
-  return 'RDS-' + tourCode + '-' + monthStr + yearStr + '-N' + nightStr
+  const lodgeShort = (lodgeName || 'TBD').replace(/[^a-zA-Z0-9]/g, '')
+  const ci = new Date(checkInDate)
+  const ciStr = String(ci.getFullYear()).slice(-2) + '/' +
+    String(ci.getMonth() + 1).padStart(2, '0') + '/' +
+    String(ci.getDate()).padStart(2, '0')
+  return 'RDS-' + tourCode + '-' + monthStr + yearStr + '-' + lodgeShort + '-' + ciStr
 }
 
 // Custom template storage (localStorage)

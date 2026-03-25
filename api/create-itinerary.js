@@ -44,16 +44,19 @@ export default async function(req, res) {
       // Lodge booking name: "Lodge Name - YYYY-MM-DD"
       var bookingName = (night.lodge || 'TBD') + ' - ' + checkIn;
 
-      // RDS reference
-      var monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+      // RDS reference: RDS-TourCode-MonYY-LodgeName-YY/MM/DD
+      var monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       var depDate = new Date(departureDate);
-      var monthStr = monthNames[depDate.getMonth()];
-      var yearStr = String(depDate.getFullYear()).slice(-2);
-      var nightNum = String(i + 1).padStart(2, '0');
+      var depMonthStr = monthNames[depDate.getMonth()];
+      var depYearStr = String(depDate.getFullYear()).slice(-2);
 
-      // Extract tour code from name (e.g. "FoSA Mar 27" -> "FoSA", "EoA14 Nov 26" -> "EoA14")
       var tourCode = tourName.split(' ')[0] || 'TOUR';
-      var rdsRef = 'RDS-' + tourCode + '-' + monthStr + yearStr + '-N' + nightNum;
+      var lodgeShort = (night.lodge || 'TBD').replace(/[^a-zA-Z0-9]/g, '');
+      var ciDate = new Date(checkIn);
+      var ciStr = String(ciDate.getFullYear()).slice(-2) + '/' +
+        String(ciDate.getMonth() + 1).padStart(2, '0') + '/' +
+        String(ciDate.getDate()).padStart(2, '0');
+      var rdsRef = 'RDS-' + tourCode + '-' + depMonthStr + depYearStr + '-' + lodgeShort + '-' + ciStr;
 
       var record = {
         Name: bookingName,
