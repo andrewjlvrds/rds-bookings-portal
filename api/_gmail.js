@@ -26,3 +26,106 @@ export async function gmailApi(token, path) {
   }
   return response.json();
 }
+
+// Cache for label IDs to avoid repeated lookups
+var labelCache = {};
+
+// Get or create a Gmail label, returns the label ID
+// Supports nested labels like "Lodge Bookings/FoSA MAR27"
+export async function getOrCreateLabel(token, labelName) {
+  // Check cache first
+  if (labelCache[labelName]) return labelCache[labelName];
+
+  // Fetch all labels
+  var labelsResult = await gmailApi(token, 'labels');
+  var labels = labelsResult.labels || [];
+
+  // Look for exact match
+  var existing = labels.find(function(l) { return l.name === labelName; });
+  if (existing) {
+    labelCache[labelName] = existing.id;
+    return existing.id;
+  }
+
+  // Create the parent label first if nested (e.g. "Lodge Bookings" before "Lodge Bookings/FoSA MAR27")
+  var parts = labelName.split('/');
+  if (parts.length > 1) {
+    var parentName = parts[0];
+    var parentExists = labels.find(function(l) { return l.name === parentName; });
+    if (!parentExists) {
+      try {
+        var parentRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: parentName,
+            labelListVisibility: 'labelShow',
+            messageListVisibility: 'show',
+          }),
+        });
+        var parentData = await parentRes.json();
+        if (parentData.id) {
+          labelCache[parentName] = parentData.id;
+        }
+      } catch (e) {
+        console.error('Failed to create parent label:', parentName, e.message);
+      }
+    }
+  }
+
+  // Create the label
+  try {
+    var createRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: labelName,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+      }),
+    });
+    var createData = await createRes.json();
+    if (createData.id) {
+      labelCache[labelName] = createData.id;
+      return createData.id;
+    } else {
+      console.error('Failed to create label:', labelName, JSON.stringify(createData));
+      return null;
+    }
+  } catch (e) {
+    console.error('Error creating label:', labelName, e.message);
+    return null;
+  }
+}
+
+// Apply a label to a Gmail message
+export async function labelMessage(token, messageId, labelId) {
+  if (!messageId || !labelId) return false;
+  try {
+    var res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/' + messageId + '/modify', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        addLabelIds: [labelId],
+      }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error('Failed to label message:', messageId, e.message);
+    return false;
+  }
+}
+
+// Build a tour label name from tour name, e.g. "FoSA Mar 27" → "Lodge Bookings/FoSA Mar 27"
+export function tourLabelName(tourName) {
+  return 'Lodge Bookings/' + (tourName || 'Unassigned');
+}

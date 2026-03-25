@@ -1,4 +1,4 @@
-import { getGmailToken, gmailApi } from './_gmail.js';
+import { getGmailToken, gmailApi, getOrCreateLabel, labelMessage, tourLabelName } from './_gmail.js';
 import { storeEmail, isEmailStored } from './_email-store.js';
 import { zohoApi } from './_zoho.js';
 import { parseEmail, extractionToZohoFields } from './_ai-parse.js';
@@ -110,7 +110,7 @@ export default async function(req, res) {
     }
 
     // Fetch all bookings with Enquiry Sent or later status to match against
-    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Lodge,id';
+    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Lodge,Tour,id';
     var bookingsResult = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200');
     var allBookings = (bookingsResult && bookingsResult.data) || [];
 
@@ -159,14 +159,30 @@ export default async function(req, res) {
         var matchedBooking = null;
         var matchMethod = '';
 
+        // Extract body for matching
+        var body = extractBody(msg.payload);
+
         // 1. Match by RDS reference in subject
         var rdsRef = extractRdsRef(subject);
         if (rdsRef && refMap[rdsRef.toLowerCase()]) {
           matchedBooking = refMap[rdsRef.toLowerCase()];
-          matchMethod = 'rds_reference';
+          matchMethod = 'rds_reference_subject';
         }
 
-        // 2. Match by lodge name in subject or from address
+        // 2. Match by RDS reference in body (quoted reply text)
+        if (!matchedBooking && body) {
+          var bodyRefs = body.match(/RDS-[A-Za-z0-9\-]+/g) || [];
+          for (var br = 0; br < bodyRefs.length; br++) {
+            var bodyRef = bodyRefs[br].toLowerCase();
+            if (refMap[bodyRef]) {
+              matchedBooking = refMap[bodyRef];
+              matchMethod = 'rds_reference_body';
+              break;
+            }
+          }
+        }
+
+        // 3. Match by lodge name in subject or from address
         if (!matchedBooking) {
           var subjectLower = (subject || '').toLowerCase();
           var fromLower = (from || '').toLowerCase();
@@ -257,6 +273,24 @@ export default async function(req, res) {
           console.log('Updated booking', bookingId, 'with', Object.keys(zohoUpdates).length - 1, 'fields');
         } catch (zohoErr) {
           console.error('Failed to update booking', bookingId, zohoErr.message);
+        }
+
+        // Apply Gmail label based on tour name
+        try {
+          var tourName = '';
+          if (matchedBooking.Tour) {
+            tourName = typeof matchedBooking.Tour === 'object' ? matchedBooking.Tour.name : matchedBooking.Tour;
+          }
+          if (tourName) {
+            var labelName = tourLabelName(tourName);
+            var labelId = await getOrCreateLabel(token, labelName);
+            if (labelId) {
+              await labelMessage(token, msgId, labelId);
+              console.log('Labelled message', msgId, 'as', labelName);
+            }
+          }
+        } catch (labelErr) {
+          console.error('Failed to label message', msgId, labelErr.message);
         }
 
         stored++;

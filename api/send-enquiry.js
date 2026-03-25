@@ -1,6 +1,6 @@
 import { zohoApi } from './_zoho.js';
 import { storeEmail } from './_email-store.js';
-import { getGmailToken } from './_gmail.js';
+import { getGmailToken, getOrCreateLabel, labelMessage, tourLabelName } from './_gmail.js';
 
 // Build RFC 2822 email and base64url encode it
 function buildRawEmail(from, to, subject, bodyText) {
@@ -37,6 +37,7 @@ export default async function(req, res) {
     var emailBody = body.body || '';
     var bookingIds = body.booking_ids || [];
     var lodgeName = body.lodge_name || '';
+    var tourName = body.tour_name || '';
     var isReply = body.is_reply || false;
 
     if (!to) return res.status(400).json({ error: 'No recipient email' });
@@ -72,6 +73,20 @@ export default async function(req, res) {
         emailSent = true;
         gmailMessageId = gmailData.id;
         gmailThreadId = gmailData.threadId;
+
+        // Apply Gmail label for the tour
+        if (tourName) {
+          try {
+            var labelName = tourLabelName(tourName);
+            var labelId = await getOrCreateLabel(token, labelName);
+            if (labelId) {
+              await labelMessage(token, gmailMessageId, labelId);
+              console.log('Labelled sent email as', labelName);
+            }
+          } catch (labelErr) {
+            console.error('Failed to label sent email:', labelErr.message);
+          }
+        }
       } else {
         emailError = gmailData.error ? gmailData.error.message : 'Gmail send failed';
       }

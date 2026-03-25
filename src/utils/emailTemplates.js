@@ -55,6 +55,8 @@ function buildRoomRequirements(opts = {}) {
 export function newLodgeEmail(bookings, tourName, lodgeName, tourConfig = {}) {
   const dateTable = buildDateTable(bookings)
   const { roomStr, guideStr } = buildRoomRequirements(tourConfig)
+  const refs = bookings.map(b => b.RDS_Reference).filter(Boolean)
+  const refLine = refs.length ? '\nRef: ' + refs.join(', ') : ''
 
   return `Hi there,
 
@@ -74,7 +76,7 @@ If available, please could you send through:
 Take care,
 Helen Baker
 Lodge Bookings | Ride Down South
-bookings@ridedownsouth.com`
+bookings@ridedownsouth.com${refLine}`
 }
 
 // Returning lodge template - we've stayed here before
@@ -82,6 +84,8 @@ export function returningLodgeEmail(bookings, tourName, lodgeName, contactName, 
   const dateTable = buildDateTable(bookings)
   const greeting = contactName ? ('Hi ' + contactName + ',') : 'Hi there,'
   const { roomStr, guideStr } = buildRoomRequirements(tourConfig)
+  const refs = bookings.map(b => b.RDS_Reference).filter(Boolean)
+  const refLine = refs.length ? '\nRef: ' + refs.join(', ') : ''
 
   return `${greeting}
 
@@ -98,7 +102,7 @@ Please confirm availability and current rates. If we don't have an STO agreement
 Take care,
 Helen Baker
 Lodge Bookings | Ride Down South
-bookings@ridedownsouth.com`
+bookings@ridedownsouth.com${refLine}`
 }
 
 // Generate the right email based on whether we've contacted this lodge before
