@@ -8,6 +8,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   const [saved, setSaved] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushed, setPushed] = useState(false)
+  const [expandedNight, setExpandedNight] = useState(null)
   const [showSaveTemplate, setShowSaveTemplate] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [templateCode, setTemplateCode] = useState('')
@@ -704,12 +705,11 @@ ${nights.map(n => `<tr>
           <table style={{ tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: 50 }} />
-              <col style={{ width: 90 }} />
-              <col style={{ width: '25%' }} />
-              <col style={{ width: '25%' }} />
-              <col style={{ width: '15%' }} />
-              <col style={{ width: 60 }} />
               <col style={{ width: 80 }} />
+              <col style={{ width: '28%' }} />
+              <col style={{ width: '30%' }} />
+              <col style={{ width: 80 }} />
+              <col style={{ width: 60 }} />
             </colgroup>
             <thead>
               <tr>
@@ -717,14 +717,14 @@ ${nights.map(n => `<tr>
                 <th>Date</th>
                 <th>Route</th>
                 <th>Lodge</th>
-                <th>Backup</th>
-                <th>Meals</th>
+                <th></th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {nights.map((n, i) => (
-                <tr key={n.id} style={n.pre_tour ? { opacity: 0.6 } : {}}>
+                <React.Fragment key={n.id}>
+                <tr style={n.pre_tour ? { opacity: 0.6 } : {}}>
                   <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
                     {n.pre_tour ? 'Pre' : n.day}
                   </td>
@@ -741,68 +741,28 @@ ${nights.map(n => `<tr>
                       }}
                       placeholder="Route description"
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                      <input
-                        type="text"
-                        value={n.km || ''}
-                        onChange={e => updateNight(i, 'km', e.target.value.replace(/[^0-9/.]/g, ''))}
-                        style={{
-                          width: 40, border: 'none', background: 'transparent',
-                          fontSize: 11, padding: '1px 0', outline: 'none',
-                          color: 'var(--text-muted)', textAlign: 'right',
-                        }}
-                        placeholder="—"
-                      />
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>km</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={n.route_notes || ''}
-                      onChange={e => updateNight(i, 'route_notes', e.target.value)}
-                      style={{
-                        width: '100%', border: 'none', background: 'transparent',
-                        fontSize: 10, padding: '1px 0', outline: 'none',
-                        color: 'var(--text-muted)', fontStyle: 'italic',
-                      }}
-                      placeholder="Route notes"
-                    />
+                    {n.km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{n.km} km</div>}
                   </td>
                   <td>
                     {(n.lodges || []).length > 0 ? (
-                      <div>
-                        <select
-                          value={(n.lodges || []).includes(n.lodge) ? n.lodge : '__custom'}
-                          onChange={e => {
-                            if (e.target.value === '__custom') return
-                            updateNight(i, 'lodge', e.target.value)
-                          }}
-                          style={{
-                            width: '100%', border: 'none', background: 'transparent',
-                            fontSize: 13, fontWeight: 500, padding: '2px 0', outline: 'none',
-                            color: 'var(--text-primary)', cursor: 'pointer',
-                          }}
-                        >
-                          {(n.lodges || []).map(l => (
-                            <option key={l} value={l}>{l}</option>
-                          ))}
-                          <option value="__custom">Other (type below)</option>
-                          <option value="">— none —</option>
-                        </select>
-                        {!(n.lodges || []).includes(n.lodge) && n.lodge && (
-                          <input
-                            type="text"
-                            value={n.lodge}
-                            onChange={e => updateNight(i, 'lodge', e.target.value)}
-                            style={{
-                              width: '100%', border: '0.5px solid var(--border-default)',
-                              borderRadius: 4, fontSize: 12, padding: '3px 6px', outline: 'none',
-                              color: 'var(--text-primary)', marginTop: 2,
-                            }}
-                            placeholder="Type lodge name"
-                            autoFocus
-                          />
-                        )}
-                      </div>
+                      <select
+                        value={(n.lodges || []).includes(n.lodge) ? n.lodge : '__custom'}
+                        onChange={e => {
+                          if (e.target.value === '__custom') return
+                          updateNight(i, 'lodge', e.target.value)
+                        }}
+                        style={{
+                          width: '100%', border: 'none', background: 'transparent',
+                          fontSize: 13, fontWeight: 500, padding: '2px 0', outline: 'none',
+                          color: 'var(--text-primary)', cursor: 'pointer',
+                        }}
+                      >
+                        {(n.lodges || []).map(l => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                        <option value="__custom">Other (type below)</option>
+                        <option value="">— none —</option>
+                      </select>
                     ) : (
                       <input
                         type="text"
@@ -813,104 +773,94 @@ ${nights.map(n => `<tr>
                           fontSize: 13, fontWeight: 500, padding: '2px 0', outline: 'none',
                           color: 'var(--text-primary)',
                         }}
-                        placeholder="Type lodge name"
+                        placeholder="Lodge name"
                       />
-                    )}
-                    {n.notes && (
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{n.notes}</div>
                     )}
                     {n.lodge && (() => {
                       const ls = getLodgeStatus(n.lodge)
-                      const fuzzyNote = ls.found && ls.matchedName && ls.matchedName.toLowerCase() !== n.lodge.toLowerCase().trim()
-                        ? ' (matched: ' + ls.matchedName + ')'
-                        : ''
-                      if (!ls.found) return (
-                        <div style={{ fontSize: 10, color: 'var(--red-text)', marginTop: 2 }}>
-                          Not in Zoho — add to Lodges module
-                        </div>
-                      )
-                      if (!ls.hasEmail) return (
-                        <div style={{ fontSize: 10, color: 'var(--amber-text)', marginTop: 2 }}>
-                          No email on file{fuzzyNote}
-                        </div>
-                      )
-                      return (
-                        <div style={{ fontSize: 10, color: 'var(--green-text)', marginTop: 2 }}>
-                          {ls.email}{ls.contact ? ' · ' + ls.contact : ''}{fuzzyNote}
-                        </div>
-                      )
+                      if (!ls.found) return <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>
+                      if (!ls.hasEmail) return <div style={{ fontSize: 10, color: 'var(--amber-text)' }}>No email</div>
+                      return <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{ls.email}{ls.contact ? ' · ' + ls.contact : ''}</div>
                     })()}
-                  </td>
-                  <td>
-                    {(n.lodges || []).length > 1 ? (
-                      <select
-                        value={n.backup || ''}
-                        onChange={e => updateNight(i, 'backup', e.target.value)}
-                        style={{
-                          width: '100%', border: 'none', background: 'transparent',
-                          fontSize: 12, padding: '2px 0', outline: 'none',
-                          color: 'var(--text-muted)', cursor: 'pointer',
-                        }}
-                      >
-                        <option value="">— none —</option>
-                        {(n.lodges || []).filter(l => l !== n.lodge).map(l => (
-                          <option key={l} value={l}>{l}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={n.backup || ''}
-                        onChange={e => updateNight(i, 'backup', e.target.value)}
-                        style={{
-                          width: '100%', border: 'none', background: 'transparent',
-                          fontSize: 12, padding: '2px 0', outline: 'none',
-                          color: 'var(--text-muted)',
-                        }}
-                        placeholder="Backup lodge"
-                      />
-                    )}
-                  </td>
-                  <td>
-                    <select
-                      value={n.meals}
-                      onChange={e => updateNight(i, 'meals', e.target.value)}
-                      style={{
-                        border: 'none', background: 'transparent',
-                        fontSize: 12, color: 'var(--text-secondary)', outline: 'none',
-                      }}
-                    >
-                      <option value="BB">BB</option>
-                      <option value="DBB">DBB</option>
-                      <option value="HB">HB</option>
-                      <option value="FB">FB</option>
-                      <option value="SC">SC</option>
-                      <option value="RO">RO</option>
-                    </select>
+                    {n.backup && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Backup: {n.backup}</div>}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button
-                        onClick={() => addNightAfter(i)}
-                        title="Add night after"
+                        onClick={() => setExpandedNight(expandedNight === i ? null : i)}
                         style={{
                           background: 'none', border: '0.5px solid var(--border-default)',
                           borderRadius: 4, fontSize: 11, padding: '2px 6px', cursor: 'pointer',
-                          color: 'var(--text-muted)',
+                          color: expandedNight === i ? 'var(--blue-text)' : 'var(--text-muted)',
                         }}
-                      >+</button>
-                      <button
-                        onClick={() => removeNight(i)}
-                        title="Remove night"
-                        style={{
-                          background: 'none', border: '0.5px solid var(--border-default)',
-                          borderRadius: 4, fontSize: 11, padding: '2px 6px', cursor: 'pointer',
-                          color: 'var(--red-text)',
-                        }}
-                      >×</button>
+                      >{expandedNight === i ? '▾' : '▸'}</button>
+                      <button onClick={() => addNightAfter(i)} title="Add night" style={{
+                        background: 'none', border: '0.5px solid var(--border-default)',
+                        borderRadius: 4, fontSize: 11, padding: '2px 6px', cursor: 'pointer',
+                        color: 'var(--text-muted)',
+                      }}>+</button>
+                      <button onClick={() => removeNight(i)} title="Remove" style={{
+                        background: 'none', border: '0.5px solid var(--border-default)',
+                        borderRadius: 4, fontSize: 11, padding: '2px 6px', cursor: 'pointer',
+                        color: 'var(--red-text)',
+                      }}>×</button>
                     </div>
                   </td>
+                  <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{n.meals || 'BB'}</td>
                 </tr>
+                {/* Expanded detail panel */}
+                {expandedNight === i && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderBottom: '0.5px solid var(--border-default)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12 }}>
+                        <div>
+                          <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Backup lodge</label>
+                          {(n.lodges || []).length > 1 ? (
+                            <select value={n.backup || ''} onChange={e => updateNight(i, 'backup', e.target.value)}
+                              style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+                              <option value="">— none —</option>
+                              {(n.lodges || []).filter(l => l !== n.lodge).map(l => <option key={l} value={l}>{l}</option>)}
+                            </select>
+                          ) : (
+                            <input type="text" value={n.backup || ''} onChange={e => updateNight(i, 'backup', e.target.value)}
+                              placeholder="Backup lodge" style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
+                          )}
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Meals</label>
+                          <select value={n.meals} onChange={e => updateNight(i, 'meals', e.target.value)}
+                            style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+                            <option value="BB">BB</option>
+                            <option value="DBB">DBB</option>
+                            <option value="HB">HB</option>
+                            <option value="FB">FB</option>
+                            <option value="SC">SC</option>
+                            <option value="RO">RO</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Km</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <input type="text" value={n.km || ''} onChange={e => updateNight(i, 'km', e.target.value.replace(/[^0-9/.]/g, ''))}
+                              placeholder="—" style={{ width: 60, fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)', textAlign: 'right' }} />
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>km</span>
+                          </div>
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Route notes</label>
+                          <input type="text" value={n.route_notes || ''} onChange={e => updateNight(i, 'route_notes', e.target.value)}
+                            placeholder="Route notes" style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
+                        </div>
+                        {n.notes && (
+                          <div style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            {n.notes}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
