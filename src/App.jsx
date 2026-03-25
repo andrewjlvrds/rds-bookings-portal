@@ -59,6 +59,14 @@ export default function App() {
       })
       .then(d => {
         const tourList = d.tours || []
+
+        // Merge local draft tours
+        const localTours = getLocalTours()
+        const zohoIds = new Set(tourList.map(t => t.id))
+        localTours.forEach(lt => {
+          if (!zohoIds.has(lt.id)) tourList.push(lt)
+        })
+
         setTours(tourList)
         setLodges(d.lodges || [])
         const all = []
@@ -82,6 +90,14 @@ export default function App() {
       .then(d => {
         console.log('API data loaded:', d.total_tours, 'tours,', d.total_bookings, 'bookings,', (d.lodges || []).length, 'lodges')
         const tourList = d.tours || []
+
+        // Merge local draft tours (not yet in Zoho)
+        const localTours = getLocalTours()
+        const zohoIds = new Set(tourList.map(t => t.id))
+        localTours.forEach(lt => {
+          if (!zohoIds.has(lt.id)) tourList.push(lt)
+        })
+
         setTours(tourList)
         setLodges(d.lodges || [])
         const all = []
@@ -107,17 +123,39 @@ export default function App() {
     setActiveView('lodge-detail')
   }
 
+  // Local draft tours stored in localStorage
+  const LOCAL_TOURS_KEY = 'rds_local_tours'
+  const getLocalTours = () => {
+    try { return JSON.parse(localStorage.getItem(LOCAL_TOURS_KEY) || '[]') } catch (e) { return [] }
+  }
+  const saveLocalTours = (list) => localStorage.setItem(LOCAL_TOURS_KEY, JSON.stringify(list))
+
   const handleCreateTour = async ({ name, departure_date, tour_type }) => {
-    const response = await fetch(API + '/api/create-tour', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, departure_date, tour_type }),
-    })
-    if (!response.ok) {
-      const err = await response.json()
-      throw new Error(err.error || 'Failed to create tour')
+    // Save locally — no Zoho write yet
+    const localTour = {
+      id: 'local_' + Date.now(),
+      name: name,
+      departure_date: departure_date,
+      start_date: departure_date,
+      tour_type: tour_type,
+      tour_status: 'Draft',
+      local: true,
+      bookings: [],
+      guide_rooms: 3,
+      pax_single: 8,
+      pax_twin: 2,
+      pax_double: 1,
+      num_riders: 12,
+      max_guests: 12,
     }
-    refreshData()
+    const localTours = getLocalTours()
+    localTours.push(localTour)
+    saveLocalTours(localTours)
+
+    // Add to state immediately
+    setTours(prev => [...prev, localTour])
+    setActiveTour(localTour)
+    setActiveView('itinerary')
   }
 
   const handleDeleteTour = async (tourId, tourName) => {

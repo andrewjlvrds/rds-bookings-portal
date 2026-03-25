@@ -268,19 +268,52 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
     setPushed(false)
   }
 
+  // Whether this is a local (not-yet-in-Zoho) tour
+  const isLocalTour = (tour.id || '').startsWith('local_') || tour.local
+  const [zohoTourName, setZohoTourName] = useState(tour.name || '')
+
   // Push to Zoho (create lodge bookings) — the big commit
   const handlePushToZoho = async () => {
-    if (!tour.id || tour.id === 'unassigned') return
-    if (!confirm('Push ' + nights.length + ' nights to Zoho? This will create lodge bookings.')) return
+    if (!confirm('Push ' + nights.length + ' nights to Zoho? This will create the tour and lodge bookings.')) return
     setPushing(true)
 
     try {
+      let tourId = tour.id
+      let tourName = zohoTourName || tour.name
+
+      // If local tour, create it in Zoho first
+      if (isLocalTour) {
+        const createRes = await fetch('/api/create-tour', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: tourName,
+            departure_date: departureDate,
+            tour_type: tour.tour_type || '',
+          }),
+        })
+        if (!createRes.ok) {
+          const err = await createRes.json()
+          throw new Error('Failed to create tour in Zoho: ' + (err.error || ''))
+        }
+        const createResult = await createRes.json()
+        tourId = createResult.id
+
+        // Remove from local tours list
+        try {
+          const localTours = JSON.parse(localStorage.getItem('rds_local_tours') || '[]')
+          const updated = localTours.filter(t => t.id !== tour.id)
+          localStorage.setItem('rds_local_tours', JSON.stringify(updated))
+        } catch (e) {}
+      }
+
+      // Now create the bookings
       const response = await fetch('/api/create-itinerary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tour_id: tour.id,
-          tour_name: tour.name,
+          tour_id: tourId,
+          tour_name: tourName,
           departure_date: departureDate,
           nights: nights.map(n => ({
             date: n.date,
@@ -461,10 +494,24 @@ ${nights.map(n => `<tr>
             <button className="btn" onClick={handleDownloadExcel} title="Download as CSV (Excel)">↓ Excel</button>
             <button className="btn" onClick={handleDownloadPDF} title="Print / Save as PDF">↓ PDF</button>
             <button className="btn" onClick={handleClear}>Clear</button>
+            {isLocalTour && (
+              <input
+                type="text"
+                value={zohoTourName}
+                onChange={e => setZohoTourName(e.target.value)}
+                placeholder="Zoho Tour Name"
+                title="Tour name for Zoho"
+                style={{
+                  fontSize: 12, padding: '5px 8px', width: 160,
+                  border: '0.5px solid var(--border-default)', borderRadius: 4,
+                  outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                }}
+              />
+            )}
             <button
               className="btn btn-primary"
               onClick={handlePushToZoho}
-              disabled={pushing || pushed || !departureDate}
+              disabled={pushing || pushed || !departureDate || (isLocalTour && !zohoTourName.trim())}
             >
               {pushing ? 'Pushing...' : pushed ? 'Pushed to Zoho' : 'Push to Zoho (' + nights.length + ' nights)'}
             </button>

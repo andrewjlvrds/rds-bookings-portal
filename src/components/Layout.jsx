@@ -289,7 +289,7 @@ function TourGroup({ label, tours, activeTour, onSelectTour, onSelectView, onAdd
             type="text"
             value={newName}
             onChange={e => setNewName(e.target.value)}
-            placeholder="Tour name (e.g. FoSA Oct 27)"
+            placeholder="Tour name (e.g. FoSA Sep 27)"
             style={{
               width: '100%', fontSize: 12, padding: '5px 8px',
               border: '0.5px solid var(--border-default)', borderRadius: 4,
@@ -332,7 +332,7 @@ function TourGroup({ label, tours, activeTour, onSelectTour, onSelectView, onAdd
               opacity: (!newName.trim() || !newDate || saving) ? 0.5 : 1,
             }}
           >
-            {saving ? 'Creating...' : 'Create tour'}
+            {saving ? 'Adding...' : 'Add tour'}
           </button>
         </div>
       )}
