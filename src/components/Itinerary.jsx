@@ -42,12 +42,33 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   } catch (e) {}
   const hasDraft = draftNights.length > 0
 
-  // Build lodge lookup
-  const lodgeLookup = {}
-  ;(lodges || []).forEach(l => {
-    if (l.name) lodgeLookup[l.name.toLowerCase()] = l
-  })
-  const lookupLodge = (name) => name ? (lodgeLookup[name.toLowerCase()] || null) : null
+  // Build lodge list for fuzzy matching
+  const lodgeList = (lodges || []).filter(l => l.name).map(l => ({
+    ...l,
+    _lower: l.name.toLowerCase().trim(),
+  }))
+  const lookupLodge = (name) => {
+    if (!name) return null
+    const q = name.toLowerCase().trim()
+    // Exact match
+    let match = lodgeList.find(l => l._lower === q)
+    // Substring match
+    if (!match) match = lodgeList.find(l => l._lower.includes(q) || q.includes(l._lower))
+    // Word overlap
+    if (!match) {
+      const qWords = q.split(/\s+/).filter(w => w.length > 2)
+      if (qWords.length > 0) {
+        let best = null, bestScore = 0
+        for (const l of lodgeList) {
+          const hits = qWords.filter(w => l._lower.includes(w)).length
+          const score = hits / Math.max(qWords.length, l._lower.split(/\s+/).length)
+          if (hits >= 2 && score > bestScore) { best = l; bestScore = score }
+        }
+        if (best) match = best
+      }
+    }
+    return match || null
+  }
 
   const allBookings = tour.bookings || []
   const active = allBookings.filter(isActiveBooking)
@@ -613,17 +634,50 @@ function TourConfig({ tour }) {
 
 function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefresh }) {
   const [pushing, setPushing] = useState(false)
+  const [zohoTourName, setZohoTourName] = useState(tour.name || '')
+  const isLocalTour = (tour.id || '').startsWith('local_') || tour.local
 
   const handlePushToZoho = async () => {
-    if (!confirm('Push ' + draftNights.length + ' nights to Zoho? This will create lodge bookings.')) return
+    if (isLocalTour && !zohoTourName.trim()) {
+      alert('Please enter a Zoho Tour Name before pushing.')
+      return
+    }
+    if (!confirm('Push ' + draftNights.length + ' nights to Zoho? This will create the tour and lodge bookings.')) return
     setPushing(true)
     try {
+      let tourId = tour.id
+      let tourName = zohoTourName || tour.name
+
+      // Create tour in Zoho first if local
+      if (isLocalTour) {
+        const createRes = await fetch('/api/create-tour', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: tourName,
+            departure_date: tour.departure_date,
+            tour_type: tour.tour_type || '',
+          }),
+        })
+        if (!createRes.ok) {
+          const err = await createRes.json()
+          throw new Error('Failed to create tour: ' + (err.error || ''))
+        }
+        const createResult = await createRes.json()
+        tourId = createResult.id
+        // Remove from local tours
+        try {
+          const localTours = JSON.parse(localStorage.getItem('rds_local_tours') || '[]')
+          localStorage.setItem('rds_local_tours', JSON.stringify(localTours.filter(t => t.id !== tour.id)))
+        } catch (e) {}
+      }
+
       const response = await fetch('/api/create-itinerary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tour_id: tour.id,
-          tour_name: tour.name,
+          tour_id: tourId,
+          tour_name: tourName,
           departure_date: tour.departure_date,
           nights: draftNights.map(n => ({
             date: n.date,
@@ -665,6 +719,27 @@ function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefre
 
   return (
     <div>
+      {/* Zoho Tour Name field for local tours */}
+      {isLocalTour && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
+          padding: '8px 16px', background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-md)', fontSize: 12,
+        }}>
+          <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Zoho Tour Name:</span>
+          <input
+            type="text"
+            value={zohoTourName}
+            onChange={e => setZohoTourName(e.target.value)}
+            placeholder="e.g. FoSA 1 Sep 27"
+            style={{
+              flex: 1, fontSize: 13, fontWeight: 500, padding: '4px 8px',
+              border: '0.5px solid var(--border-default)', borderRadius: 4,
+              outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+            }}
+          />
+        </div>
+      )}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginBottom: 12, padding: '10px 16px', background: 'var(--amber-bg)',
@@ -680,7 +755,7 @@ function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefre
           <button
             className="btn btn-primary"
             onClick={handlePushToZoho}
-            disabled={pushing}
+            disabled={pushing || (isLocalTour && !zohoTourName.trim())}
             style={{ fontSize: 12, padding: '4px 12px' }}
           >
             {pushing ? 'Pushing...' : 'Push to Zoho'}
