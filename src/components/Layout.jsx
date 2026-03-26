@@ -96,64 +96,69 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
     <nav style={{
       width: 260, flexShrink: 0, background: 'var(--bg-primary)',
       borderRight: '0.5px solid var(--border-default)', height: '100vh',
-      overflow: 'auto', position: 'sticky', top: 0,
+      position: 'sticky', top: 0,
       display: 'flex', flexDirection: 'column',
     }}>
-      {/* Portal title */}
-      <button
-        onClick={() => { onSelectTour(null); onSelectView('dashboard'); setLodgeExpanded(true); setGuestExpanded(false) }}
-        style={{
-          display: 'block', width: '100%', textAlign: 'left', padding: '18px 20px',
-          background: 'transparent', border: 'none',
-          borderBottom: '0.5px solid var(--border-default)',
-          fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: -0.3,
-        }}
-      >
-        RDS Portal
-      </button>
+      {/* ═══ FIXED HEADER ZONE ═══ */}
+      <div style={{ flexShrink: 0 }}>
+        {/* Portal title */}
+        <button
+          onClick={() => { onSelectTour(null); onSelectView('dashboard'); setLodgeExpanded(true); setGuestExpanded(false) }}
+          style={{
+            display: 'block', width: '100%', textAlign: 'left', padding: '18px 20px',
+            background: 'var(--bg-primary)', border: 'none',
+            borderBottom: '0.5px solid var(--border-default)',
+            fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: -0.3,
+          }}
+        >
+          RDS Portal
+        </button>
 
-      {/* ═══ LODGE BOOKINGS ═══ */}
-      <SectionBlock
-        label="Lodge bookings"
-        expanded={lodgeExpanded}
-        active={currentSection === 'lodges'}
-        onToggle={handleLodgeToggle}
-        subItems={[
-          { label: 'Payments', view: 'payments' },
-          { label: 'Correspondence', view: 'correspondence' },
-          { label: 'Lodges', view: 'lodges' },
-        ]}
-        activeView={activeView}
-        onSelectView={(v) => { onSelectTour(null); onSelectView(v) }}
-        tours={tours}
-        activeTour={activeTour}
-        onTourClick={(tour) => { onSelectTour(tour); onSelectView('itinerary') }}
-        onCreateTour={onCreateTour}
-      />
+        {/* Section headers — always visible */}
+        <SectionHeader label="Lodge bookings" expanded={lodgeExpanded} active={currentSection === 'lodges'} onClick={handleLodgeToggle} />
+        <SectionHeader label="Guest bookings" expanded={guestExpanded} active={currentSection === 'guests'} onClick={handleGuestToggle} />
+      </div>
 
-      {/* ═══ GUEST BOOKINGS ═══ */}
-      <SectionBlock
-        label="Guest bookings"
-        expanded={guestExpanded}
-        active={currentSection === 'guests'}
-        onToggle={handleGuestToggle}
-        subItems={[
-          { label: 'Transfers', view: 'transfers' },
-          { label: 'Excursions', view: 'guest-excursions' },
-          { label: 'Accommodation', view: 'guest-accommodation' },
-          { label: 'Payments', view: 'guest-payments' },
-          { label: 'Bikes & gear', view: 'guest-bikes' },
-        ]}
-        activeView={activeView}
-        onSelectView={(v) => { onSelectTour(null); onSelectView(v) }}
-        tours={tours}
-        activeTour={activeTour}
-        onTourClick={(tour) => { onSelectTour(tour); onSelectView('guest-tour') }}
-      />
+      {/* ═══ SCROLLABLE CONTENT ZONE ═══ */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {/* Lodge bookings content */}
+        {lodgeExpanded && (
+          <SectionContent
+            subItems={[
+              { label: 'Payments', view: 'payments' },
+              { label: 'Correspondence', view: 'correspondence' },
+              { label: 'Lodges', view: 'lodges' },
+            ]}
+            activeView={activeView}
+            onSelectView={(v) => { onSelectTour(null); onSelectView(v) }}
+            tours={tours}
+            activeTour={activeTour}
+            onTourClick={(tour) => { onSelectTour(tour); onSelectView('itinerary') }}
+            onCreateTour={onCreateTour}
+          />
+        )}
+
+        {/* Guest bookings content */}
+        {guestExpanded && (
+          <SectionContent
+            subItems={[
+              { label: 'Transfers', view: 'transfers' },
+              { label: 'Excursions', view: 'guest-excursions' },
+              { label: 'Accommodation', view: 'guest-accommodation' },
+              { label: 'Payments', view: 'guest-payments' },
+              { label: 'Bikes & gear', view: 'guest-bikes' },
+            ]}
+            activeView={activeView}
+            onSelectView={(v) => { onSelectTour(null); onSelectView(v) }}
+            tours={tours}
+            activeTour={activeTour}
+            onTourClick={(tour) => { onSelectTour(tour); onSelectView('guest-tour') }}
+          />
+        )}
+      </div>
 
       {/* Bottom */}
-      <div style={{ flex: 1 }} />
-      <div style={{ borderTop: '0.5px solid var(--border-default)', padding: '8px 0' }}>
+      <div style={{ flexShrink: 0, borderTop: '0.5px solid var(--border-default)', padding: '8px 0' }}>
         <NavItem label="Getting started" active={activeView === 'getting-started'} onClick={() => { onSelectTour(null); onSelectView('getting-started') }} />
       </div>
     </nav>
@@ -161,50 +166,47 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
 }
 
 
-function SectionBlock({ label, expanded, active, onToggle, subItems, activeView, onSelectView, tours, activeTour, onTourClick, onCreateTour }) {
+function SectionHeader({ label, expanded, active, onClick }) {
   return (
-    <div style={{ borderBottom: '0.5px solid var(--border-default)' }}>
-      {/* Section header — toggles expand/collapse */}
-      <button
-        onClick={onToggle}
-        style={{
-          display: 'flex', width: '100%', textAlign: 'left',
-          padding: '10px 20px 8px', background: 'transparent', border: 'none',
-          fontSize: 11, fontWeight: 600, color: active ? 'var(--blue-text)' : 'var(--text-muted)',
-          textTransform: 'uppercase', letterSpacing: 0.5,
-          cursor: 'pointer', alignItems: 'center', justifyContent: 'space-between',
-        }}
-        onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-primary)' }}
-        onMouseLeave={e => { if (!active) e.currentTarget.style.color = active ? 'var(--blue-text)' : 'var(--text-muted)' }}
-      >
-        <span>{label}</span>
-        <span style={{
-          fontSize: 10, transition: 'transform 0.15s',
-          transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-          display: 'inline-block',
-        }}>▾</span>
-      </button>
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', width: '100%', textAlign: 'left',
+        padding: '10px 20px 8px', background: 'var(--bg-primary)', border: 'none',
+        borderBottom: '0.5px solid var(--border-default)',
+        fontSize: 11, fontWeight: 600, color: active ? 'var(--blue-text)' : 'var(--text-muted)',
+        textTransform: 'uppercase', letterSpacing: 0.5,
+        cursor: 'pointer', alignItems: 'center', justifyContent: 'space-between',
+      }}
+      onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-primary)' }}
+      onMouseLeave={e => { if (!active) e.currentTarget.style.color = active ? 'var(--blue-text)' : 'var(--text-muted)' }}
+    >
+      <span>{label}</span>
+      <span style={{
+        fontSize: 10, transition: 'transform 0.15s',
+        transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+        display: 'inline-block',
+      }}>▾</span>
+    </button>
+  )
+}
 
-      {expanded && (
-        <>
-          {/* Sub-nav items */}
-          <div style={{ padding: '0 0 4px' }}>
-            {subItems.map(item => (
-              <NavItem key={item.view} label={item.label} active={activeView === item.view}
-                onClick={() => onSelectView(item.view)} indent />
-            ))}
-          </div>
-
-          {/* Tour list — fully self-contained within this section */}
-          <TourList
-            tours={tours}
-            activeTour={activeTour}
-            onTourClick={onTourClick}
-            onCreateTour={onCreateTour}
-          />
-        </>
-      )}
-    </div>
+function SectionContent({ subItems, activeView, onSelectView, tours, activeTour, onTourClick, onCreateTour }) {
+  return (
+    <>
+      <div style={{ padding: '4px 0' }}>
+        {subItems.map(item => (
+          <NavItem key={item.view} label={item.label} active={activeView === item.view}
+            onClick={() => onSelectView(item.view)} indent />
+        ))}
+      </div>
+      <TourList
+        tours={tours}
+        activeTour={activeTour}
+        onTourClick={onTourClick}
+        onCreateTour={onCreateTour}
+      />
+    </>
   )
 }
 
