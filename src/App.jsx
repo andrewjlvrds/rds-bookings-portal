@@ -212,6 +212,17 @@ export default function App() {
       return <Payments allBookings={allBookings} tours={tours} onSelectBooking={handleSelectBooking} onRefresh={() => refreshData()} />
     }
 
+    if (activeView === 'lodge-dashboard') {
+      return (
+        <Dashboard
+          tours={tours}
+          allBookings={allBookings}
+          onSelectTour={handleSelectTour}
+          onSelectView={setActiveView}
+        />
+      )
+    }
+
     if (activeView === 'getting-started') {
       return <GettingStarted onSelectView={setActiveView} />
     }

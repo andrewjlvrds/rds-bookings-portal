@@ -37,13 +37,15 @@ function categorizeTours(tours) {
   return { newBuild, drafts, yearGroups, years, past }
 }
 
-const LODGE_VIEWS = ['dashboard', 'itinerary', 'edit-itinerary', 'enquiry-preview', 'lodge-detail', 'payments', 'correspondence', 'lodges']
+const PLANNER_VIEWS = ['dashboard', 'itinerary', 'edit-itinerary', 'enquiry-preview']
+const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'correspondence', 'lodges']
 const GUEST_VIEWS = ['guest-dashboard', 'guest-tour', 'guest-detail', 'transfers', 'guest-excursions', 'guest-accommodation', 'guest-payments', 'guest-bikes']
 
 function getSection(activeView) {
   if (GUEST_VIEWS.includes(activeView)) return 'guests'
   if (LODGE_VIEWS.includes(activeView)) return 'lodges'
-  return null
+  if (PLANNER_VIEWS.includes(activeView)) return 'planner'
+  return 'planner'
 }
 
 export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, children }) {
@@ -66,30 +68,31 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
 
 function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour }) {
   const currentSection = getSection(activeView)
-  const [lodgeExpanded, setLodgeExpanded] = useState(currentSection === 'lodges' || !currentSection)
+  const [plannerExpanded, setPlannerExpanded] = useState(currentSection === 'planner')
+  const [lodgeExpanded, setLodgeExpanded] = useState(currentSection === 'lodges')
   const [guestExpanded, setGuestExpanded] = useState(currentSection === 'guests')
 
-  // Keep sections in sync when views change
+  const collapseAll = () => { setPlannerExpanded(false); setLodgeExpanded(false); setGuestExpanded(false) }
+
+  const handlePlannerToggle = () => {
+    if (!plannerExpanded) {
+      collapseAll(); setPlannerExpanded(true)
+      onSelectTour(null); onSelectView('dashboard')
+    } else { setPlannerExpanded(false) }
+  }
+
   const handleLodgeToggle = () => {
     if (!lodgeExpanded) {
-      setLodgeExpanded(true)
-      setGuestExpanded(false)
-      onSelectTour(null)
-      onSelectView('dashboard')
-    } else {
-      setLodgeExpanded(false)
-    }
+      collapseAll(); setLodgeExpanded(true)
+      onSelectTour(null); onSelectView('lodge-dashboard')
+    } else { setLodgeExpanded(false) }
   }
 
   const handleGuestToggle = () => {
     if (!guestExpanded) {
-      setGuestExpanded(true)
-      setLodgeExpanded(false)
-      onSelectTour(null)
-      onSelectView('guest-dashboard')
-    } else {
-      setGuestExpanded(false)
-    }
+      collapseAll(); setGuestExpanded(true)
+      onSelectTour(null); onSelectView('guest-dashboard')
+    } else { setGuestExpanded(false) }
   }
 
   return (
@@ -103,7 +106,7 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
       <div style={{ flexShrink: 0 }}>
         {/* Portal title */}
         <button
-          onClick={() => { onSelectTour(null); onSelectView('dashboard'); setLodgeExpanded(true); setGuestExpanded(false) }}
+          onClick={() => { onSelectTour(null); onSelectView('dashboard'); collapseAll(); setPlannerExpanded(true) }}
           style={{
             display: 'block', width: '100%', textAlign: 'left', padding: '18px 20px',
             background: 'var(--bg-primary)', border: 'none',
@@ -115,13 +118,24 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
         </button>
 
         {/* Section headers — always visible */}
+        <SectionHeader label="Tour planner" expanded={plannerExpanded} active={currentSection === 'planner'} onClick={handlePlannerToggle} />
         <SectionHeader label="Lodge bookings" expanded={lodgeExpanded} active={currentSection === 'lodges'} onClick={handleLodgeToggle} />
         <SectionHeader label="Guest bookings" expanded={guestExpanded} active={currentSection === 'guests'} onClick={handleGuestToggle} />
       </div>
 
       {/* ═══ SCROLLABLE CONTENT ZONE ═══ */}
       <div style={{ flex: 1, overflow: 'auto' }}>
-        {/* Lodge bookings content */}
+        {/* Tour planner content — all tours, create + edit focus */}
+        {plannerExpanded && (
+          <TourList
+            tours={tours}
+            activeTour={activeTour}
+            onTourClick={(tour) => { onSelectTour(tour); onSelectView('itinerary') }}
+            onCreateTour={onCreateTour}
+          />
+        )}
+
+        {/* Lodge bookings content — committed tours only */}
         {lodgeExpanded && (
           <SectionContent
             subItems={[
@@ -134,11 +148,11 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
             tours={tours}
             activeTour={activeTour}
             onTourClick={(tour) => { onSelectTour(tour); onSelectView('itinerary') }}
-            onCreateTour={onCreateTour}
+            committedOnly
           />
         )}
 
-        {/* Guest bookings content */}
+        {/* Guest bookings content — committed tours only */}
         {guestExpanded && (
           <SectionContent
             subItems={[
@@ -153,6 +167,7 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
             tours={tours}
             activeTour={activeTour}
             onTourClick={(tour) => { onSelectTour(tour); onSelectView('guest-tour') }}
+            committedOnly
           />
         )}
       </div>
@@ -191,7 +206,7 @@ function SectionHeader({ label, expanded, active, onClick }) {
   )
 }
 
-function SectionContent({ subItems, activeView, onSelectView, tours, activeTour, onTourClick, onCreateTour }) {
+function SectionContent({ subItems, activeView, onSelectView, tours, activeTour, onTourClick, onCreateTour, committedOnly }) {
   return (
     <>
       <div style={{ padding: '4px 0' }}>
@@ -205,16 +220,27 @@ function SectionContent({ subItems, activeView, onSelectView, tours, activeTour,
         activeTour={activeTour}
         onTourClick={onTourClick}
         onCreateTour={onCreateTour}
+        committedOnly={committedOnly}
       />
     </>
   )
 }
 
 
-function TourList({ tours, activeTour, onTourClick, onCreateTour }) {
+function TourList({ tours, activeTour, onTourClick, onCreateTour, committedOnly }) {
   const [showPast, setShowPast] = useState(false)
   const [collapsedYears, setCollapsedYears] = useState({})
-  const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
+
+  // Filter tours: committedOnly excludes drafts and local tours
+  const filteredTours = committedOnly
+    ? (tours || []).filter(t => {
+        if (typeof t.id === 'string' && t.id.startsWith('local_')) return false
+        if (t.tour_status === 'Draft') return false
+        return true
+      })
+    : tours
+
+  const { newBuild, drafts, yearGroups, years, past } = categorizeTours(filteredTours)
 
   const toggleYear = (year) => {
     setCollapsedYears(prev => ({ ...prev, [year]: !prev[year] }))
