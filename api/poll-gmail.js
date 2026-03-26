@@ -110,7 +110,7 @@ export default async function(req, res) {
     }
 
     // Fetch all bookings with Enquiry Sent or later status to match against
-    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Lodge,Tour,id';
+    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Lodge,Tour,id,Deposit_Amount,Second_Payment_Amount,Third_Payment_Amount,Fourth_Payment_Amount,Deposit_Paid_Date,Second_Payment_Paid_Date,Third_Payment_Paid_Date,Fourth_Payment_Paid_Date';
     var bookingsResult = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200');
     var allBookings = (bookingsResult && bookingsResult.data) || [];
 
@@ -246,6 +246,14 @@ export default async function(req, res) {
               lodge_name: matchedBooking.Lodge_Name || matchedBooking.Name || '',
               check_in: matchedBooking.Check_in_Date || '',
               status: matchedBooking.Status || '',
+              deposit_amount: matchedBooking.Deposit_Amount || '',
+              deposit_paid: matchedBooking.Deposit_Paid_Date ? 'yes' : 'no',
+              payment_2_amount: matchedBooking.Second_Payment_Amount || '',
+              payment_2_paid: matchedBooking.Second_Payment_Paid_Date ? 'yes' : 'no',
+              payment_3_amount: matchedBooking.Third_Payment_Amount || '',
+              payment_3_paid: matchedBooking.Third_Payment_Paid_Date ? 'yes' : 'no',
+              payment_4_amount: matchedBooking.Fourth_Payment_Amount || '',
+              payment_4_paid: matchedBooking.Fourth_Payment_Paid_Date ? 'yes' : 'no',
             };
 
             aiResult = await parseEmail(body, bookingContext);

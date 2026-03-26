@@ -24,7 +24,16 @@ var SYSTEM_PROMPT = [
   '12. contact_name: Name of person who sent the email',
   '13. reservation_comments: Important notes, special conditions from lodge',
   '14. meals: "BB" | "HB" | "FB" | "DBB" | "AI" | "SC" | "RO" | null',
-  '15. suggested_status: "Availability Confirmed" | "Not Available" | "Proforma Received" | "Waitlisted" | "Cancelled" | null',
+  '15. suggested_status: "Availability Confirmed" | "Not Available" | "Proforma Received" | "Waitlisted" | "Cancelled" | "Deposit Paid" | "Balance Paid" | null',
+  '',
+  'PAYMENT RECEIPT FIELDS (extract when email confirms a payment was received):',
+  '16. payment_received_amount: Amount received/paid (numeric)',
+  '17. payment_received_date: Date payment was received (YYYY-MM-DD)',
+  '18. payment_received_currency: Currency of payment received',
+  '19. payment_method: "EFT" | "credit_card" | "bank_transfer" | "cash" | "other" | null',
+  '20. receipt_reference: Receipt or transaction reference number from the lodge',
+  '21. balance_due: Remaining balance after payment (numeric, if stated)',
+  '22. payment_slot: Which payment this relates to: "deposit" | "2nd_payment" | "3rd_payment" | "4th_payment" | null (infer from context — e.g. if they say "deposit received" → "deposit")',
   '',
   'RULES:',
   '- Only extract explicitly stated information. Do NOT guess.',
@@ -35,6 +44,9 @@ var SYSTEM_PROMPT = [
   '- "STO rate" = Special Tour Operator rate (discounted).',
   '- If email is just confirming availability without rates, suggested_status should be "Availability Confirmed".',
   '- If email includes a proforma/invoice with amounts, suggested_status should be "Proforma Received".',
+  '- If email confirms a payment was received (receipt, proof of payment, "thank you for payment"), email_type should be "payment_confirmation".',
+  '- For payment confirmations, extract payment_received_amount, payment_received_date, and payment_slot. If the lodge mentions "deposit" → payment_slot is "deposit". If they mention "balance" or "final payment" → infer the appropriate slot.',
+  '- If payment confirmation and deposit was paid, suggested_status should be "Deposit Paid". If balance/final payment, "Balance Paid".',
   '',
   'RESPOND WITH VALID JSON ONLY:',
   '{',
@@ -69,6 +81,18 @@ var FIELD_MAP = {
   reservation_comments: { zoho: 'Reservation_Comments' },
   meals: { zoho: 'Meals' },
   suggested_status: { zoho: 'Status' },
+  // Receipt fields — mapped dynamically based on payment_slot
+  balance_due: { zoho: 'Balance_Due' },
+  receipt_reference: { zoho: 'Payment_Notes', transform: function(v) { return 'Receipt: ' + v; } },
+  // payment_received_amount, payment_received_date, payment_slot handled in extractionToZohoFields
+};
+
+// Map payment slot to Zoho field prefixes
+var SLOT_FIELD_MAP = {
+  deposit: { paid_date: 'Deposit_Paid_Date', paid_amount: 'Deposit_Paid_Amount' },
+  '2nd_payment': { paid_date: 'Second_Payment_Paid_Date', paid_amount: 'Second_Payment_Paid_Amount' },
+  '3rd_payment': { paid_date: 'Third_Payment_Paid_Date', paid_amount: 'Third_Payment_Paid_Amount' },
+  '4th_payment': { paid_date: 'Fourth_Payment_Paid_Date', paid_amount: 'Fourth_Payment_Paid_Amount' },
 };
 
 export async function parseEmail(emailBody, bookingContext) {
@@ -85,6 +109,18 @@ export async function parseEmail(emailBody, bookingContext) {
     userMessage += 'Check-out: ' + (bookingContext.check_out || 'Unknown') + '\n';
     userMessage += 'Nights: ' + (bookingContext.nights || 'Unknown') + '\n';
     userMessage += 'Current status: ' + (bookingContext.status || 'Unknown') + '\n';
+    if (bookingContext.deposit_amount) {
+      userMessage += 'Deposit amount: ' + bookingContext.deposit_amount + ' (paid: ' + (bookingContext.deposit_paid || 'unknown') + ')\n';
+    }
+    if (bookingContext.payment_2_amount) {
+      userMessage += '2nd payment amount: ' + bookingContext.payment_2_amount + ' (paid: ' + (bookingContext.payment_2_paid || 'unknown') + ')\n';
+    }
+    if (bookingContext.payment_3_amount) {
+      userMessage += '3rd payment amount: ' + bookingContext.payment_3_amount + ' (paid: ' + (bookingContext.payment_3_paid || 'unknown') + ')\n';
+    }
+    if (bookingContext.payment_4_amount) {
+      userMessage += '4th payment amount: ' + bookingContext.payment_4_amount + ' (paid: ' + (bookingContext.payment_4_paid || 'unknown') + ')\n';
+    }
     userMessage += '--- END CONTEXT ---\n\n';
   }
 
@@ -139,6 +175,15 @@ export function extractionToZohoFields(extraction) {
   var updates = {};
   var flagged = {};
 
+  // Determine payment slot first (needed for receipt field mapping)
+  var paymentSlot = null;
+  if (extracted.payment_slot && extracted.payment_slot.value) {
+    var slotConf = confidenceLevels[extracted.payment_slot.confidence] || 0;
+    if (slotConf >= minLevel) {
+      paymentSlot = extracted.payment_slot.value;
+    }
+  }
+
   var keys = Object.keys(extracted);
   for (var i = 0; i < keys.length; i++) {
     var key = keys[i];
@@ -147,16 +192,50 @@ export function extractionToZohoFields(extraction) {
     if (!field || field.value === null || field.value === undefined) continue;
 
     var level = confidenceLevels[field.confidence] || 0;
+
+    // Handle slot-based payment fields
+    if (key === 'payment_received_amount' && paymentSlot && SLOT_FIELD_MAP[paymentSlot]) {
+      if (level >= minLevel) {
+        updates[SLOT_FIELD_MAP[paymentSlot].paid_amount] = field.value;
+      } else {
+        flagged[key] = { value: field.value, confidence: field.confidence, zoho_field: SLOT_FIELD_MAP[paymentSlot].paid_amount };
+      }
+      continue;
+    }
+
+    if (key === 'payment_received_date' && paymentSlot && SLOT_FIELD_MAP[paymentSlot]) {
+      if (level >= minLevel) {
+        updates[SLOT_FIELD_MAP[paymentSlot].paid_date] = field.value;
+      } else {
+        flagged[key] = { value: field.value, confidence: field.confidence, zoho_field: SLOT_FIELD_MAP[paymentSlot].paid_date };
+      }
+      continue;
+    }
+
+    // Skip fields handled above or without mapping
+    if (key === 'payment_slot' || key === 'payment_received_currency' || key === 'payment_method') continue;
+
     var mapping = FIELD_MAP[key];
     if (!mapping) continue;
 
     if (level >= minLevel) {
       var value = field.value;
       if (mapping.transform) value = mapping.transform(value);
-      updates[mapping.zoho] = value;
+      // For Payment_Notes, append rather than overwrite
+      if (mapping.zoho === 'Payment_Notes' && updates.Payment_Notes) {
+        updates.Payment_Notes += '\n' + value;
+      } else {
+        updates[mapping.zoho] = value;
+      }
     } else {
       flagged[key] = { value: field.value, confidence: field.confidence, zoho_field: mapping.zoho };
     }
+  }
+
+  // If we got a payment method or receipt ref, add to Payment_Notes
+  if (extracted.payment_method && extracted.payment_method.value) {
+    var methodNote = 'Method: ' + extracted.payment_method.value;
+    updates.Payment_Notes = updates.Payment_Notes ? updates.Payment_Notes + '\n' + methodNote : methodNote;
   }
 
   return { updates: updates, flagged: flagged, has_flags: Object.keys(flagged).length > 0 };

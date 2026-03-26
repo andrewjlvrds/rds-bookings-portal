@@ -51,10 +51,15 @@ export default async function(req, res) {
       'Lodge_Availability','Lodge','Lodge_Contact','Tour',
       'RDS_Reference','Lodge_Reference','Cancel_Free_Before','Cancellation_Policy_Text',
       'Credit_Amount','Enquiry_Sent_Date','Last_Response_Date',
-      'Follow_up_Date','Excursion','Excursion_booking_status','Excursion_Date','Excursion_notes',
+      'Follow_up_Date','Excursion','Excursion_booking_status',
       'Deposit_Due_Date','Second_Payment_Amount','Second_Payment_Due_Date',
       'Third_Payment_Amount','Third_Payment_Due_Date',
       'Fourth_Payment_Amount','Fourth_Payment_Due_Date',
+      'Deposit_Paid_Date','Second_Payment_Paid_Date',
+      'Third_Payment_Paid_Date','Fourth_Payment_Paid_Date',
+      'Deposit_Paid_Amount','Second_Payment_Paid_Amount',
+      'Third_Payment_Paid_Amount','Fourth_Payment_Paid_Amount',
+      'Payment_Notes','Balance_Due',
       'Email','Contact_Name','Exchange_Rate','Currency',
       'Day_Description','id'
     ].join(',');

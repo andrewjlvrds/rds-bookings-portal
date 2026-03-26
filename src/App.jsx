@@ -202,7 +202,7 @@ export default function App() {
     }
 
     if (activeView === 'payments') {
-      return <Payments allBookings={allBookings} tours={tours} />
+      return <Payments allBookings={allBookings} tours={tours} onSelectBooking={handleSelectBooking} onRefresh={() => refreshData()} />
     }
 
     if (activeTour && activeView === 'enquiry-preview') {
