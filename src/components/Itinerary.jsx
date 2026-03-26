@@ -359,6 +359,13 @@ ${sorted.map((bk, i) => {
                   <td>{fmtDate(checkIn)}</td>
                   <td>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{route}</div>
+                    {bk.Booking_Notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>{bk.Booking_Notes}</div>}
+                    {bk.Excursion && (
+                      <div style={{ fontSize: 10, color: 'var(--blue-text)', marginTop: 2 }}>
+                        Excursion: {bk.Excursion}
+                        {bk.Excursion_booking_status ? ' (' + bk.Excursion_booking_status + ')' : ''}
+                      </div>
+                    )}
                   </td>
                   <td>
                     {editing && editing.id === (bk.id || bk['Record Id']) && editing.field === 'lodge' ? (
@@ -795,6 +802,11 @@ function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefre
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{n.route || ''}</div>
                     {n.km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{n.km} km</div>}
                     {n.route_notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>{n.route_notes}</div>}
+                    {n.excursion && (
+                      <div style={{ fontSize: 10, color: 'var(--blue-text)', marginTop: 2 }}>
+                        Excursion: {n.excursion}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <div style={{ fontWeight: 500 }}>{lodge}</div>

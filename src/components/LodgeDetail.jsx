@@ -266,7 +266,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: '0.5px solid var(--border-light)' }}>
               <DetailRows onEdit={handleSave} rows={[
                 { label: 'Free cancel before', value: cancelBefore ? fmtDateFull(cancelBefore) : '—', field: 'Cancel_Free_Before', type: 'date', raw: cancelBefore },
-                { label: 'Cancel policy', value: cancelPolicy || '—', field: 'Cancellation_Policy_Text', raw: cancelPolicy },
+                { label: 'Cancel policy', value: cancelPolicy || '—', field: 'Cancellation_Policy_Text', type: 'multiline', raw: cancelPolicy },
               ]} />
             </div>
 
@@ -274,7 +274,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             {booking.Payment_Note && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light)' }}>
                 <DetailRows onEdit={handleSave} rows={[
-                  { label: 'Payment note', value: booking.Payment_Note || '—', field: 'Payment_Note', raw: booking.Payment_Note || '' },
+                  { label: 'Payment note', value: booking.Payment_Note || '—', field: 'Payment_Note', type: 'multiline', raw: booking.Payment_Note || '' },
                 ]} />
               </div>
             )}
@@ -316,7 +316,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
                 { label: 'Excursion', value: booking.Excursion || '—', field: 'Excursion', raw: booking.Excursion || '' },
                 { label: 'Status', value: booking.Excursion_booking_status || '—', field: 'Excursion_booking_status', raw: booking.Excursion_booking_status || '' },
                 { label: 'Date', value: booking.Excursion_Date ? fmtDateFull(booking.Excursion_Date) : '—', field: 'Excursion_Date', type: 'date', raw: booking.Excursion_Date || '' },
-                { label: 'Notes', value: booking.Excursion_notes || '—', field: 'Excursion_notes', raw: booking.Excursion_notes || '' },
+                { label: 'Notes', value: booking.Excursion_notes || '—', field: 'Excursion_notes', type: 'multiline', raw: booking.Excursion_notes || '' },
               ]} />
             </div>
           </div>
@@ -326,8 +326,8 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             <div className="panel-head">Notes</div>
             <div className="panel-body">
               <DetailRows onEdit={handleSave} rows={[
-                { label: 'Booking notes', value: booking.Booking_Notes || '—', field: 'Booking_Notes', raw: booking.Booking_Notes || '' },
-                { label: 'Reservation', value: booking.Reservation_Comments || '—', field: 'Reservation_Comments', raw: booking.Reservation_Comments || '' },
+                { label: 'Booking notes', value: booking.Booking_Notes || '—', field: 'Booking_Notes', type: 'multiline', raw: booking.Booking_Notes || '' },
+                { label: 'Reservation', value: booking.Reservation_Comments || '—', field: 'Reservation_Comments', type: 'multiline', raw: booking.Reservation_Comments || '' },
               ]} />
             </div>
           </div>
@@ -455,22 +455,50 @@ function EditableCell({ value, display, field, type, onEdit }) {
   }
 
   if (editing) {
+    const isMultiline = type === 'multiline'
     return (
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        <input
-          type={type === 'date' ? 'date' : type === 'number' ? 'number' : 'text'}
-          value={editValue}
-          onChange={e => setEditValue(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false) }}
-          onBlur={() => setTimeout(handleSave, 150)}
-          autoFocus
-          disabled={saving}
-          style={{
-            fontSize: 13, padding: '2px 6px', width: '100%',
-            border: '0.5px solid var(--blue-mid)', borderRadius: 4,
-            outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
-          }}
-        />
+      <div style={{ display: 'flex', gap: 4, alignItems: isMultiline ? 'flex-start' : 'center' }}>
+        {isMultiline ? (
+          <textarea
+            value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') setEditing(false) }}
+            autoFocus
+            disabled={saving}
+            rows={3}
+            style={{
+              fontSize: 13, padding: '4px 6px', width: '100%',
+              border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+              outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+              fontFamily: 'var(--font-sans)', resize: 'vertical',
+            }}
+          />
+        ) : (
+          <input
+            type={type === 'date' ? 'date' : type === 'number' ? 'number' : 'text'}
+            value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false) }}
+            onBlur={() => setTimeout(handleSave, 150)}
+            autoFocus
+            disabled={saving}
+            style={{
+              fontSize: 13, padding: '2px 6px', width: '100%',
+              border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+              outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+            }}
+          />
+        )}
+        {isMultiline && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <button onClick={handleSave} disabled={saving} className="btn btn-sm" style={{ fontSize: 10, padding: '2px 6px' }}>
+              {saving ? '...' : 'Save'}
+            </button>
+            <button onClick={() => setEditing(false)} style={{ fontSize: 10, padding: '2px 6px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
     )
   }
