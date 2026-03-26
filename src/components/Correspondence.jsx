@@ -138,7 +138,11 @@ export default function Correspondence({ tours, onSelectBooking, allBookings }) 
           {loading ? (
             <div style={{ padding: 20, fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>Loading emails...</div>
           ) : filtered.length === 0 ? (
-            <div style={{ padding: 20, fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>No emails match this filter</div>
+            <div style={{ padding: 20, fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
+              {emails.length === 0
+                ? 'No emails stored yet. Emails are recorded when you send enquiries or poll Gmail for replies from lodge detail views.'
+                : 'No emails match this filter'}
+            </div>
           ) : (
             filtered.slice(0, 100).map((em) => {
               const isOut = em.direction === 'outbound'

@@ -29,14 +29,20 @@ export default async function(req, res) {
       return res.status(400).json({ error: 'No data provided' });
     }
 
-    // Validate each record has an id
-    for (var i = 0; i < data.length; i++) {
-      if (!data[i].id) {
-        return res.status(400).json({ error: 'Record at index ' + i + ' missing id' });
-      }
-    }
+    var action = body.action || 'update';
 
-    var result = await zohoApi('PUT', module, { data: data });
+    if (action === 'create') {
+      // POST to create new records
+      var result = await zohoApi('POST', module, { data: data });
+    } else {
+      // PUT to update existing records
+      for (var i = 0; i < data.length; i++) {
+        if (!data[i].id) {
+          return res.status(400).json({ error: 'Record at index ' + i + ' missing id' });
+        }
+      }
+      var result = await zohoApi('PUT', module, { data: data });
+    }
 
     // Check per-record results
     var results = (result && result.data) || [];

@@ -1,8 +1,11 @@
 import React, { useState, useMemo } from 'react'
 
-export default function Lodges({ lodges }) {
+export default function Lodges({ lodges, onRefresh }) {
   const [search, setSearch] = useState('')
   const [expandedCountry, setExpandedCountry] = useState(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [newLodge, setNewLodge] = useState({ Name: '', Email: '', Country: '', Lodge_Currency: '', Contact_First_Name: '' })
+  const [saving, setSaving] = useState(false)
 
   // Group by country
   const grouped = useMemo(() => {
@@ -52,14 +55,87 @@ export default function Lodges({ lodges }) {
     )
   }
 
+  const handleAddLodge = async () => {
+    if (!newLodge.Name.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/zoho-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: 'Lodges', action: 'create', data: [newLodge] }),
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) throw new Error(result.error || 'Create failed')
+      setNewLodge({ Name: '', Email: '', Country: '', Lodge_Currency: '', Contact_First_Name: '' })
+      setShowAdd(false)
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const totalLodges = (lodges || []).length
 
   return (
     <div>
-      <h1 style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Lodges</h1>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-        {totalLodges} lodges across {countries.length} countries
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Lodges</h1>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            {totalLodges} lodges across {countries.length} countries
+          </p>
+        </div>
+        <button
+          className="btn btn-primary btn-sm"
+          style={{ fontSize: 12, padding: '6px 14px' }}
+          onClick={() => setShowAdd(!showAdd)}
+        >
+          {showAdd ? 'Cancel' : '+ Add lodge'}
+        </button>
+      </div>
+
+      {/* Add lodge form */}
+      {showAdd && (
+        <div style={{
+          padding: 16, marginBottom: 16, background: 'var(--bg-secondary)',
+          border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <input placeholder="Lodge name *" value={newLodge.Name} onChange={e => setNewLodge({ ...newLodge, Name: e.target.value })}
+              style={{ fontSize: 13, padding: '6px 10px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none' }} />
+            <input placeholder="Email" value={newLodge.Email} onChange={e => setNewLodge({ ...newLodge, Email: e.target.value })}
+              style={{ fontSize: 13, padding: '6px 10px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none' }} />
+            <input placeholder="Contact name" value={newLodge.Contact_First_Name} onChange={e => setNewLodge({ ...newLodge, Contact_First_Name: e.target.value })}
+              style={{ fontSize: 13, padding: '6px 10px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <input placeholder="Country" value={newLodge.Country} onChange={e => setNewLodge({ ...newLodge, Country: e.target.value })}
+              style={{ fontSize: 13, padding: '6px 10px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none' }} />
+            <select value={newLodge.Lodge_Currency} onChange={e => setNewLodge({ ...newLodge, Lodge_Currency: e.target.value })}
+              style={{ fontSize: 13, padding: '6px 10px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)' }}>
+              <option value="">Currency</option>
+              <option value="ZAR">ZAR</option>
+              <option value="NAD">NAD</option>
+              <option value="BWP">BWP</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="SZL">SZL</option>
+              <option value="MZN">MZN</option>
+              <option value="ZMW">ZMW</option>
+            </select>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleAddLodge}
+              disabled={saving || !newLodge.Name.trim()}
+              style={{ fontSize: 12 }}
+            >
+              {saving ? 'Adding...' : 'Add lodge'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <input

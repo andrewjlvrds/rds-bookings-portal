@@ -213,7 +213,7 @@ export default function App() {
     }
 
     if (activeView === 'lodges') {
-      return <Lodges lodges={lodges} />
+      return <Lodges lodges={lodges} onRefresh={() => refreshData()} />
     }
 
     if (activeView === 'correspondence') {
