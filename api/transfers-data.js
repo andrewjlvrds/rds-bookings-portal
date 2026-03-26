@@ -55,19 +55,22 @@ export default async function(req, res) {
       }
     }
 
-    // Filter to only bookings that have transfer data or airport transfers required
+    // Filter to only current/future tours and bookings with transfer data
+    var today = new Date().toISOString().split('T')[0];
     var transfers = allBookings.filter(function(bk) {
+      // Must have a tour end date in the future (or no end date but start date in future)
+      var endDate = bk.Tour_end_date || bk.Tour_start_date || '';
+      if (endDate && endDate < today) return false;
+      
       return bk.Airport_Transfers_Required ||
         bk.Arrival_Flight_Details ||
         bk.Departure_Flight_Details ||
-        bk.Departure_Flight_Details_CT_to_home ||
-        bk.Departure_Flight_from_CT_to_Home ||
         bk.Additional_Transfers_Required;
     });
 
     res.status(200).json({
       success: true,
-      bookings: allBookings,
+      bookings: transfers,
       transfers: transfers.length,
       total: allBookings.length,
       api_error: apiError || undefined,
