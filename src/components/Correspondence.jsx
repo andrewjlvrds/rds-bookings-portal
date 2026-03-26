@@ -230,26 +230,25 @@ function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onView
   const [body, setBody] = useState(emBody || '')
   const [fetching, setFetching] = useState(false)
   const [fetchError, setFetchError] = useState(null)
+  const hasBody = body && body.trim().length > 0
+  const msgId = em.message_id || em.gmail_id
 
-  // Auto-fetch from Gmail if body is empty and we have a message_id
-  useEffect(() => {
-    const msgId = em.message_id || em.gmail_id
-    const hasBody = emBody && emBody.trim().length > 0
-    if (!hasBody && msgId) {
-      setFetching(true)
-      fetch('/api/gmail-fetch-body?message_id=' + encodeURIComponent(msgId))
-        .then(r => {
-          if (!r.ok) throw new Error('HTTP ' + r.status)
-          return r.json()
-        })
-        .then(d => {
-          if (d.body) setBody(d.body)
-          else setFetchError('Empty response')
-        })
-        .catch(err => setFetchError(err.message))
-        .finally(() => setFetching(false))
-    }
-  }, [])
+  const handleFetchBody = () => {
+    if (!msgId) return
+    setFetching(true)
+    setFetchError(null)
+    fetch('/api/gmail-fetch-body?message_id=' + encodeURIComponent(msgId))
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+        return r.json()
+      })
+      .then(d => {
+        if (d.body && d.body.trim()) setBody(d.body)
+        else setFetchError('No content found in Gmail')
+      })
+      .catch(err => setFetchError(err.message))
+      .finally(() => setFetching(false))
+  }
 
   return (
     <div style={{ padding: '0 14px 12px 76px' }}>
@@ -264,7 +263,22 @@ function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onView
         fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
         whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto',
       }}>
-        {fetching ? 'Loading content from Gmail...' : fetchError ? '(Failed to load: ' + fetchError + ')' : (body || '(no content)')}
+        {hasBody ? body : (
+          <div>
+            <span style={{ color: 'var(--text-muted)' }}>(no content stored)</span>
+            {msgId && (
+              <button
+                onClick={handleFetchBody}
+                disabled={fetching}
+                className="btn btn-sm"
+                style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px' }}
+              >
+                {fetching ? 'Fetching...' : 'Load from Gmail'}
+              </button>
+            )}
+            {fetchError && <span style={{ color: 'var(--red-text)', fontSize: 11, marginLeft: 8 }}>{fetchError}</span>}
+          </div>
+        )}
       </div>
       {em.attachments && em.attachments.length > 0 && (
         <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>

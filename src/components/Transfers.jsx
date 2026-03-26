@@ -54,10 +54,6 @@ export default function Transfers() {
       // Skip cancelled bookings
       if (status === 'Cancelled' || status === 'Refunded') return
 
-      // Skip past tours (client-side filter as backup)
-      const endOrStart = tourEnd || tourStart
-      if (endOrStart && endOrStart < today) return
-
       // Arrival transfer
       if (bk.Arrival_Flight_Details || bk.Request_Capey_Leg_1) {
         rows.push({
@@ -172,11 +168,9 @@ export default function Transfers() {
     return result
   }, [transferRows, tourFilter, statusFilter, search])
 
-  // Split upcoming/past
+  // Split upcoming/past — use tour start date if available
   const today = new Date().toISOString().split('T')[0]
-  const upcoming = filtered.filter(r => !r.date || r.date >= today)
-  const past = filtered.filter(r => r.date && r.date < today)
-  const displayed = showPast ? filtered : upcoming
+  const displayed = filtered
 
   return (
     <div>
@@ -233,16 +227,8 @@ export default function Transfers() {
       />
 
       {!loading && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span>Showing {displayed.length} transfers ({upcoming.length} upcoming{past.length > 0 ? ', ' + past.length + ' past' : ''})</span>
-          {past.length > 0 && (
-            <button
-              onClick={() => setShowPast(!showPast)}
-              style={{ fontSize: 11, background: 'none', border: 'none', color: 'var(--blue-text)', cursor: 'pointer', textDecoration: 'underline' }}
-            >
-              {showPast ? 'Hide past' : 'Show past'}
-            </button>
-          )}
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+          Showing {displayed.length} transfers
         </div>
       )}
 
