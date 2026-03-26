@@ -231,10 +231,17 @@ function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onView
   const [fetching, setFetching] = useState(false)
   const [fetchError, setFetchError] = useState(null)
   const hasBody = body && body.trim().length > 0
-  const msgId = em.message_id || em.gmail_id
+  const msgId = em.message_id || em.gmail_id || em.id || ''
+
+  // Auto-fetch on mount if no body
+  useEffect(() => {
+    if (!hasBody && msgId && !fetching) {
+      handleFetchBody()
+    }
+  }, [])
 
   const handleFetchBody = () => {
-    if (!msgId) return
+    if (!msgId) { setFetchError('No message ID available'); return }
     setFetching(true)
     setFetchError(null)
     fetch('/api/gmail-fetch-body?message_id=' + encodeURIComponent(msgId))
@@ -243,8 +250,9 @@ function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onView
         return r.json()
       })
       .then(d => {
+        if (d.error) { setFetchError(d.error); return }
         if (d.body && d.body.trim()) setBody(d.body)
-        else setFetchError('No content found in Gmail')
+        else setFetchError('Gmail returned empty body')
       })
       .catch(err => setFetchError(err.message))
       .finally(() => setFetching(false))
@@ -265,18 +273,19 @@ function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onView
       }}>
         {hasBody ? body : (
           <div>
-            <span style={{ color: 'var(--text-muted)' }}>(no content stored)</span>
-            {msgId && (
-              <button
-                onClick={handleFetchBody}
-                disabled={fetching}
-                className="btn btn-sm"
-                style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px' }}
-              >
-                {fetching ? 'Fetching...' : 'Load from Gmail'}
-              </button>
+            {fetching && <span style={{ color: 'var(--text-muted)' }}>Loading from Gmail...</span>}
+            {!fetching && !fetchError && <span style={{ color: 'var(--text-muted)' }}>(loading...)</span>}
+            {fetchError && (
+              <span>
+                <span style={{ color: 'var(--text-muted)' }}>(no content) </span>
+                <span style={{ color: 'var(--red-text)', fontSize: 11 }}>{fetchError}</span>
+                <button
+                  onClick={handleFetchBody}
+                  className="btn btn-sm"
+                  style={{ marginLeft: 8, fontSize: 10, padding: '1px 6px' }}
+                >Retry</button>
+              </span>
             )}
-            {fetchError && <span style={{ color: 'var(--red-text)', fontSize: 11, marginLeft: 8 }}>{fetchError}</span>}
           </div>
         )}
       </div>
