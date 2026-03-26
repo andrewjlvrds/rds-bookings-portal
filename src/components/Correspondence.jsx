@@ -34,7 +34,7 @@ export default function Correspondence() {
   const [expanded, setExpanded] = useState(null)
   const [search, setSearch] = useState('')
   const [directionFilter, setDirectionFilter] = useState('all')
-  const [labelSource, setLabelSource] = useState('tour')
+  const [labelSource, setLabelSource] = useState('all')
   const [summary, setSummary] = useState(null)
   const [loadingSummary, setLoadingSummary] = useState(false)
 
@@ -55,28 +55,37 @@ export default function Correspondence() {
       .catch(() => setLoadingLabels(false))
   }, [])
 
-  // Parse label hierarchy
+  // Parse label hierarchy — merge all sources, skip noise labels
   const { tours, lodgesByTour } = useMemo(() => {
-    const activeLabels = labels.filter(l => {
-      if (labelSource === 'inbox') return l.name.startsWith('INBOX/')
-      if (labelSource === 'lodgeBookings') return l.name.startsWith('Lodge Bookings/')
-      if (labelSource === 'tour') return l._source === 'tour'
-      return false
-    })
+    // Skip known non-tour labels
+    const skipLabels = ['google admin', '2025 archive', 'previous 2025 emails', 'lodges general', 'general']
 
     const tourMap = {}
     const lodgeMap = {}
 
-    activeLabels.forEach(l => {
-      const parts = l.shortName.split('/')
+    labels.forEach(l => {
+      // Strip prefix to get the useful part
+      let short = l.shortName
+      if (l.name.startsWith('INBOX/')) short = l.shortName
+      else if (l.name.startsWith('Lodge Bookings/')) short = l.shortName
+      else if (l._source === 'tour') short = l.shortName
+      else return
+
+      if (skipLabels.includes(short.toLowerCase())) return
+
+      const parts = short.split('/')
       if (parts.length === 1) {
-        tourMap[l.shortName] = l
-        if (!lodgeMap[l.shortName]) lodgeMap[l.shortName] = []
+        // Tour-level label — deduplicate by shortName
+        if (!tourMap[short]) tourMap[short] = l
+        if (!lodgeMap[short]) lodgeMap[short] = []
       } else if (parts.length === 2) {
         const tourPart = parts[0]
         const lodgePart = parts[1]
         if (!lodgeMap[tourPart]) lodgeMap[tourPart] = []
-        lodgeMap[tourPart].push({ ...l, lodgeName: lodgePart })
+        // Deduplicate lodges by name
+        if (!lodgeMap[tourPart].some(x => x.lodgeName === lodgePart)) {
+          lodgeMap[tourPart].push({ ...l, lodgeName: lodgePart })
+        }
         if (!tourMap[tourPart]) tourMap[tourPart] = null
       }
     })
@@ -196,27 +205,7 @@ export default function Correspondence() {
         Browse emails by tour and lodge from Gmail
       </p>
 
-      {/* Source toggle */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 14, width: 'fit-content', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '0.5px solid var(--border-default)' }}>
-        {[
-          { key: 'tour', label: 'Tour labels' },
-          { key: 'inbox', label: 'Inbox (legacy)' },
-          { key: 'lodgeBookings', label: 'Lodge Bookings (legacy)' },
-        ].map(g => (
-          <button
-            key={g.key}
-            onClick={() => { setLabelSource(g.key); setSelectedTour(null); setSelectedLodge(null); setSummary(null) }}
-            style={{
-              padding: '6px 16px', fontSize: 12, fontWeight: 500, border: 'none',
-              cursor: 'pointer',
-              background: labelSource === g.key ? 'var(--blue-mid)' : 'var(--bg-secondary)',
-              color: labelSource === g.key ? '#fff' : 'var(--text-secondary)',
-            }}
-          >{g.label}</button>
-        ))}
-      </div>
-
-      {/* Tour buttons */}
+      {/* Tour buttons with year-colour borders */}
       {loadingLabels ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>Loading labels...</div>
       ) : (
@@ -224,6 +213,16 @@ export default function Correspondence() {
           {tours.map(t => {
             const isSelected = selectedTour && selectedTour.key === t.key
             const lodgeCount = (lodgesByTour[t.key] || []).length
+            // Determine year for colour coding
+            const yearMatch = t.key.match(/(20\d{2})/) || tourDisplay(t.key).match(/'(\d{2})/)
+            let yearColor = 'var(--border-default)'
+            if (yearMatch) {
+              const yr = yearMatch[1].length === 4 ? yearMatch[1] : '20' + yearMatch[1]
+              if (yr === '2026') yearColor = '#3b82f6'  // blue
+              else if (yr === '2027') yearColor = '#8b5cf6'  // purple
+              else if (yr === '2028') yearColor = '#f59e0b'  // amber
+              else if (yr === '2025') yearColor = '#9ca3af'  // grey
+            }
             return (
               <button
                 key={t.key}
@@ -232,7 +231,10 @@ export default function Correspondence() {
                   else { setSelectedTour(t); setSelectedLodge(null); setSummary(null) }
                 }}
                 className={'filter-btn' + (isSelected ? ' active' : '')}
-                style={{ fontSize: 12 }}
+                style={{
+                  fontSize: 12,
+                  borderLeft: isSelected ? undefined : `3px solid ${yearColor}`,
+                }}
               >
                 {tourDisplay(t.key)}
                 {lodgeCount > 0 && (
