@@ -73,10 +73,14 @@ export default async function(req, res) {
       bookings: transfers,
       transfers: transfers.length,
       total: allBookings.length,
+      today: today,
+      filtered_out: allBookings.length - transfers.length,
       api_error: apiError || undefined,
+      version: 2,
     });
   } catch (err) {
     console.error('transfers-data error:', err.message);
     res.status(500).json({ error: err.message });
   }
 }
+// force redeploy 1774528653
