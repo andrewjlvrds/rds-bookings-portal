@@ -7,6 +7,7 @@ export default function Transfers() {
   const [apiError, setApiError] = useState(null)
   const [tourFilter, setTourFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [showPast, setShowPast] = useState(false)
   const [search, setSearch] = useState('')
   const [transferStatuses, setTransferStatuses] = useState(() => {
     try { return JSON.parse(localStorage.getItem('rds_transfer_statuses') || '{}') } catch (e) { return {} }
@@ -171,10 +172,11 @@ export default function Transfers() {
     return result
   }, [transferRows, tourFilter, statusFilter, search])
 
-  // Group by tour date for display
+  // Split upcoming/past
   const today = new Date().toISOString().split('T')[0]
-  const upcoming = filtered.filter(r => (r.date || '') >= today)
-  const past = filtered.filter(r => (r.date || '') < today)
+  const upcoming = filtered.filter(r => !r.date || r.date >= today)
+  const past = filtered.filter(r => r.date && r.date < today)
+  const displayed = showPast ? filtered : upcoming
 
   return (
     <div>
@@ -231,8 +233,16 @@ export default function Transfers() {
       />
 
       {!loading && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-          Showing {filtered.length} transfers ({upcoming.length} upcoming, {past.length} past)
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span>Showing {displayed.length} transfers ({upcoming.length} upcoming{past.length > 0 ? ', ' + past.length + ' past' : ''})</span>
+          {past.length > 0 && (
+            <button
+              onClick={() => setShowPast(!showPast)}
+              style={{ fontSize: 11, background: 'none', border: 'none', color: 'var(--blue-text)', cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              {showPast ? 'Hide past' : 'Show past'}
+            </button>
+          )}
         </div>
       )}
 
@@ -266,12 +276,12 @@ export default function Transfers() {
           <tbody>
             {loading ? (
               <tr><td colSpan={9} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading transfers...</td></tr>
-            ) : filtered.length === 0 ? (
+            ) : displayed.length === 0 ? (
               <tr><td colSpan={9} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
                 {transferRows.length === 0 ? 'No transfer data found in bookings.' : 'No transfers match this filter.'}
               </td></tr>
             ) : (
-              filtered.map(r => {
+              displayed.map(r => {
                 const isPast = (r.date || '') < today
                 const capeyColor = r.capeyStatus === 'Confirmed' || r.capeyStatus === 'Booked'
                   ? 'var(--green-text)'
