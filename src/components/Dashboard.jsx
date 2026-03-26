@@ -29,7 +29,7 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
     <div>
       {/* Hero */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>RDS Lodge Bookings</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Lodge Bookings</h1>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>
           {activeTours.length + newBuild.length} active tours · {totalLodges} lodge bookings · {confirmed} confirmed
         </p>
@@ -37,15 +37,6 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
 
       {/* Navigation panels */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
-        <NavPanel
-          title="Tours"
-          icon="🗺"
-          desc={`${activeTours.length} active tours across ${years.join(', ')}`}
-          detail={`${confirmed} of ${totalLodges} lodges confirmed (${totalLodges ? Math.round(confirmed / totalLodges * 100) : 0}%)`}
-          color="#1565C0"
-          bg="#E3F2FD"
-          onClick={() => onSelectView('dashboard-tours')}
-        />
         <NavPanel
           title="Payments"
           icon="💰"
@@ -64,18 +55,6 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
           bg="#F3E5F5"
           onClick={() => onSelectView('correspondence')}
         />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
-        <NavPanel
-          title="Transfers"
-          icon="✈️"
-          desc="Client airport transfers"
-          detail="Flight details, Capey status, transfer tracking"
-          color="#E65100"
-          bg="#FFF3E0"
-          onClick={() => onSelectView('transfers')}
-        />
         <NavPanel
           title="Lodges"
           icon="🏨"
@@ -84,16 +63,6 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
           color="#2E7D32"
           bg="#E8F5E9"
           onClick={() => onSelectView('lodges')}
-        />
-        <NavPanel
-          title="Getting Started"
-          icon="📖"
-          desc="New here? Start here"
-          detail="Step-by-step guide to the booking portal"
-          color="#00695C"
-          bg="#E0F2F1"
-          onClick={() => onSelectView('getting-started')}
-          highlight
         />
       </div>
 
@@ -178,26 +147,9 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
         </div>
       ))}
 
-      {/* New & draft tours */}
-      {(newBuild.length > 0 || draftTours.length > 0) && (
-        <div style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>New tours</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
-            {[...newBuild, ...draftTours].map(tour => (
-              <TourCard
-                key={tour.id}
-                tour={tour}
-                onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
-                isDraft={typeof tour.id === 'string' && tour.id.startsWith('local_')}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTours.length === 0 && newBuild.length === 0 && draftTours.length === 0 && (
+      {activeTours.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)' }}>
-          No tours to display. Create a new tour from the sidebar.
+          No committed tours to display. Create tours in the Tour Planner tab.
         </div>
       )}
     </div>

@@ -11,6 +11,8 @@ import Lodges from './components/Lodges'
 import Correspondence from './components/Correspondence'
 import Transfers from './components/Transfers'
 import Guests from './components/Guests'
+import GuestDashboard from './components/GuestDashboard'
+import PlannerDashboard from './components/PlannerDashboard'
 import './styles/global.css'
 
 const API = ''
@@ -217,7 +219,7 @@ export default function App() {
         <Dashboard
           tours={tours}
           allBookings={allBookings}
-          onSelectTour={handleSelectTour}
+          onSelectTour={(tour) => { setActiveTour(tour); setActiveView('itinerary') }}
           onSelectView={setActiveView}
         />
       )
@@ -240,7 +242,9 @@ export default function App() {
     }
 
     if (activeView === 'guest-dashboard' || activeView === 'guests') {
-      return <Guests tours={tours} />
+      return (
+        <GuestDashboard tours={tours} onSelectView={setActiveView} onSelectTour={(tour) => { setActiveTour(tour); setActiveView('guest-tour') }} />
+      )
     }
 
     if (activeTour && activeView === 'guest-tour') {
@@ -303,10 +307,9 @@ export default function App() {
     }
 
     return (
-      <Dashboard
+      <PlannerDashboard
         tours={tours}
-        allBookings={allBookings}
-        onSelectTour={handleSelectTour}
+        onSelectTour={(tour) => { setActiveTour(tour); setActiveView('itinerary') }}
         onSelectView={setActiveView}
       />
     )
