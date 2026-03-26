@@ -32,7 +32,7 @@ export default function Transfers() {
   }
 
   useEffect(() => {
-    fetch('/api/transfers-data')
+    fetch('/api/transfers')
       .then(r => r.json())
       .then(d => { setBookings(d.bookings || []); if (d.api_error) setApiError(d.api_error); if (!d.version) setApiError('Old API version - redeploy needed'); setLoading(false) })
       .catch(err => { setApiError(err.message); setLoading(false) })

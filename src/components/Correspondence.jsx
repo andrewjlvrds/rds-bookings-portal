@@ -234,7 +234,8 @@ function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onView
   // Auto-fetch from Gmail if body is empty and we have a message_id
   useEffect(() => {
     const msgId = em.message_id || em.gmail_id
-    if (!emBody && msgId) {
+    const hasBody = emBody && emBody.trim().length > 0
+    if (!hasBody && msgId) {
       setFetching(true)
       fetch('/api/gmail-fetch-body?message_id=' + encodeURIComponent(msgId))
         .then(r => {
