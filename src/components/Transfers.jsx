@@ -8,6 +8,28 @@ export default function Transfers() {
   const [tourFilter, setTourFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [transferStatuses, setTransferStatuses] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('rds_transfer_statuses') || '{}') } catch (e) { return {} }
+  })
+
+  const STATUSES = ['Not started', 'Booked', 'Confirmed', 'Completed']
+  const STATUS_COLORS = {
+    'Not started': { bg: '#F5F5F5', color: 'var(--text-muted)', border: '#DDD' },
+    'Booked': { bg: '#FFF8E1', color: '#F57F17', border: '#FFD54F' },
+    'Confirmed': { bg: '#E8F5E9', color: '#2E7D32', border: '#A5D6A7' },
+    'Completed': { bg: '#E3F2FD', color: '#1565C0', border: '#90CAF9' },
+  }
+
+  const cycleStatus = (id) => {
+    setTransferStatuses(prev => {
+      const current = prev[id] || 'Not started'
+      const idx = STATUSES.indexOf(current)
+      const next = STATUSES[(idx + 1) % STATUSES.length]
+      const updated = { ...prev, [id]: next }
+      localStorage.setItem('rds_transfer_statuses', JSON.stringify(updated))
+      return updated
+    })
+  }
 
   useEffect(() => {
     fetch('/api/transfers-data')
@@ -218,10 +240,11 @@ export default function Transfers() {
             <col style={{ width: 150 }} />
             <col style={{ width: 110 }} />
             <col style={{ width: 80 }} />
-            <col style={{ width: '30%' }} />
+            <col style={{ width: '25%' }} />
             <col style={{ width: 50 }} />
-            <col style={{ width: 100 }} />
             <col style={{ width: 90 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 95 }} />
           </colgroup>
           <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg-primary)' }}>
             <tr>
@@ -232,14 +255,15 @@ export default function Transfers() {
               <th>Flight details</th>
               <th>Pax</th>
               <th>Hotel</th>
-              <th>Capey status</th>
+              <th>Capey</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading transfers...</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading transfers...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
                 {transferRows.length === 0 ? 'No transfer data found in bookings.' : 'No transfers match this filter.'}
               </td></tr>
             ) : (
@@ -285,6 +309,25 @@ export default function Transfers() {
                           {r.requestCapey ? 'Requested' : '—'}
                         </span>
                       )}
+                    </td>
+                    <td>
+                      {(() => {
+                        const st = transferStatuses[r.id] || 'Not started'
+                        const sc = STATUS_COLORS[st] || STATUS_COLORS['Not started']
+                        return (
+                          <button
+                            onClick={() => cycleStatus(r.id)}
+                            style={{
+                              fontSize: 10, fontWeight: 500, padding: '3px 8px',
+                              borderRadius: 4, border: '1px solid ' + sc.border,
+                              background: sc.bg, color: sc.color,
+                              cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {st}
+                          </button>
+                        )
+                      })()}
                     </td>
                   </tr>
                 )
