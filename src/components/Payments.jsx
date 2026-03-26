@@ -30,7 +30,11 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   // Apply filters
   let filtered = payments
   if (filter !== 'all') {
-    filtered = filtered.filter(p => p.statusKey === filter)
+    if (filter === 'upcoming') {
+      filtered = filtered.filter(p => p.statusKey === 'upcoming' || p.statusKey === 'due-soon')
+    } else {
+      filtered = filtered.filter(p => p.statusKey === filter)
+    }
   }
   if (tourFilter !== 'all') {
     filtered = filtered.filter(p => p.tour === tourFilter)
@@ -225,13 +229,13 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-        {['all', 'overdue', 'due-soon', 'upcoming', 'paid'].map(f => (
+        {['all', 'overdue', 'upcoming', 'paid'].map(f => (
           <button
             key={f}
             className={'filter-btn' + (filter === f ? ' active' : '')}
             onClick={() => setFilter(f)}
           >
-            {f === 'all' ? 'All' : f === 'due-soon' ? 'Due soon' : f.charAt(0).toUpperCase() + f.slice(1)}
+            {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
         ))}
         <span style={{ fontSize: 12, color: 'var(--text-hint)', padding: '5px 4px' }}>|</span>
