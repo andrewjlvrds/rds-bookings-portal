@@ -50,14 +50,14 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
         updates.Deposit_Paid_Date = paidDate
         updates.Deposit_Paid_Amount = p.amount || 0
       } else if (p.slot === '2nd payment') {
-        updates.Second_Payment_Paid_Date = paidDate
-        updates.Second_Payment_Paid_Amount = p.amount || 0
+        updates.nd_Payment_Paid_Date = paidDate
+        updates.nd_Payment_Paid_Amount = p.amount || 0
       } else if (p.slot === '3rd payment') {
-        updates.Third_Payment_Paid_Date = paidDate
-        updates.Third_Payment_Paid_Amount = p.amount || 0
+        updates.rd_Payment_Paid_Date = paidDate
+        updates.rd_Payment_Paid_Amount = p.amount || 0
       } else if (p.slot === '4th payment') {
-        updates.Fourth_Payment_Paid_Date = paidDate
-        updates.Fourth_Payment_Paid_Amount = p.amount || 0
+        updates.th_Payment_Paid_Date = paidDate
+        updates.th_Payment_Paid_Amount = p.amount || 0
       }
 
       // Update booking status based on what's being paid
@@ -272,22 +272,22 @@ function extractPayments(bookings, now) {
         label: '2nd payment', slot: '2nd payment',
         dueDate: bk['2nd  Payment Due Date'] || bk.Second_Payment_Due_Date,
         amount: bk['2nd Payment Amount'] || bk.Second_Payment_Amount,
-        paidDate: bk.Second_Payment_Paid_Date,
-        paidAmount: bk.Second_Payment_Paid_Amount,
+        paidDate: bk.nd_Payment_Paid_Date,
+        paidAmount: bk.nd_Payment_Paid_Amount,
       },
       {
         label: '3rd payment', slot: '3rd payment',
         dueDate: bk['3rd Payment Due Date'] || bk.Third_Payment_Due_Date,
         amount: bk['3rd Payment amount'] || bk.Third_Payment_Amount,
-        paidDate: bk.Third_Payment_Paid_Date,
-        paidAmount: bk.Third_Payment_Paid_Amount,
+        paidDate: bk.rd_Payment_Paid_Date,
+        paidAmount: bk.rd_Payment_Paid_Amount,
       },
       {
         label: '4th payment', slot: '4th payment',
         dueDate: bk['4th Payment Due Date'] || bk.Fourth_Payment_Due_Date,
         amount: bk['4th Payment Amount'] || bk.Fourth_Payment_Amount,
-        paidDate: bk.Fourth_Payment_Paid_Date,
-        paidAmount: bk.Fourth_Payment_Paid_Amount,
+        paidDate: bk.th_Payment_Paid_Date,
+        paidAmount: bk.th_Payment_Paid_Amount,
       },
     ]
 

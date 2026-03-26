@@ -55,11 +55,11 @@ export default async function(req, res) {
       'Deposit_Due_Date','Second_Payment_Amount','Second_Payment_Due_Date',
       'Third_Payment_Amount','Third_Payment_Due_Date',
       'Fourth_Payment_Amount','Fourth_Payment_Due_Date',
-      'Deposit_Paid_Date','Second_Payment_Paid_Date',
-      'Third_Payment_Paid_Date','Fourth_Payment_Paid_Date',
-      'Deposit_Paid_Amount','Second_Payment_Paid_Amount',
-      'Third_Payment_Paid_Amount','Fourth_Payment_Paid_Amount',
-      'Payment_Notes','Balance_Due',
+      'Deposit_Paid_Date','nd_Payment_Paid_Date',
+      'rd_Payment_Paid_Date','th_Payment_Paid_Date',
+      'Deposit_Paid_Amount','nd_Payment_Paid_Amount',
+      'rd_Payment_Paid_Amount','th_Payment_Paid_Amount',
+      'Payment_Note',
       'Email','Contact_Name','Exchange_Rate','Currency',
       'Day_Description','id'
     ].join(',');

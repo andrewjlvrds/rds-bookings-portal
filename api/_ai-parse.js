@@ -83,16 +83,16 @@ var FIELD_MAP = {
   suggested_status: { zoho: 'Status' },
   // Receipt fields — mapped dynamically based on payment_slot
   balance_due: { zoho: 'Balance_Due' },
-  receipt_reference: { zoho: 'Payment_Notes', transform: function(v) { return 'Receipt: ' + v; } },
+  receipt_reference: { zoho: 'Payment_Note', transform: function(v) { return 'Receipt: ' + v; } },
   // payment_received_amount, payment_received_date, payment_slot handled in extractionToZohoFields
 };
 
 // Map payment slot to Zoho field prefixes
 var SLOT_FIELD_MAP = {
   deposit: { paid_date: 'Deposit_Paid_Date', paid_amount: 'Deposit_Paid_Amount' },
-  '2nd_payment': { paid_date: 'Second_Payment_Paid_Date', paid_amount: 'Second_Payment_Paid_Amount' },
-  '3rd_payment': { paid_date: 'Third_Payment_Paid_Date', paid_amount: 'Third_Payment_Paid_Amount' },
-  '4th_payment': { paid_date: 'Fourth_Payment_Paid_Date', paid_amount: 'Fourth_Payment_Paid_Amount' },
+  '2nd_payment': { paid_date: 'nd_Payment_Paid_Date', paid_amount: 'nd_Payment_Paid_Amount' },
+  '3rd_payment': { paid_date: 'rd_Payment_Paid_Date', paid_amount: 'rd_Payment_Paid_Amount' },
+  '4th_payment': { paid_date: 'th_Payment_Paid_Date', paid_amount: 'th_Payment_Paid_Amount' },
 };
 
 export async function parseEmail(emailBody, bookingContext) {
@@ -221,9 +221,9 @@ export function extractionToZohoFields(extraction) {
     if (level >= minLevel) {
       var value = field.value;
       if (mapping.transform) value = mapping.transform(value);
-      // For Payment_Notes, append rather than overwrite
-      if (mapping.zoho === 'Payment_Notes' && updates.Payment_Notes) {
-        updates.Payment_Notes += '\n' + value;
+      // For Payment_Note, append rather than overwrite
+      if (mapping.zoho === 'Payment_Note' && updates.Payment_Note) {
+        updates.Payment_Note += '\n' + value;
       } else {
         updates[mapping.zoho] = value;
       }
@@ -232,10 +232,10 @@ export function extractionToZohoFields(extraction) {
     }
   }
 
-  // If we got a payment method or receipt ref, add to Payment_Notes
+  // If we got a payment method or receipt ref, add to Payment_Note
   if (extracted.payment_method && extracted.payment_method.value) {
     var methodNote = 'Method: ' + extracted.payment_method.value;
-    updates.Payment_Notes = updates.Payment_Notes ? updates.Payment_Notes + '\n' + methodNote : methodNote;
+    updates.Payment_Note = updates.Payment_Note ? updates.Payment_Note + '\n' + methodNote : methodNote;
   }
 
   return { updates: updates, flagged: flagged, has_flags: Object.keys(flagged).length > 0 };
