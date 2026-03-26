@@ -25,38 +25,26 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
     ? (lodgeRecord.contact || '')
     : (booking.Contact_Name || '')
 
-  // Fetch emails for this booking
   const fetchEmails = () => {
     setLoadingEmails(true)
     fetch('/api/bp-emails?booking_id=' + bookingId)
       .then(r => r.json())
-      .then(d => {
-        setEmails(d.emails || [])
-        setLoadingEmails(false)
-      })
+      .then(d => { setEmails(d.emails || []); setLoadingEmails(false) })
       .catch(() => setLoadingEmails(false))
   }
 
   useEffect(() => { fetchEmails() }, [bookingId])
 
-  // Check Gmail for new replies
   const handleCheckReplies = async () => {
     setPolling(true)
     try {
       const res = await fetch('/api/poll-gmail', { method: 'POST' })
       const result = await res.json()
-      if (result.stored > 0) {
-        fetchEmails()
-        if (onRefresh) onRefresh()
-      }
-    } catch (err) {
-      console.error('Poll error:', err)
-    } finally {
-      setPolling(false)
-    }
+      if (result.stored > 0) { fetchEmails(); if (onRefresh) onRefresh() }
+    } catch (err) { console.error('Poll error:', err) }
+    finally { setPolling(false) }
   }
 
-  // Save inline edit
   const handleSave = async (field, value) => {
     setSavingEdit(true)
     try {
@@ -70,39 +58,13 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
       if (!res.ok) throw new Error('Failed to update')
       setEditing(null)
       if (onRefresh) onRefresh()
-    } catch (err) {
-      alert('Error: ' + err.message)
-    } finally {
-      setSavingEdit(false)
-    }
+    } catch (err) { alert('Error: ' + err.message) }
+    finally { setSavingEdit(false) }
   }
 
-  // Build payment schedule
-  const payments = []
-  const deposit = parseFloat(booking.Deposit_Amount) || 0
   const total = parseFloat(booking.Total_Amount || booking['Total Amount']) || 0
   const currency = booking.Lodge_Currency || booking.Currency || ''
-
-  if (deposit > 0) {
-    payments.push({
-      label: 'Deposit',
-      amount: deposit,
-      due: booking.Deposit_Due_Date || null,
-    })
-  }
-
-  const paymentFields = [
-    { amount: 'Second_Payment_Amount', due: 'Second_Payment_Due_Date', label: '2nd payment' },
-    { amount: 'Third_Payment_Amount', due: 'Third_Payment_Due_Date', label: '3rd payment' },
-    { amount: 'Fourth_Payment_Amount', due: 'Fourth_Payment_Due_Date', label: '4th payment' },
-  ]
-  paymentFields.forEach(pf => {
-    const amt = parseFloat(booking[pf.amount]) || 0
-    if (amt > 0) {
-      payments.push({ label: pf.label, amount: amt, due: booking[pf.due] || null })
-    }
-  })
-
+  const deposit = parseFloat(booking.Deposit_Amount) || 0
   const today = new Date().toISOString().split('T')[0]
   const cancelBefore = booking.Cancel_Free_Before || ''
   const cancelPolicy = booking.Cancellation_Policy_Text || ''
@@ -111,13 +73,14 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
   const checkIn = booking.Check_in_Date || booking['Check-in'] || ''
   const checkOut = booking.Check_out_Date || booking['Check-out'] || ''
   const nights = booking.Nights || (checkIn && checkOut ? daysBetween(checkIn, checkOut) : '')
-  const meals = booking.Meals || booking['Meals'] || ''
+  const meals = booking.Meals || ''
   const rdsRef = booking.RDS_Reference || ''
   const lodgeRef = booking.Lodge_Reference || ''
   const enquirySent = booking.Enquiry_Sent_Date || ''
   const lastResponse = booking.Last_Response_Date || ''
   const followUp = booking.Follow_up_Date || ''
   const dayDesc = booking.Day_Description || booking['Day Description'] || ''
+  const balanceDue = booking.Balance_Due_calculated
 
   const STATUS_OPTIONS = [
     'Not Started', 'Ready to Send', 'Enquiry Sent', 'Availability Confirmed',
@@ -128,13 +91,10 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
   return (
     <div>
       {/* Back button */}
-      <button
-        onClick={onBack}
-        style={{
-          background: 'none', border: 'none', color: 'var(--text-muted)',
-          fontSize: 13, padding: '0 0 12px', cursor: 'pointer',
-        }}
-      >
+      <button onClick={onBack} style={{
+        background: 'none', border: 'none', color: 'var(--text-muted)',
+        fontSize: 13, padding: '0 0 12px', cursor: 'pointer',
+      }}>
         ← Back to {tour ? tour.name : 'itinerary'}
       </button>
 
@@ -151,7 +111,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         <div>
           {editing === 'status' ? (
             <select
-              value={editing === 'status' ? (savingEdit ? status : undefined) : status}
+              value={status}
               onChange={e => handleSave('Status', e.target.value)}
               autoFocus
               onBlur={() => setTimeout(() => setEditing(null), 200)}
@@ -176,7 +136,28 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+      {/* Row 1: Tour details + Booking details */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        {/* Tour details panel */}
+        <div className="panel">
+          <div className="panel-head">Tour details</div>
+          <div className="panel-body">
+            {tour ? (
+              <DetailRows rows={[
+                { label: 'Tour', value: tour.name || '—' },
+                { label: 'Departure', value: tour.departure_date ? fmtDateFull(tour.departure_date) : '—' },
+                { label: 'End date', value: tour.end_date ? fmtDateFull(tour.end_date) : '—' },
+                { label: 'Tour status', value: tour.tour_status || '—' },
+                { label: 'Tour type', value: tour.tour_type || '—' },
+                { label: 'Max guests', value: tour.max_guests || '—' },
+                { label: 'Riders', value: tour.num_riders || '—' },
+              ]} />
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No tour linked</div>
+            )}
+          </div>
+        </div>
+
         {/* Booking details panel */}
         <div className="panel">
           <div className="panel-head">Booking details</div>
@@ -196,7 +177,6 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
               ...(credit > 0 ? [{ label: 'Credit applied', value: fmtCurrency(credit, currency), field: 'Credit_Amount', type: 'number', raw: credit }] : []),
             ]} />
 
-            {/* Dates row */}
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light)' }}>
               <DetailRows rows={[
                 { label: 'Enquiry sent', value: enquirySent ? fmtDateFull(enquirySent) : '—' },
@@ -205,7 +185,6 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
               ]} />
             </div>
 
-            {/* Lodge directory info */}
             {lodgeRecord && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light)' }}>
                 <DetailRows rows={[
@@ -218,26 +197,115 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             )}
           </div>
         </div>
+      </div>
 
+      {/* Row 2: Payments + Pax */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Payment & cancellation panel */}
         <div className="panel">
           <div className="panel-head">Payments & cancellation</div>
           <div className="panel-body">
             <DetailRows onEdit={handleSave} rows={[
               { label: 'Total', value: total ? fmtCurrency(total, currency) : '—', field: 'Total_Amount', type: 'number', raw: total || '' },
-              { label: 'Deposit', value: deposit ? fmtCurrency(deposit, currency) : '—', field: 'Deposit_Amount', type: 'number', raw: deposit || '' },
-              { label: 'Deposit due', value: booking.Deposit_Due_Date ? fmtDateFull(booking.Deposit_Due_Date) : '—', field: 'Deposit_Due_Date', type: 'date', raw: booking.Deposit_Due_Date || '' },
-              { label: '2nd payment', value: booking.Second_Payment_Amount ? fmtCurrency(booking.Second_Payment_Amount, currency) : '—', field: 'Second_Payment_Amount', type: 'number', raw: booking.Second_Payment_Amount || '' },
-              { label: '2nd due', value: booking.Second_Payment_Due_Date ? fmtDateFull(booking.Second_Payment_Due_Date) : '—', field: 'Second_Payment_Due_Date', type: 'date', raw: booking.Second_Payment_Due_Date || '' },
-              { label: '3rd payment', value: booking.Third_Payment_Amount ? fmtCurrency(booking.Third_Payment_Amount, currency) : '—', field: 'Third_Payment_Amount', type: 'number', raw: booking.Third_Payment_Amount || '' },
-              { label: '3rd due', value: booking.Third_Payment_Due_Date ? fmtDateFull(booking.Third_Payment_Due_Date) : '—', field: 'Third_Payment_Due_Date', type: 'date', raw: booking.Third_Payment_Due_Date || '' },
+              ...(balanceDue != null && balanceDue !== '' ? [{ label: 'Balance due', value: fmtCurrency(parseFloat(balanceDue) || 0, currency) }] : []),
             ]} />
+
+            {/* Payment slots */}
+            {[
+              { prefix: 'Deposit', amountField: 'Deposit_Amount', dueField: 'Deposit_Due_Date', paidDateField: 'Deposit_Paid_Date', paidAmountField: 'Deposit_Paid_Amount', label: 'Deposit' },
+              { prefix: '2nd', amountField: 'Second_Payment_Amount', dueField: 'Second_Payment_Due_Date', paidDateField: 'nd_Payment_Paid_Date', paidAmountField: 'nd_Payment_Paid_Amount', label: '2nd payment' },
+              { prefix: '3rd', amountField: 'Third_Payment_Amount', dueField: 'Third_Payment_Due_Date', paidDateField: 'rd_Payment_Paid_Date', paidAmountField: 'rd_Payment_Paid_Amount', label: '3rd payment' },
+              { prefix: '4th', amountField: 'Fourth_Payment_Amount', dueField: 'Fourth_Payment_Due_Date', paidDateField: 'th_Payment_Paid_Date', paidAmountField: 'th_Payment_Paid_Amount', label: '4th payment' },
+            ].map(slot => {
+              const amt = parseFloat(booking[slot.amountField]) || 0
+              const due = booking[slot.dueField] || ''
+              const paidDate = booking[slot.paidDateField] || ''
+              const paidAmt = booking[slot.paidAmountField]
+              // Show slot if amount or due date exists
+              if (!amt && !due) return null
+              return (
+                <div key={slot.prefix} style={{ marginTop: 12, paddingTop: 10, borderTop: '0.5px solid var(--border-light)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>{slot.label}</div>
+                  <DetailRows onEdit={handleSave} rows={[
+                    { label: 'Amount', value: amt ? fmtCurrency(amt, currency) : '—', field: slot.amountField, type: 'number', raw: amt || '' },
+                    { label: 'Due', value: due ? fmtDateFull(due) : '—', field: slot.dueField, type: 'date', raw: due },
+                    ...(paidDate ? [
+                      { label: 'Paid', value: fmtDateFull(paidDate), field: slot.paidDateField, type: 'date', raw: paidDate },
+                      { label: 'Paid amount', value: paidAmt ? fmtCurrency(parseFloat(paidAmt), currency) : '—', field: slot.paidAmountField, type: 'number', raw: paidAmt || '' },
+                    ] : [
+                      { label: 'Paid', value: '—' },
+                    ]),
+                  ]} />
+                </div>
+              )
+            })}
 
             {/* Cancellation */}
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: '0.5px solid var(--border-light)' }}>
               <DetailRows onEdit={handleSave} rows={[
                 { label: 'Free cancel before', value: cancelBefore ? fmtDateFull(cancelBefore) : '—', field: 'Cancel_Free_Before', type: 'date', raw: cancelBefore },
                 { label: 'Cancel policy', value: cancelPolicy || '—', field: 'Cancellation_Policy_Text', raw: cancelPolicy },
+              ]} />
+            </div>
+
+            {/* Payment note */}
+            {booking.Payment_Note && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light)' }}>
+                <DetailRows onEdit={handleSave} rows={[
+                  { label: 'Payment note', value: booking.Payment_Note || '—', field: 'Payment_Note', raw: booking.Payment_Note || '' },
+                ]} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Pax info panel */}
+        <div>
+          <div className="panel" style={{ marginBottom: 16 }}>
+            <div className="panel-head">Pax info</div>
+            <div className="panel-body">
+              {tour && (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 6 }}>Tour pax</div>
+                  <DetailRows rows={[
+                    { label: 'Single rooms', value: tour.pax_single || 0 },
+                    { label: 'Shared twin', value: tour.pax_twin || 0 },
+                    { label: 'Shared double', value: tour.pax_double || 0 },
+                    { label: 'Guide rooms', value: tour.guide_rooms || 0 },
+                  ]} />
+                </>
+              )}
+              <div style={{ marginTop: tour ? 14 : 0, paddingTop: tour ? 12 : 0, borderTop: tour ? '0.5px solid var(--border-light)' : 'none' }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 6 }}>Booked at lodge</div>
+                <DetailRows onEdit={handleSave} rows={[
+                  { label: 'Room config', value: booking.Sgl_Twin_Dbl_Guides || '—', field: 'Sgl_Twin_Dbl_Guides', raw: booking.Sgl_Twin_Dbl_Guides || '' },
+                  { label: 'Total pax', value: booking.Total_Pax_excl_guides ?? '—' },
+                  { label: 'Guide rooms', value: booking.Number_of_guides ?? '—' },
+                ]} />
+              </div>
+            </div>
+          </div>
+
+          {/* Excursion card */}
+          <div className="panel" style={{ marginBottom: 16 }}>
+            <div className="panel-head">Excursion</div>
+            <div className="panel-body">
+              <DetailRows onEdit={handleSave} rows={[
+                { label: 'Excursion', value: booking.Excursion || '—', field: 'Excursion', raw: booking.Excursion || '' },
+                { label: 'Status', value: booking.Excursion_booking_status || '—', field: 'Excursion_booking_status', raw: booking.Excursion_booking_status || '' },
+                { label: 'Date', value: booking.Excursion_Date ? fmtDateFull(booking.Excursion_Date) : '—', field: 'Excursion_Date', type: 'date', raw: booking.Excursion_Date || '' },
+                { label: 'Notes', value: booking.Excursion_notes || '—', field: 'Excursion_notes', raw: booking.Excursion_notes || '' },
+              ]} />
+            </div>
+          </div>
+
+          {/* Booking notes card */}
+          <div className="panel">
+            <div className="panel-head">Notes</div>
+            <div className="panel-body">
+              <DetailRows onEdit={handleSave} rows={[
+                { label: 'Booking notes', value: booking.Booking_Notes || '—', field: 'Booking_Notes', raw: booking.Booking_Notes || '' },
+                { label: 'Reservation', value: booking.Reservation_Comments || '—', field: 'Reservation_Comments', raw: booking.Reservation_Comments || '' },
               ]} />
             </div>
           </div>
@@ -264,21 +332,12 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         </div>
         <div className="panel-body" style={{ padding: 0 }}>
           {loadingEmails ? (
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>
-              Loading emails...
-            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>Loading emails...</div>
           ) : emails.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>
-              No emails recorded for this booking yet.
-            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>No emails recorded for this booking yet.</div>
           ) : (
-            <div>
-              {emails.map((em, i) => (
-                <EmailRow key={em.id || i} email={em} />
-              ))}
-            </div>
+            <div>{emails.map((em, i) => <EmailRow key={em.id || i} email={em} />)}</div>
           )}
-          {/* Reply composer */}
           <ReplyComposer
             bookingId={bookingId}
             lodgeEmail={lodgeEmail}
@@ -317,21 +376,15 @@ function EditableCell({ value, display, field, type, onEdit }) {
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
-    if (editValue === String(value || '')) {
-      setEditing(false)
-      return
-    }
+    if (editValue === String(value || '')) { setEditing(false); return }
     setSaving(true)
     try {
       var saveVal = editValue
       if (type === 'number') saveVal = parseFloat(editValue) || 0
       await onEdit(field, saveVal)
       setEditing(false)
-    } catch (err) {
-      alert('Error: ' + err.message)
-    } finally {
-      setSaving(false)
-    }
+    } catch (err) { alert('Error: ' + err.message) }
+    finally { setSaving(false) }
   }
 
   if (editing) {
@@ -374,25 +427,16 @@ function EmailRow({ email }) {
   const subject = email.subject || email.email_subject || ''
   const body = email.body || email.email_content || ''
   const attachments = email.attachments || []
-
-  // First line of body as preview
   const firstLine = body.split('\n').filter(l => l.trim())[0] || ''
   const preview = firstLine.length > 120 ? firstLine.substring(0, 120) + '...' : firstLine
 
   return (
     <div style={{ borderBottom: '0.5px solid var(--border-light)' }}>
-      {/* Collapsed row */}
       <div
         onClick={() => setExpanded(!expanded)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '8px 14px', cursor: 'pointer', fontSize: 12,
-        }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 12 }}
       >
-        <span style={{
-          fontWeight: 500, fontSize: 11, width: 52, flexShrink: 0,
-          color: isOutbound ? 'var(--blue-text)' : 'var(--green-text)',
-        }}>
+        <span style={{ fontWeight: 500, fontSize: 11, width: 52, flexShrink: 0, color: isOutbound ? 'var(--blue-text)' : 'var(--green-text)' }}>
           {isOutbound ? 'Sent' : 'Received'}
         </span>
         <span style={{ color: 'var(--text-muted)', width: 180, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -410,19 +454,10 @@ function EmailRow({ email }) {
           {date ? fmtDate(date) : ''}
         </span>
       </div>
-
-      {/* Expanded body */}
       {expanded && (
         <div style={{ padding: '0 14px 12px 76px' }}>
-          {subject && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-              {subject}
-            </div>
-          )}
-          <div style={{
-            fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
-            whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto',
-          }}>
+          {subject && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{subject}</div>}
+          <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto' }}>
             {body}
           </div>
           {attachments.length > 0 && (
@@ -431,10 +466,7 @@ function EmailRow({ email }) {
             </div>
           )}
           {email.ai_summary && (
-            <div style={{
-              marginTop: 6, padding: '4px 8px', background: 'var(--blue-bg)',
-              borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--blue-text)',
-            }}>
+            <div style={{ marginTop: 6, padding: '4px 8px', background: 'var(--blue-bg)', borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--blue-text)' }}>
               AI: {email.ai_summary}
             </div>
           )}
@@ -462,37 +494,21 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, las
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: lodgeEmail,
-          subject: subject,
-          body: fullBody,
-          booking_ids: [bookingId],
-          lodge_name: lodgeName,
-          is_reply: true,
+          to: lodgeEmail, subject, body: fullBody,
+          booking_ids: [bookingId], lodge_name: lodgeName, is_reply: true,
         }),
       })
       const result = await res.json()
-      if (result.email_sent) {
-        setBody('')
-        setOpen(false)
-        if (onSent) onSent()
-      } else {
-        alert('Send failed: ' + (result.email_error || 'Unknown error'))
-      }
-    } catch (err) {
-      alert('Error: ' + err.message)
-    } finally {
-      setSending(false)
-    }
+      if (result.email_sent) { setBody(''); setOpen(false); if (onSent) onSent() }
+      else alert('Send failed: ' + (result.email_error || 'Unknown error'))
+    } catch (err) { alert('Error: ' + err.message) }
+    finally { setSending(false) }
   }
 
   if (!open) {
     return (
       <div style={{ padding: '10px 14px' }}>
-        <button
-          className="btn btn-sm"
-          onClick={() => setOpen(true)}
-          style={{ fontSize: 12 }}
-        >
+        <button className="btn btn-sm" onClick={() => setOpen(true)} style={{ fontSize: 12 }}>
           Reply to {lodgeName}
         </button>
       </div>
@@ -505,11 +521,8 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, las
         To: {lodgeEmail || 'No email'} · Subject: {subject}
       </div>
       <textarea
-        value={body}
-        onChange={e => setBody(e.target.value)}
-        placeholder="Type your reply..."
-        autoFocus
-        rows={5}
+        value={body} onChange={e => setBody(e.target.value)}
+        placeholder="Type your reply..." autoFocus rows={5}
         style={{
           width: '100%', fontSize: 13, lineHeight: 1.5, padding: '8px 10px',
           border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)',
@@ -524,9 +537,7 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, las
         <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={sending || !body.trim()}>
           {sending ? 'Sending...' : 'Send reply'}
         </button>
-        <button className="btn btn-sm" onClick={() => setOpen(false)} disabled={sending}>
-          Cancel
-        </button>
+        <button className="btn btn-sm" onClick={() => setOpen(false)} disabled={sending}>Cancel</button>
       </div>
     </div>
   )
