@@ -7,6 +7,8 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
   const [editing, setEditing] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [polling, setPolling] = useState(false)
+  const [gmailResults, setGmailResults] = useState([])
+  const [searchingGmail, setSearchingGmail] = useState(false)
 
   const bookingId = booking.id || booking['Record Id']
   const lodgeName = (booking.Lodge_Name || booking.Name || '').split(' - ')[0]
@@ -43,6 +45,25 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
       if (result.stored > 0) { fetchEmails(); if (onRefresh) onRefresh() }
     } catch (err) { console.error('Poll error:', err) }
     finally { setPolling(false) }
+  }
+
+  const handleSearchGmail = async () => {
+    setSearchingGmail(true)
+    try {
+      const params = new URLSearchParams()
+      if (lodgeEmail) params.set('lodge_email', lodgeEmail)
+      else params.set('lodge_name', lodgeName)
+      if (checkIn) params.set('check_in', checkIn)
+      const res = await fetch('/api/gmail-search?' + params.toString())
+      const result = await res.json()
+      if (result.emails) {
+        // Filter out emails we already have stored (by gmail_id matching message_id)
+        const storedIds = new Set(emails.map(e => e.message_id || e.gmail_id || ''))
+        const newResults = result.emails.filter(gm => !storedIds.has(gm.gmail_id))
+        setGmailResults(newResults)
+      }
+    } catch (err) { console.error('Gmail search error:', err) }
+    finally { setSearchingGmail(false) }
   }
 
   const handleSave = async (field, value) => {
@@ -317,6 +338,16 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         <div className="panel-head">
           <span>Email thread</span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {lodgeEmail && (
+              <button
+                className="btn btn-sm"
+                onClick={handleSearchGmail}
+                disabled={searchingGmail}
+                style={{ fontSize: 11, padding: '3px 10px' }}
+              >
+                {searchingGmail ? 'Searching...' : 'Search Gmail'}
+              </button>
+            )}
             <button
               className="btn btn-sm"
               onClick={handleCheckReplies}
@@ -333,11 +364,36 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         <div className="panel-body" style={{ padding: 0 }}>
           {loadingEmails ? (
             <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>Loading emails...</div>
-          ) : emails.length === 0 ? (
+          ) : emails.length === 0 && gmailResults.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>No emails recorded for this booking yet.</div>
           ) : (
-            <div>{emails.map((em, i) => <EmailRow key={em.id || i} email={em} />)}</div>
+            <div>
+              {emails.map((em, i) => <EmailRow key={em.id || i} email={em} />)}
+            </div>
           )}
+
+          {/* Gmail search results */}
+          {gmailResults.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border-default)' }}>
+              <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, background: 'var(--bg-secondary)' }}>
+                Gmail results ({gmailResults.length})
+                <button
+                  onClick={() => setGmailResults([])}
+                  style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11 }}
+                >Clear</button>
+              </div>
+              {gmailResults.map((gm) => (
+                <GmailResultRow
+                  key={gm.gmail_id}
+                  email={gm}
+                  bookingId={bookingId}
+                  onImported={() => { fetchEmails(); setGmailResults(prev => prev.filter(g => g.gmail_id !== gm.gmail_id)) }}
+                  onDismiss={() => setGmailResults(prev => prev.filter(g => g.gmail_id !== gm.gmail_id))}
+                />
+              ))}
+            </div>
+          )}
+
           <ReplyComposer
             bookingId={bookingId}
             lodgeEmail={lodgeEmail}
@@ -476,30 +532,114 @@ function EmailRow({ email }) {
   )
 }
 
+function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
+  const [expanded, setExpanded] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const from = email.from || ''
+  const subject = email.subject || ''
+  const body = email.body || ''
+  const date = email.date || ''
+  const isFromUs = from.indexOf('bookings@ridedownsouth.com') > -1 || from.indexOf('ridedownsouth.com') > -1
+
+  const handleImport = async (e) => {
+    e.stopPropagation()
+    setImporting(true)
+    try {
+      const res = await fetch('/api/import-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_id: email.gmail_id,
+          booking_id: bookingId,
+          type: isFromUs ? 'outbound' : 'lodge_reply',
+          direction: isFromUs ? 'outbound' : 'inbound',
+          email_from: from,
+          email_to: email.to || '',
+          email_subject: subject,
+          email_content: body,
+          email_date: date,
+          attachments: email.attachments || [],
+          import_source: 'gmail_search',
+        }),
+      })
+      if (res.ok) onImported()
+    } catch (err) { console.error('Import error:', err) }
+    finally { setImporting(false) }
+  }
+
+  const firstLine = body.split('\n').filter(l => l.trim())[0] || ''
+  const preview = firstLine.length > 100 ? firstLine.substring(0, 100) + '...' : firstLine
+
+  return (
+    <div style={{ borderBottom: '0.5px solid var(--border-light)' }}>
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 12 }}
+      >
+        <span style={{ fontWeight: 500, fontSize: 11, width: 52, flexShrink: 0, color: isFromUs ? 'var(--blue-text)' : 'var(--green-text)' }}>
+          {isFromUs ? 'Sent' : 'Received'}
+        </span>
+        <span style={{ color: 'var(--text-muted)', width: 160, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {isFromUs ? 'to lodge' : from.split('<')[0].trim() || from}
+        </span>
+        <span style={{ color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {expanded ? subject : preview}
+        </span>
+        <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
+          {date ? fmtDate(date) : ''}
+        </span>
+        <button
+          onClick={handleImport}
+          disabled={importing}
+          className="btn btn-sm"
+          style={{ fontSize: 10, padding: '2px 6px', flexShrink: 0, background: '#E3F2FD', color: '#1565C0', border: '1px solid #90CAF9' }}
+        >
+          {importing ? '...' : 'Link'}
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDismiss() }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-hint)', fontSize: 14, flexShrink: 0, padding: '0 4px' }}
+          title="Dismiss"
+        >×</button>
+      </div>
+      {expanded && (
+        <div style={{ padding: '0 14px 12px 76px' }}>
+          {subject && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{subject}</div>}
+          <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto' }}>
+            {body}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, lastSubject, onSent }) {
   const [open, setOpen] = useState(false)
-  const [body, setBody] = useState('')
-  const [sending, setSending] = useState(false)
-
-  const subject = lastSubject && lastSubject.startsWith('Re:')
+  const defaultSubject = lastSubject && lastSubject.startsWith('Re:')
     ? lastSubject
     : 'Re: ' + (lastSubject || 'Booking enquiry - ' + tourName + (rdsRef ? ' [' + rdsRef + ']' : ''))
+  const defaultSignature = '\n\nTake care,\nHelen Baker\nLodge Bookings | Ride Down South\nbookings@ridedownsouth.com'
+
+  const [toAddr, setToAddr] = useState(lodgeEmail || '')
+  const [subject, setSubject] = useState(defaultSubject)
+  const [body, setBody] = useState(defaultSignature)
+  const [sending, setSending] = useState(false)
 
   const handleSend = async () => {
-    if (!body.trim()) return
+    if (!body.trim() || !toAddr.trim()) return
     setSending(true)
     try {
-      const fullBody = body.trim() + '\n\nTake care,\nHelen Baker\nLodge Bookings | Ride Down South\nbookings@ridedownsouth.com'
       const res = await fetch('/api/send-enquiry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: lodgeEmail, subject, body: fullBody,
+          to: toAddr, subject, body: body.trim(),
           booking_ids: [bookingId], lodge_name: lodgeName, is_reply: true,
         }),
       })
       const result = await res.json()
-      if (result.email_sent) { setBody(''); setOpen(false); if (onSent) onSent() }
+      if (result.email_sent) { setBody(defaultSignature); setOpen(false); if (onSent) onSent() }
       else alert('Send failed: ' + (result.email_error || 'Unknown error'))
     } catch (err) { alert('Error: ' + err.message) }
     finally { setSending(false) }
@@ -517,12 +657,34 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, las
 
   return (
     <div style={{ padding: '12px 14px', borderTop: '0.5px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-        To: {lodgeEmail || 'No email'} · Subject: {subject}
+      <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr', gap: '6px 8px', marginBottom: 8 }}>
+        <label style={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: 4 }}>To:</label>
+        <input
+          type="email"
+          value={toAddr}
+          onChange={e => setToAddr(e.target.value)}
+          style={{
+            fontSize: 13, padding: '4px 8px',
+            border: '0.5px solid var(--border-default)', borderRadius: 4,
+            outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+          }}
+        />
+        <label style={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: 4 }}>Subject:</label>
+        <input
+          type="text"
+          value={subject}
+          onChange={e => setSubject(e.target.value)}
+          style={{
+            fontSize: 13, padding: '4px 8px',
+            border: '0.5px solid var(--border-default)', borderRadius: 4,
+            outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+          }}
+        />
       </div>
       <textarea
         value={body} onChange={e => setBody(e.target.value)}
-        placeholder="Type your reply..." autoFocus rows={5}
+        placeholder="Type your reply..."
+        autoFocus rows={8}
         style={{
           width: '100%', fontSize: 13, lineHeight: 1.5, padding: '8px 10px',
           border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)',
@@ -530,11 +692,8 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, las
           background: 'var(--bg-primary)', color: 'var(--text-primary)',
         }}
       />
-      <div style={{ fontSize: 11, color: 'var(--text-hint)', margin: '4px 0 8px' }}>
-        Sign-off added automatically (Helen Baker, Ride Down South)
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={sending || !body.trim()}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={sending || !body.trim() || !toAddr.trim()}>
           {sending ? 'Sending...' : 'Send reply'}
         </button>
         <button className="btn btn-sm" onClick={() => setOpen(false)} disabled={sending}>Cancel</button>
