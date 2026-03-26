@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { getStatus, isConfirmed } from '../utils/helpers'
+import { isConfirmed } from '../utils/helpers'
 
 function categorizeTours(tours) {
   const today = new Date().toISOString().split('T')[0]
@@ -37,7 +37,6 @@ function categorizeTours(tours) {
   return { newBuild, drafts, yearGroups, years, past }
 }
 
-// Which views belong to which section
 const LODGE_VIEWS = ['dashboard', 'itinerary', 'edit-itinerary', 'enquiry-preview', 'lodge-detail', 'payments', 'correspondence', 'lodges']
 const GUEST_VIEWS = ['guest-dashboard', 'guest-tour', 'guest-detail', 'transfers', 'guest-excursions', 'guest-accommodation', 'guest-payments', 'guest-bikes']
 
@@ -66,31 +65,32 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
 }
 
 function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour }) {
-  const [showPast, setShowPast] = useState(false)
-  const [collapsedYears, setCollapsedYears] = useState({})
-  const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
   const currentSection = getSection(activeView)
+  const [lodgeExpanded, setLodgeExpanded] = useState(currentSection === 'lodges' || !currentSection)
+  const [guestExpanded, setGuestExpanded] = useState(currentSection === 'guests')
 
-  const toggleYear = (year) => {
-    setCollapsedYears(prev => ({ ...prev, [year]: !prev[year] }))
-  }
-
-  // When clicking a tour in the sidebar, route to the right view based on section
-  const handleTourClick = (tour) => {
-    onSelectTour(tour)
-    if (currentSection === 'guests') {
-      onSelectView('guest-tour')
+  // Keep sections in sync when views change
+  const handleLodgeToggle = () => {
+    if (!lodgeExpanded) {
+      setLodgeExpanded(true)
+      setGuestExpanded(false)
+      onSelectTour(null)
+      onSelectView('dashboard')
     } else {
-      onSelectView('itinerary')
+      setLodgeExpanded(false)
     }
   }
 
-  // Lodge bookings tour-related views
-  const showLodgeTours = currentSection === 'lodges' || activeView === 'dashboard'
-  // Guest bookings tour-related views
-  const showGuestTours = currentSection === 'guests'
-
-  const showTourList = showLodgeTours || showGuestTours
+  const handleGuestToggle = () => {
+    if (!guestExpanded) {
+      setGuestExpanded(true)
+      setLodgeExpanded(false)
+      onSelectTour(null)
+      onSelectView('guest-dashboard')
+    } else {
+      setGuestExpanded(false)
+    }
+  }
 
   return (
     <nav style={{
@@ -101,7 +101,7 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
     }}>
       {/* Portal title */}
       <button
-        onClick={() => { onSelectTour(null); onSelectView('dashboard') }}
+        onClick={() => { onSelectTour(null); onSelectView('dashboard'); setLodgeExpanded(true); setGuestExpanded(false) }}
         style={{
           display: 'block', width: '100%', textAlign: 'left', padding: '18px 20px',
           background: 'transparent', border: 'none',
@@ -112,95 +112,44 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
         RDS Portal
       </button>
 
-      {/* ═══ LODGE BOOKINGS SECTION ═══ */}
-      <div style={{ borderBottom: '0.5px solid var(--border-default)' }}>
-        <SectionHeader
-          label="Lodge bookings"
-          active={currentSection === 'lodges'}
-          onClick={() => { onSelectTour(null); onSelectView('dashboard') }}
-        />
-        {currentSection === 'lodges' && (
-          <div style={{ padding: '0 0 4px' }}>
-            <NavItem label="Payments" active={activeView === 'payments'} onClick={() => { onSelectTour(null); onSelectView('payments') }} indent />
-            <NavItem label="Correspondence" active={activeView === 'correspondence'} onClick={() => { onSelectTour(null); onSelectView('correspondence') }} indent />
-            <NavItem label="Lodges" active={activeView === 'lodges'} onClick={() => { onSelectTour(null); onSelectView('lodges') }} indent />
-          </div>
-        )}
-      </div>
+      {/* ═══ LODGE BOOKINGS ═══ */}
+      <SectionBlock
+        label="Lodge bookings"
+        expanded={lodgeExpanded}
+        active={currentSection === 'lodges'}
+        onToggle={handleLodgeToggle}
+        subItems={[
+          { label: 'Payments', view: 'payments' },
+          { label: 'Correspondence', view: 'correspondence' },
+          { label: 'Lodges', view: 'lodges' },
+        ]}
+        activeView={activeView}
+        onSelectView={(v) => { onSelectTour(null); onSelectView(v) }}
+        tours={tours}
+        activeTour={activeTour}
+        onTourClick={(tour) => { onSelectTour(tour); onSelectView('itinerary') }}
+        onCreateTour={onCreateTour}
+      />
 
-      {/* ═══ GUEST BOOKINGS SECTION ═══ */}
-      <div style={{ borderBottom: '0.5px solid var(--border-default)' }}>
-        <SectionHeader
-          label="Guest bookings"
-          active={currentSection === 'guests'}
-          onClick={() => { onSelectTour(null); onSelectView('guest-dashboard') }}
-        />
-        {currentSection === 'guests' && (
-          <div style={{ padding: '0 0 4px' }}>
-            <NavItem label="Transfers" active={activeView === 'transfers'} onClick={() => { onSelectTour(null); onSelectView('transfers') }} indent />
-            <NavItem label="Excursions" active={activeView === 'guest-excursions'} onClick={() => { onSelectTour(null); onSelectView('guest-excursions') }} indent />
-            <NavItem label="Accommodation" active={activeView === 'guest-accommodation'} onClick={() => { onSelectTour(null); onSelectView('guest-accommodation') }} indent />
-            <NavItem label="Payments" active={activeView === 'guest-payments'} onClick={() => { onSelectTour(null); onSelectView('guest-payments') }} indent />
-            <NavItem label="Bikes & gear" active={activeView === 'guest-bikes'} onClick={() => { onSelectTour(null); onSelectView('guest-bikes') }} indent />
-          </div>
-        )}
-      </div>
-
-      {/* ═══ TOUR LIST (context-aware) ═══ */}
-      {showTourList && (
-        <>
-          <TourGroup
-            label="New tours"
-            tours={[...newBuild, ...drafts]}
-            activeTour={activeTour}
-            onTourClick={handleTourClick}
-            onAdd={showLodgeTours ? onCreateTour : null}
-            drafts={drafts}
-          />
-
-          {years.map(year => (
-            <div key={year} style={{ borderTop: '0.5px solid var(--border-default)' }}>
-              <button
-                onClick={() => toggleYear(year)}
-                style={{
-                  display: 'flex', width: '100%', textAlign: 'left',
-                  padding: '8px 20px 6px', background: 'transparent', border: 'none',
-                  fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
-                  textTransform: 'uppercase', letterSpacing: 0.5,
-                  justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
-                }}
-              >
-                <span>{year} Tours ({yearGroups[year].length})</span>
-                <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: collapsedYears[year] ? 'rotate(0deg)' : 'rotate(180deg)', display: 'inline-block' }}>▾</span>
-              </button>
-              {!collapsedYears[year] && yearGroups[year].map(tour => (
-                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => handleTourClick(tour)} />
-              ))}
-            </div>
-          ))}
-
-          {past.length > 0 && (
-            <div style={{ borderTop: '0.5px solid var(--border-default)' }}>
-              <button
-                onClick={() => setShowPast(!showPast)}
-                style={{
-                  display: 'flex', width: '100%', textAlign: 'left',
-                  padding: '8px 20px 6px', background: 'transparent', border: 'none',
-                  fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
-                  textTransform: 'uppercase', letterSpacing: 0.5,
-                  justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
-                }}
-              >
-                <span>Past ({past.length})</span>
-                <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: showPast ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▾</span>
-              </button>
-              {showPast && past.map(tour => (
-                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => handleTourClick(tour)} dimmed />
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      {/* ═══ GUEST BOOKINGS ═══ */}
+      <SectionBlock
+        label="Guest bookings"
+        expanded={guestExpanded}
+        active={currentSection === 'guests'}
+        onToggle={handleGuestToggle}
+        subItems={[
+          { label: 'Transfers', view: 'transfers' },
+          { label: 'Excursions', view: 'guest-excursions' },
+          { label: 'Accommodation', view: 'guest-accommodation' },
+          { label: 'Payments', view: 'guest-payments' },
+          { label: 'Bikes & gear', view: 'guest-bikes' },
+        ]}
+        activeView={activeView}
+        onSelectView={(v) => { onSelectTour(null); onSelectView(v) }}
+        tours={tours}
+        activeTour={activeTour}
+        onTourClick={(tour) => { onSelectTour(tour); onSelectView('guest-tour') }}
+      />
 
       {/* Bottom */}
       <div style={{ flex: 1 }} />
@@ -211,25 +160,123 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
   )
 }
 
-function SectionHeader({ label, active, onClick }) {
+
+function SectionBlock({ label, expanded, active, onToggle, subItems, activeView, onSelectView, tours, activeTour, onTourClick, onCreateTour }) {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        display: 'flex', width: '100%', textAlign: 'left',
-        padding: '10px 20px 6px', background: 'transparent', border: 'none',
-        fontSize: 11, fontWeight: 600, color: active ? 'var(--blue-text)' : 'var(--text-muted)',
-        textTransform: 'uppercase', letterSpacing: 0.5,
-        cursor: 'pointer', alignItems: 'center', justifyContent: 'space-between',
-      }}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-primary)' }}
-      onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-muted)' }}
-    >
-      <span>{label}</span>
-      {active && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--blue-mid)' }} />}
-    </button>
+    <div style={{ borderBottom: '0.5px solid var(--border-default)' }}>
+      {/* Section header — toggles expand/collapse */}
+      <button
+        onClick={onToggle}
+        style={{
+          display: 'flex', width: '100%', textAlign: 'left',
+          padding: '10px 20px 8px', background: 'transparent', border: 'none',
+          fontSize: 11, fontWeight: 600, color: active ? 'var(--blue-text)' : 'var(--text-muted)',
+          textTransform: 'uppercase', letterSpacing: 0.5,
+          cursor: 'pointer', alignItems: 'center', justifyContent: 'space-between',
+        }}
+        onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-primary)' }}
+        onMouseLeave={e => { if (!active) e.currentTarget.style.color = active ? 'var(--blue-text)' : 'var(--text-muted)' }}
+      >
+        <span>{label}</span>
+        <span style={{
+          fontSize: 10, transition: 'transform 0.15s',
+          transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+          display: 'inline-block',
+        }}>▾</span>
+      </button>
+
+      {expanded && (
+        <>
+          {/* Sub-nav items */}
+          <div style={{ padding: '0 0 4px' }}>
+            {subItems.map(item => (
+              <NavItem key={item.view} label={item.label} active={activeView === item.view}
+                onClick={() => onSelectView(item.view)} indent />
+            ))}
+          </div>
+
+          {/* Tour list — fully self-contained within this section */}
+          <TourList
+            tours={tours}
+            activeTour={activeTour}
+            onTourClick={onTourClick}
+            onCreateTour={onCreateTour}
+          />
+        </>
+      )}
+    </div>
   )
 }
+
+
+function TourList({ tours, activeTour, onTourClick, onCreateTour }) {
+  const [showPast, setShowPast] = useState(false)
+  const [collapsedYears, setCollapsedYears] = useState({})
+  const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
+
+  const toggleYear = (year) => {
+    setCollapsedYears(prev => ({ ...prev, [year]: !prev[year] }))
+  }
+
+  return (
+    <>
+      {/* New & draft tours */}
+      <TourGroup
+        label="New tours"
+        tours={[...newBuild, ...drafts]}
+        activeTour={activeTour}
+        onTourClick={onTourClick}
+        onAdd={onCreateTour || null}
+        drafts={drafts}
+      />
+
+      {/* Year groups */}
+      {years.map(year => (
+        <div key={year} style={{ borderTop: '0.5px solid var(--border-default)' }}>
+          <button
+            onClick={() => toggleYear(year)}
+            style={{
+              display: 'flex', width: '100%', textAlign: 'left',
+              padding: '8px 20px 6px', background: 'transparent', border: 'none',
+              fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
+              textTransform: 'uppercase', letterSpacing: 0.5,
+              justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
+            }}
+          >
+            <span>{year} Tours ({yearGroups[year].length})</span>
+            <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: collapsedYears[year] ? 'rotate(0deg)' : 'rotate(180deg)', display: 'inline-block' }}>▾</span>
+          </button>
+          {!collapsedYears[year] && yearGroups[year].map(tour => (
+            <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => onTourClick(tour)} />
+          ))}
+        </div>
+      ))}
+
+      {/* Past tours */}
+      {past.length > 0 && (
+        <div style={{ borderTop: '0.5px solid var(--border-default)' }}>
+          <button
+            onClick={() => setShowPast(!showPast)}
+            style={{
+              display: 'flex', width: '100%', textAlign: 'left',
+              padding: '8px 20px 6px', background: 'transparent', border: 'none',
+              fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
+              textTransform: 'uppercase', letterSpacing: 0.5,
+              justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
+            }}
+          >
+            <span>Past ({past.length})</span>
+            <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: showPast ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▾</span>
+          </button>
+          {showPast && past.map(tour => (
+            <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => onTourClick(tour)} dimmed />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 
 function NavItem({ label, active, onClick, indent }) {
   return (
@@ -251,6 +298,7 @@ function NavItem({ label, active, onClick, indent }) {
     </button>
   )
 }
+
 
 function TourGroup({ label, tours, activeTour, onTourClick, onAdd, drafts }) {
   const [adding, setAdding] = useState(false)
@@ -323,6 +371,7 @@ function TourGroup({ label, tours, activeTour, onTourClick, onAdd, drafts }) {
     </div>
   )
 }
+
 
 function TourItem({ tour, active, onClick, dimmed, isDraft }) {
   const bookings = tour.bookings || []
