@@ -20,12 +20,50 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   // Draft key for localStorage
   const draftKey = 'itinerary_draft_' + tour.id
 
-  // Load initial state: draft from localStorage, or empty
+  // Load initial state: draft from localStorage, existing bookings, or empty
   const [nights, setNights] = useState(() => {
     try {
       const draft = localStorage.getItem(draftKey)
-      if (draft) return JSON.parse(draft)
+      if (draft) {
+        const parsed = JSON.parse(draft)
+        if (parsed && parsed.length > 0) return parsed
+      }
     } catch (e) {}
+
+    // If tour has existing bookings, auto-load them
+    const bookings = (tour.bookings || []).slice().sort((a, b) => {
+      const dA = a.Check_in_Date || a['Check-in'] || ''
+      const dB = b.Check_in_Date || b['Check-in'] || ''
+      return dA.localeCompare(dB)
+    })
+    if (bookings.length > 0) {
+      return bookings.map((bk, i) => {
+        const dayDesc = bk.Day_Description || bk['Day Description'] || ''
+        const nightMatch = dayDesc.match(/Day\s*(\d+)/)
+        const dayNum = nightMatch ? parseInt(nightMatch[1]) : i + 1
+        const routeMatch = dayDesc.match(/Day\s*\d+:\s*(.+)/)
+        const route = routeMatch ? routeMatch[1] : dayDesc
+
+        const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
+        const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
+
+        return {
+          id: bk.id || bk['Record Id'] || 'existing_' + i,
+          zoho_id: bk.id || bk['Record Id'] || '',
+          day: dayNum,
+          night_number: i + 1,
+          date: checkIn,
+          route: route,
+          km: '',
+          route_notes: '',
+          lodge: lodge,
+          backup: '',
+          meals: bk.Meals || '',
+          notes: bk.Booking_Notes || '',
+        }
+      })
+    }
+
     return []
   })
 

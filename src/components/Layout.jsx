@@ -8,12 +8,20 @@ import { getStatus, isConfirmed } from '../utils/helpers'
 function categorizeTours(tours) {
   const today = new Date().toISOString().split('T')[0]
   const newBuild = []
+  const drafts = []
   const yearGroups = {} // { '2026': [...], '2027': [...] }
   const past = []
 
   ;(tours || []).forEach(tour => {
     if (tour.id === 'unassigned') {
       past.push(tour)
+      return
+    }
+
+    // Draft tours (local, not pushed to Zoho)
+    const isDraft = typeof tour.id === 'string' && tour.id.startsWith('local_')
+    if (isDraft) {
+      drafts.push(tour)
       return
     }
 
@@ -50,13 +58,13 @@ function categorizeTours(tours) {
   // Sort within groups
   const byDate = (a, b) => (a.start_date || a.departure_date || '').localeCompare(b.start_date || b.departure_date || '')
   newBuild.sort(byDate)
+  drafts.sort(byDate)
   Object.keys(yearGroups).forEach(y => yearGroups[y].sort(byDate))
   past.sort((a, b) => (b.start_date || b.departure_date || '').localeCompare(a.start_date || a.departure_date || ''))
 
-  // Get sorted year keys
   const years = Object.keys(yearGroups).sort()
 
-  return { newBuild, yearGroups, years, past }
+  return { newBuild, drafts, yearGroups, years, past }
 }
 
 export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, children }) {
@@ -81,7 +89,7 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
   const [showPast, setShowPast] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [collapsedYears, setCollapsedYears] = useState({})
-  const { newBuild, yearGroups, years, past } = categorizeTours(tours)
+  const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
 
   const toggleYear = (year) => {
     setCollapsedYears(prev => ({ ...prev, [year]: !prev[year] }))
@@ -134,15 +142,16 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
         />
       </div>
 
-      {/* New build tours */}
-      {newBuild.length >= 0 && (
+      {/* New & draft tours */}
+      {(newBuild.length > 0 || drafts.length > 0 || true) && (
         <TourGroup
           label="New tours"
-          tours={newBuild}
+          tours={[...newBuild, ...drafts]}
           activeTour={activeTour}
           onSelectTour={onSelectTour}
           onSelectView={onSelectView}
           onAdd={onCreateTour}
+          drafts={drafts}
         />
       )}
 
@@ -234,7 +243,7 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
   )
 }
 
-function TourGroup({ label, tours, activeTour, onSelectTour, onSelectView, onAdd }) {
+function TourGroup({ label, tours, activeTour, onSelectTour, onSelectView, onAdd, drafts }) {
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDate, setNewDate] = useState('')
@@ -337,14 +346,18 @@ function TourGroup({ label, tours, activeTour, onSelectTour, onSelectView, onAdd
         </div>
       )}
 
-      {tours.map(tour => (
-        <TourItem
-          key={tour.id}
-          tour={tour}
-          active={activeTour && activeTour.id === tour.id}
-          onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
-        />
-      ))}
+      {tours.map(tour => {
+        const isDraftTour = (drafts || []).some(d => d.id === tour.id)
+        return (
+          <TourItem
+            key={tour.id}
+            tour={tour}
+            active={activeTour && activeTour.id === tour.id}
+            onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
+            isDraft={isDraftTour}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -376,7 +389,7 @@ function NavItem({ label, active, onClick }) {
   )
 }
 
-function TourItem({ tour, active, onClick, dimmed }) {
+function TourItem({ tour, active, onClick, dimmed, isDraft }) {
   const bookings = tour.bookings || []
   const confirmed = bookings.filter(b => isConfirmed(b)).length
   const total = bookings.length
@@ -412,7 +425,7 @@ function TourItem({ tour, active, onClick, dimmed }) {
     >
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
         {tour.name}
-        {hasDraft && total === 0 && (
+        {((hasDraft && total === 0) || isDraft) && (
           <span style={{ fontSize: 9, color: 'var(--amber-text)', fontWeight: 500 }}>draft</span>
         )}
       </span>
