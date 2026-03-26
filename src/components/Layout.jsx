@@ -150,6 +150,11 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
           active={activeView === 'lodges' && !activeTour}
           onClick={() => { onSelectTour(null); onSelectView('lodges') }}
         />
+        <NavItem
+          label="Transfers"
+          active={activeView === 'transfers' && !activeTour}
+          onClick={() => { onSelectTour(null); onSelectView('transfers') }}
+        />
       </div>
 
       {/* Tour list — only show in tour-related views */}

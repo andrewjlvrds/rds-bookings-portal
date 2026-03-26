@@ -9,6 +9,7 @@ import LodgeDetail from './components/LodgeDetail'
 import GettingStarted from './components/GettingStarted'
 import Lodges from './components/Lodges'
 import Correspondence from './components/Correspondence'
+import Transfers from './components/Transfers'
 import './styles/global.css'
 
 const API = ''
@@ -218,6 +219,10 @@ export default function App() {
 
     if (activeView === 'correspondence') {
       return <Correspondence tours={tours} allBookings={allBookings} onSelectBooking={handleSelectBooking} />
+    }
+
+    if (activeView === 'transfers') {
+      return <Transfers />
     }
 
     if (activeTour && activeView === 'enquiry-preview') {

@@ -20,7 +20,7 @@ export default async function(req, res) {
     }
 
     // Whitelist allowed modules
-    var allowed = ['Lodge_Bookings', 'Tours', 'Lodges'];
+    var allowed = ['Lodge_Bookings', 'Tours', 'Lodges', 'Bookings'];
     if (allowed.indexOf(module) === -1) {
       return res.status(400).json({ error: 'Module not allowed: ' + module });
     }

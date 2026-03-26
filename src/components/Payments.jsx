@@ -335,7 +335,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       )}
 
       {/* Table */}
-      <div className="table-wrap">
+      <div className="table-wrap" style={{ maxHeight: 'calc(100vh - 320px)', overflow: 'auto' }}>
         <table style={{ tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: 36 }} />
@@ -348,7 +348,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
             <col style={{ width: 90 }} />
             <col style={{ width: 100 }} />
           </colgroup>
-          <thead>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg-primary)' }}>
             <tr>
               <th style={{ textAlign: 'center' }}>
                 <input
