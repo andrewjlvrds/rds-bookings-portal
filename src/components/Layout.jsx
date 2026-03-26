@@ -131,7 +131,7 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
       {/* Navigation items */}
       <div style={{ padding: '8px 0' }}>
         <NavItem
-          label="Dashboard"
+          label="Tours"
           active={activeView === 'dashboard' && !activeTour}
           onClick={() => { onSelectTour(null); onSelectView('dashboard') }}
         />
@@ -139,6 +139,16 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
           label="Payments"
           active={activeView === 'payments' && !activeTour}
           onClick={() => { onSelectTour(null); onSelectView('payments') }}
+        />
+        <NavItem
+          label="Correspondence"
+          active={activeView === 'correspondence' && !activeTour}
+          onClick={() => { onSelectTour(null); onSelectView('correspondence') }}
+        />
+        <NavItem
+          label="Lodges"
+          active={activeView === 'lodges' && !activeTour}
+          onClick={() => { onSelectTour(null); onSelectView('lodges') }}
         />
       </div>
 

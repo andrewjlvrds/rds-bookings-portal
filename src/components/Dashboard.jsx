@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiveBooking, today, daysBetween, getTourName, getStatus } from '../utils/helpers'
 import { categorizeTours } from './Layout'
 
 export default function Dashboard({ tours, allBookings, onSelectTour, onSelectView }) {
+  const [showAttention, setShowAttention] = useState(false)
   const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
   const now = today()
 
@@ -50,7 +51,7 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
           </div>
           <div className="metric-sub">{payments.overdue > 0 ? 'R ' + payments.overdueTotal.toLocaleString() : 'All up to date'}</div>
         </div>
-        <div className="metric-card">
+        <div className="metric-card" style={{ cursor: needsAttention.length > 0 ? 'pointer' : 'default' }} onClick={() => needsAttention.length > 0 && setShowAttention(!showAttention)}>
           <div className="metric-label">Needs attention</div>
           <div className="metric-value" style={{ color: needsAttention.length > 0 ? 'var(--red-text)' : 'var(--green-text)' }}>
             {needsAttention.length}
@@ -61,8 +62,8 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
         </div>
       </div>
 
-      {/* Needs attention */}
-      {needsAttention.length > 0 && (
+      {/* Needs attention — shown on click */}
+      {showAttention && needsAttention.length > 0 && (
         <div className="panel" style={{ marginBottom: 24 }}>
           <div className="panel-head">
             Needs attention

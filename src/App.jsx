@@ -7,6 +7,8 @@ import EnquiryPreview from './components/EnquiryPreview'
 import Payments from './components/Payments'
 import LodgeDetail from './components/LodgeDetail'
 import GettingStarted from './components/GettingStarted'
+import Lodges from './components/Lodges'
+import Correspondence from './components/Correspondence'
 import './styles/global.css'
 
 const API = ''
@@ -208,6 +210,14 @@ export default function App() {
 
     if (activeView === 'getting-started') {
       return <GettingStarted onSelectView={setActiveView} />
+    }
+
+    if (activeView === 'lodges') {
+      return <Lodges lodges={lodges} />
+    }
+
+    if (activeView === 'correspondence') {
+      return <Correspondence tours={tours} allBookings={allBookings} onSelectBooking={handleSelectBooking} />
     }
 
     if (activeTour && activeView === 'enquiry-preview') {
