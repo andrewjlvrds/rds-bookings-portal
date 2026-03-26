@@ -326,6 +326,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
             day: n.day,
             km: n.km || '',
             route_notes: n.route_notes || '',
+            excursion: n.excursion || '',
+            excursion_date: n.excursion_date || '',
             pre_tour: n.pre_tour || false,
           })),
         }),
@@ -363,6 +365,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
         meals: n.meals || 'BB',
         km: n.km || '',
         route_notes: n.route_notes || '',
+        excursion: n.excursion || '',
         notes: n.notes || '',
         lodges: [n.lodge, n.backup].filter(Boolean),
       })),
@@ -766,6 +769,36 @@ ${nights.map(n => `<tr>
                     />
                     {n.notes && (
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{n.notes}</div>
+                    )}
+                    {/* Excursion — toggle with × to remove */}
+                    {n.excursion !== undefined && n.excursion !== null ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                        <span style={{ fontSize: 10, color: 'var(--blue-text)' }}>Excursion:</span>
+                        <input
+                          type="text"
+                          value={n.excursion || ''}
+                          onChange={e => updateNight(i, 'excursion', e.target.value)}
+                          style={{
+                            flex: 1, border: 'none', background: 'transparent',
+                            fontSize: 10, padding: '1px 0', outline: 'none',
+                            color: 'var(--blue-text)',
+                          }}
+                          placeholder="e.g. Kruger Safari"
+                        />
+                        <button
+                          onClick={() => { updateNight(i, 'excursion', null); updateNight(i, 'excursion_date', null) }}
+                          style={{ background: 'none', border: 'none', fontSize: 10, color: 'var(--text-muted)', cursor: 'pointer' }}
+                          title="Remove excursion"
+                        >×</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => updateNight(i, 'excursion', '')}
+                        style={{
+                          background: 'none', border: 'none', fontSize: 9, color: 'var(--text-muted)',
+                          cursor: 'pointer', padding: '2px 0', opacity: 0.6,
+                        }}
+                      >+ Excursion</button>
                     )}
                   </td>
                   <td>

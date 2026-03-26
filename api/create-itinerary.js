@@ -73,6 +73,14 @@ export default async function(req, res) {
       // RDS_Reference may not be active in Zoho API yet — try but don't fail
       try { record.RDS_Reference = rdsRef; } catch(e) {}
 
+      // Excursion fields
+      if (night.excursion) {
+        try {
+          record.Excursion = night.excursion;
+          if (night.excursion_date) record.Excursion_Date = night.excursion_date;
+        } catch(e) {}
+      }
+
       try {
         var result = await zohoApi('POST', 'Lodge_Bookings', { data: [record] });
 

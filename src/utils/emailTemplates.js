@@ -1,13 +1,10 @@
 // Email templates for lodge enquiries
 
-// Generate subject line with RDS reference
+// Generate subject line — just the RDS reference
 export function generateSubject(booking, tourName) {
   const rdsRef = booking.RDS_Reference || ''
-  const checkIn = booking.Check_in_Date || ''
-  if (rdsRef) {
-    return 'Booking enquiry - ' + tourName + ' [' + rdsRef + ']'
-  }
-  return 'Booking enquiry - ' + tourName + ' - ' + checkIn
+  if (rdsRef) return rdsRef
+  return 'Booking enquiry - ' + tourName
 }
 
 // Format date for email display (e.g. "14 April 2027")
@@ -54,13 +51,13 @@ Room requirements:
 * ${pax_single} pax in single rooms
 * ${pax_double * 2} pax in ${pax_double} shared room${pax_double > 1 ? 's' : ''} (double bed)
 * ${pax_twin * 2} pax in ${pax_twin} shared room${pax_twin > 1 ? 's' : ''} (twin beds)
-* Guide room${guide_rooms > 1 ? 's' : ''}: ${numGuides} guide${numGuides > 1 ? 's' : ''} in ${guide_rooms} room${guide_rooms > 1 ? 's' : ''}`
+* ${numGuides} guide${numGuides > 1 ? 's' : ''} in available rooms`
 
   if (excursion) {
     body += '\n\nExcursion: ' + excursion + ' for ' + totalPax + ' pax' + (excursionDate ? ' on ' + excursionDate : '')
   }
 
-  body += refRequest + '\n\n\n\nThanks,\n\n' + sender + '\nRide Down South\nbookings@ridedownsouth.com' + refLine
+  body += refRequest + '\n\n\n\nThanks,\n\n' + sender + '\nRide Down South\nbookings@ridedownsouth.com'
 
   return body
 }
