@@ -8,7 +8,7 @@ import { getStatus, isConfirmed } from '../utils/helpers'
 function categorizeTours(tours) {
   const today = new Date().toISOString().split('T')[0]
   const newBuild = []
-  const upcoming = []
+  const yearGroups = {} // { '2026': [...], '2027': [...] }
   const past = []
 
   ;(tours || []).forEach(tour => {
@@ -19,16 +19,15 @@ function categorizeTours(tours) {
 
     const depDate = tour.departure_date || tour.start_date || ''
 
-    // No departure date at all — new build
+    // No departure date — new build
     if (!depDate) {
       newBuild.push(tour)
       return
     }
 
-    // Determine completion date: end_date, or estimate from departure + booking count
+    // Determine completion date
     let completionDate = tour.end_date || ''
     if (!completionDate && depDate) {
-      // Estimate: departure date + number of bookings (nights), or +21 days as fallback
       const bookingCount = (tour.bookings || []).length
       const estDays = bookingCount > 0 ? bookingCount : 21
       const est = new Date(depDate)
@@ -42,25 +41,22 @@ function categorizeTours(tours) {
       return
     }
 
-    // Has bookings with activity — upcoming
-    const hasBookings = (tour.bookings || []).length > 0
-    if (hasBookings) {
-      upcoming.push(tour)
-      return
-    }
-
-    // Future tour with no bookings yet — new build
-    newBuild.push(tour)
+    // Active/future: group by departure year
+    const year = depDate.substring(0, 4)
+    if (!yearGroups[year]) yearGroups[year] = []
+    yearGroups[year].push(tour)
   })
 
-  // Sort new build and upcoming by start date ascending
-  const byDate = (a, b) => (a.start_date || '').localeCompare(b.start_date || '')
+  // Sort within groups
+  const byDate = (a, b) => (a.start_date || a.departure_date || '').localeCompare(b.start_date || b.departure_date || '')
   newBuild.sort(byDate)
-  upcoming.sort(byDate)
-  // Past by start date descending (most recent first)
-  past.sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))
+  Object.keys(yearGroups).forEach(y => yearGroups[y].sort(byDate))
+  past.sort((a, b) => (b.start_date || b.departure_date || '').localeCompare(a.start_date || a.departure_date || ''))
 
-  return { newBuild, upcoming, past }
+  // Get sorted year keys
+  const years = Object.keys(yearGroups).sort()
+
+  return { newBuild, yearGroups, years, past }
 }
 
 export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, children }) {
@@ -82,10 +78,14 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
 }
 
 function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour }) {
-  const [showUpcoming, setShowUpcoming] = useState(false)
   const [showPast, setShowPast] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
-  const { newBuild, upcoming, past } = categorizeTours(tours)
+  const [collapsedYears, setCollapsedYears] = useState({})
+  const { newBuild, yearGroups, years, past } = categorizeTours(tours)
+
+  const toggleYear = (year) => {
+    setCollapsedYears(prev => ({ ...prev, [year]: !prev[year] }))
+  }
 
   return (
     <nav style={{
@@ -146,11 +146,11 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
         />
       )}
 
-      {/* Upcoming tours with activity — collapsed by default */}
-      {upcoming.length > 0 && (
-        <div style={{ borderTop: '0.5px solid var(--border-default)' }}>
+      {/* Year-based tour groups */}
+      {years.map(year => (
+        <div key={year} style={{ borderTop: '0.5px solid var(--border-default)' }}>
           <button
-            onClick={() => setShowUpcoming(!showUpcoming)}
+            onClick={() => toggleYear(year)}
             style={{
               display: 'flex',
               width: '100%',
@@ -168,16 +168,16 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
               cursor: 'pointer',
             }}
           >
-            <span>Upcoming ({upcoming.length})</span>
+            <span>{year} Tours ({yearGroups[year].length})</span>
             <span style={{
               fontSize: 10,
               transition: 'transform 0.15s',
-              transform: showUpcoming ? 'rotate(180deg)' : 'rotate(0deg)',
+              transform: collapsedYears[year] ? 'rotate(0deg)' : 'rotate(180deg)',
               display: 'inline-block',
             }}>▾</span>
           </button>
 
-          {showUpcoming && upcoming.map(tour => (
+          {!collapsedYears[year] && yearGroups[year].map(tour => (
             <TourItem
               key={tour.id}
               tour={tour}
@@ -186,7 +186,7 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
             />
           ))}
         </div>
-      )}
+      ))}
 
       {/* Past tours — collapsed by default */}
       {past.length > 0 && (
