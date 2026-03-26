@@ -163,6 +163,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
           activeTour={activeTour}
           onTourClick={handleTourClick}
           onCreateTour={section === 'planner' ? onCreateTour : null}
+          mode={section === 'planner' ? 'planner' : 'committed'}
         />
       </div>
 
@@ -175,7 +176,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
 }
 
 
-function TourList({ tours, activeTour, onTourClick, onCreateTour }) {
+function TourList({ tours, activeTour, onTourClick, onCreateTour, mode }) {
   const [showPast, setShowPast] = useState(false)
   const [collapsedYears, setCollapsedYears] = useState({})
   const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
@@ -186,55 +187,69 @@ function TourList({ tours, activeTour, onTourClick, onCreateTour }) {
 
   return (
     <>
-      <TourGroup
-        label="New tours"
-        tours={[...newBuild, ...drafts]}
-        activeTour={activeTour}
-        onTourClick={onTourClick}
-        onAdd={onCreateTour || null}
-        drafts={drafts}
-      />
+      {/* Planner mode: drafts and new tours only */}
+      {mode === 'planner' && (
+        <TourGroup
+          label="Draft tours"
+          tours={[...newBuild, ...drafts]}
+          activeTour={activeTour}
+          onTourClick={onTourClick}
+          onAdd={onCreateTour || null}
+          drafts={drafts}
+        />
+      )}
 
-      {years.map(year => (
-        <div key={year} style={{ borderTop: '0.5px solid var(--border-default)' }}>
-          <button
-            onClick={() => toggleYear(year)}
-            style={{
-              display: 'flex', width: '100%', textAlign: 'left',
-              padding: '8px 16px 6px', background: 'transparent', border: 'none',
-              fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
-              textTransform: 'uppercase', letterSpacing: 0.5,
-              justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
-            }}
-          >
-            <span>{year} Tours ({yearGroups[year].length})</span>
-            <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: collapsedYears[year] ? 'rotate(0deg)' : 'rotate(180deg)', display: 'inline-block' }}>▾</span>
-          </button>
-          {!collapsedYears[year] && yearGroups[year].map(tour => (
-            <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => onTourClick(tour)} />
+      {/* Committed mode: year groups and past only */}
+      {mode === 'committed' && (
+        <>
+          {years.map(year => (
+            <div key={year} style={{ borderTop: '0.5px solid var(--border-default)' }}>
+              <button
+                onClick={() => toggleYear(year)}
+                style={{
+                  display: 'flex', width: '100%', textAlign: 'left',
+                  padding: '8px 16px 6px', background: 'transparent', border: 'none',
+                  fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
+                  textTransform: 'uppercase', letterSpacing: 0.5,
+                  justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
+                }}
+              >
+                <span>{year} Tours ({yearGroups[year].length})</span>
+                <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: collapsedYears[year] ? 'rotate(0deg)' : 'rotate(180deg)', display: 'inline-block' }}>▾</span>
+              </button>
+              {!collapsedYears[year] && yearGroups[year].map(tour => (
+                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => onTourClick(tour)} />
+              ))}
+            </div>
           ))}
-        </div>
-      ))}
 
-      {past.length > 0 && (
-        <div style={{ borderTop: '0.5px solid var(--border-default)' }}>
-          <button
-            onClick={() => setShowPast(!showPast)}
-            style={{
-              display: 'flex', width: '100%', textAlign: 'left',
-              padding: '8px 16px 6px', background: 'transparent', border: 'none',
-              fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
-              textTransform: 'uppercase', letterSpacing: 0.5,
-              justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
-            }}
-          >
-            <span>Past ({past.length})</span>
-            <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: showPast ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▾</span>
-          </button>
-          {showPast && past.map(tour => (
-            <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => onTourClick(tour)} dimmed />
-          ))}
-        </div>
+          {past.length > 0 && (
+            <div style={{ borderTop: '0.5px solid var(--border-default)' }}>
+              <button
+                onClick={() => setShowPast(!showPast)}
+                style={{
+                  display: 'flex', width: '100%', textAlign: 'left',
+                  padding: '8px 16px 6px', background: 'transparent', border: 'none',
+                  fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
+                  textTransform: 'uppercase', letterSpacing: 0.5,
+                  justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
+                }}
+              >
+                <span>Past ({past.length})</span>
+                <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: showPast ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▾</span>
+              </button>
+              {showPast && past.map(tour => (
+                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => onTourClick(tour)} dimmed />
+              ))}
+            </div>
+          )}
+
+          {years.length === 0 && past.length === 0 && (
+            <div style={{ padding: '20px 16px', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+              No committed tours yet.
+            </div>
+          )}
+        </>
       )}
     </>
   )
