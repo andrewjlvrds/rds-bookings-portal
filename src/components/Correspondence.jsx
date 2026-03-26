@@ -253,18 +253,21 @@ function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onView
   }, [])
 
   const handleFetchBody = () => {
-    if (!msgId) { setFetchError('No message ID available'); return }
+    if (!msgId) { setFetchError('No message ID'); return }
     setFetching(true)
     setFetchError(null)
     fetch('/api/gmail-fetch-body?message_id=' + encodeURIComponent(msgId))
       .then(r => {
-        if (!r.ok) throw new Error('HTTP ' + r.status)
+        if (!r.ok) {
+          if (r.status === 500) throw new Error('Message not found in Gmail')
+          throw new Error('HTTP ' + r.status)
+        }
         return r.json()
       })
       .then(d => {
         if (d.error) { setFetchError(d.error); return }
         if (d.body && d.body.trim()) setBody(d.body)
-        else setFetchError('Gmail returned empty body')
+        else setFetchError('Empty content')
       })
       .catch(err => setFetchError(err.message))
       .finally(() => setFetching(false))
