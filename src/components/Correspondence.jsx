@@ -1,5 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { fmtDate } from '../utils/helpers'
+
+// Tour name mappings from Gmail label shortNames
+const TOUR_NAMES = {
+  '30 Mar - 18 Apr': 'FoSA Mar \'26',
+  '24 Apr - 13 May': 'FoSA Apr \'26',
+  '25 May - 6 June': 'BoN May \'26',
+  '2026-06 June': 'June \'26',
+  '2026-07 Great Lakes': 'GL Jul \'26',
+  '2026-08 August': 'August \'26',
+  '2026-09 Sept (11-30) Group A': 'FoSA 9 Sep \'26',
+  '2026-09 Sept (9-28) Group B': 'FoSA 11 Sep \'26',
+  '2026-10 October': 'FoSA Oct \'26',
+}
+
+function tourDisplay(shortName) {
+  // Check direct mapping first
+  if (TOUR_NAMES[shortName]) return TOUR_NAMES[shortName]
+  // Try matching just the part before any /
+  const base = shortName.split('/')[0]
+  if (TOUR_NAMES[base]) return TOUR_NAMES[base]
+  return shortName
+}
 
 export default function Correspondence() {
   const [labels, setLabels] = useState([])
@@ -12,7 +34,9 @@ export default function Correspondence() {
   const [expanded, setExpanded] = useState(null)
   const [search, setSearch] = useState('')
   const [directionFilter, setDirectionFilter] = useState('all')
-  const [labelSource, setLabelSource] = useState('inbox') // 'inbox' or 'lodgeBookings'
+  const [labelSource, setLabelSource] = useState('inbox')
+  const [summary, setSummary] = useState(null)
+  const [loadingSummary, setLoadingSummary] = useState(false)
 
   // Load labels on mount
   useEffect(() => {
@@ -27,49 +51,36 @@ export default function Correspondence() {
       .catch(() => setLoadingLabels(false))
   }, [])
 
-  // Parse label hierarchy: tour parents and lodge children
+  // Parse label hierarchy
   const { tours, lodgesByTour } = useMemo(() => {
     const activeLabels = labels.filter(l => {
       if (labelSource === 'inbox') return l.name.startsWith('INBOX/')
       return l.name.startsWith('Lodge Bookings/')
     })
 
-    const tourMap = {} // shortName -> label
-    const lodgeMap = {} // tourShortName -> [lodgeLabels]
+    const tourMap = {}
+    const lodgeMap = {}
 
     activeLabels.forEach(l => {
       const parts = l.shortName.split('/')
       if (parts.length === 1) {
-        // Tour-level label like "2026-04 (24 Apr - 13 May)"
         tourMap[l.shortName] = l
         if (!lodgeMap[l.shortName]) lodgeMap[l.shortName] = []
       } else if (parts.length === 2) {
-        // Lodge sub-label like "2026-04 (24 Apr - 13 May)/Hohewarte"
         const tourPart = parts[0]
         const lodgePart = parts[1]
         if (!lodgeMap[tourPart]) lodgeMap[tourPart] = []
         lodgeMap[tourPart].push({ ...l, lodgeName: lodgePart })
-        // Ensure tour parent exists even if no standalone label
         if (!tourMap[tourPart]) tourMap[tourPart] = null
       }
     })
 
-    // Sort tours: most recent first (reverse alpha on YYYY-MM prefix)
+    // Sort: most recent first
     const tourList = Object.keys(tourMap).sort((a, b) => b.localeCompare(a))
-
     return { tours: tourList.map(t => ({ key: t, label: tourMap[t] })), lodgesByTour: lodgeMap }
   }, [labels, labelSource])
 
-  // Build display name for tour (strip year prefix for cleaner look)
-  const tourDisplayName = (key) => {
-    // "2026-04 (24 Apr - 13 May)" -> "Apr - May '26"  or just show as-is but shorter
-    const m = key.match(/^\d{4}-\d{2}\s*\((.+?)\)$/)
-    if (m) return m[1]
-    // "Complete 2026 Tours" etc
-    return key
-  }
-
-  // Determine which label(s) to fetch emails from
+  // Active label to fetch
   const activeLabel = useMemo(() => {
     if (selectedLodge) return selectedLodge
     if (selectedTour && selectedTour.label) return selectedTour.label
@@ -83,6 +94,7 @@ export default function Correspondence() {
     setEmails([])
     setNextPageToken(null)
     setExpanded(null)
+    setSummary(null)
     fetch('/api/gmail-by-label?label_id=' + encodeURIComponent(activeLabel.id) + '&max_results=50')
       .then(r => r.json())
       .then(d => {
@@ -111,6 +123,44 @@ export default function Correspondence() {
       .catch(() => setLoadingEmails(false))
   }
 
+  // Generate AI summary for current lodge emails
+  const generateSummary = useCallback(() => {
+    if (emails.length === 0 || loadingSummary) return
+    setLoadingSummary(true)
+    setSummary(null)
+
+    const lodgeName = selectedLodge ? selectedLodge.lodgeName : (selectedTour ? tourDisplay(selectedTour.key) : 'Unknown')
+    const tourName = selectedTour ? tourDisplay(selectedTour.key) : ''
+
+    // Build conversation text from emails (chronological)
+    const sorted = [...emails].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
+    const thread = sorted.map(em => {
+      const dir = em.direction === 'outbound' ? 'SENT' : 'RECEIVED'
+      const from = (em.from || '').split('<')[0].trim()
+      const date = em.date ? new Date(em.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+      const body = (em.body || em.snippet || '').substring(0, 1500)
+      return `[${dir}] ${date} - From: ${from}\nSubject: ${em.subject || ''}\n${body}`
+    }).join('\n\n---\n\n')
+
+    fetch('/api/ai-summarise', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lodge: lodgeName,
+        tour: tourName,
+        thread: thread,
+        emailCount: emails.length,
+      }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.summary) setSummary(d.summary)
+        else setSummary('Could not generate summary.')
+        setLoadingSummary(false)
+      })
+      .catch(() => { setSummary('Error generating summary.'); setLoadingSummary(false) })
+  }, [emails, selectedLodge, selectedTour, loadingSummary])
+
   // Filter emails
   const filtered = useMemo(() => {
     let result = emails
@@ -131,8 +181,6 @@ export default function Correspondence() {
 
   const inCount = emails.filter(e => e.direction === 'inbound').length
   const outCount = emails.filter(e => e.direction === 'outbound').length
-
-  // Current lodges for selected tour
   const currentLodges = selectedTour ? (lodgesByTour[selectedTour.key] || []) : []
 
   return (
@@ -150,7 +198,7 @@ export default function Correspondence() {
         ].map(g => (
           <button
             key={g.key}
-            onClick={() => { setLabelSource(g.key); setSelectedTour(null); setSelectedLodge(null) }}
+            onClick={() => { setLabelSource(g.key); setSelectedTour(null); setSelectedLodge(null); setSummary(null) }}
             style={{
               padding: '6px 16px', fontSize: 12, fontWeight: 500, border: 'none',
               cursor: 'pointer',
@@ -161,7 +209,7 @@ export default function Correspondence() {
         ))}
       </div>
 
-      {/* Tour buttons - horizontal scroll */}
+      {/* Tour buttons */}
       {loadingLabels ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>Loading labels...</div>
       ) : (
@@ -173,13 +221,13 @@ export default function Correspondence() {
               <button
                 key={t.key}
                 onClick={() => {
-                  if (isSelected) { setSelectedTour(null); setSelectedLodge(null) }
-                  else { setSelectedTour(t); setSelectedLodge(null) }
+                  if (isSelected) { setSelectedTour(null); setSelectedLodge(null); setSummary(null) }
+                  else { setSelectedTour(t); setSelectedLodge(null); setSummary(null) }
                 }}
                 className={'filter-btn' + (isSelected ? ' active' : '')}
                 style={{ fontSize: 12 }}
               >
-                {tourDisplayName(t.key)}
+                {tourDisplay(t.key)}
                 {lodgeCount > 0 && (
                   <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.6 }}>{lodgeCount}</span>
                 )}
@@ -194,14 +242,14 @@ export default function Correspondence() {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
           <button
             className={'filter-btn' + (!selectedLodge ? ' active' : '')}
-            onClick={() => setSelectedLodge(null)}
+            onClick={() => { setSelectedLodge(null); setSummary(null) }}
             style={{ fontSize: 11 }}
           >All lodges</button>
           {currentLodges.map(l => (
             <button
               key={l.id}
               className={'filter-btn' + (selectedLodge && selectedLodge.id === l.id ? ' active' : '')}
-              onClick={() => setSelectedLodge(selectedLodge && selectedLodge.id === l.id ? null : l)}
+              onClick={() => { setSelectedLodge(selectedLodge && selectedLodge.id === l.id ? null : l); setSummary(null) }}
               style={{ fontSize: 11 }}
             >
               {l.lodgeName}
@@ -210,7 +258,7 @@ export default function Correspondence() {
         </div>
       )}
 
-      {/* No tour selected state */}
+      {/* No tour selected */}
       {!selectedTour && !loadingLabels && (
         <div className="panel" style={{ marginTop: 8 }}>
           <div className="panel-body" style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
@@ -219,10 +267,47 @@ export default function Correspondence() {
         </div>
       )}
 
-      {/* Email list when tour is selected */}
+      {/* Email content when tour selected */}
       {selectedTour && (
         <>
-          {/* Header with direction tabs + search */}
+          {/* AI Summary box */}
+          {(selectedLodge || selectedTour) && emails.length > 0 && (
+            <div style={{
+              marginBottom: 14, padding: '10px 14px',
+              background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)',
+              border: '0.5px solid var(--border-default)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: summary ? 8 : 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  Conversation summary
+                  {selectedLodge && <span style={{ fontWeight: 400 }}> — {selectedLodge.lodgeName}</span>}
+                </span>
+                <button
+                  className="btn btn-sm"
+                  onClick={generateSummary}
+                  disabled={loadingSummary}
+                  style={{ fontSize: 11, padding: '3px 10px' }}
+                >
+                  {loadingSummary ? 'Summarising...' : summary ? 'Refresh' : 'Summarise'}
+                </button>
+              </div>
+              {loadingSummary && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 0' }}>
+                  Analysing {emails.length} email{emails.length !== 1 ? 's' : ''}...
+                </div>
+              )}
+              {summary && !loadingSummary && (
+                <div style={{
+                  fontSize: 12, lineHeight: 1.7, color: 'var(--text-primary)',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {summary}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Direction tabs + search */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border-default)' }}>
               {[
@@ -351,7 +436,6 @@ export default function Correspondence() {
             </div>
           </div>
 
-          {/* Load more */}
           {nextPageToken && (
             <div style={{ textAlign: 'center', padding: 12 }}>
               <button
