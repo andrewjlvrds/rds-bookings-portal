@@ -283,14 +283,15 @@ export default async function(req, res) {
           console.error('Failed to update booking', bookingId, zohoErr.message);
         }
 
-        // Apply Gmail label based on tour name
+        // Apply Gmail label based on tour/lodge name
         try {
           var tourName = '';
           if (matchedBooking.Tour) {
             tourName = typeof matchedBooking.Tour === 'object' ? matchedBooking.Tour.name : matchedBooking.Tour;
           }
+          var lodgeNameForLabel = (matchedBooking.Lodge_Name || matchedBooking.Name || '').split(' - ')[0].trim();
           if (tourName) {
-            var labelName = tourLabelName(tourName);
+            var labelName = tourLabelName(tourName, lodgeNameForLabel);
             var labelId = await getOrCreateLabel(token, labelName);
             if (labelId) {
               await labelMessage(token, msgId, labelId);

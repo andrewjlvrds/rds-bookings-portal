@@ -74,10 +74,11 @@ export default async function(req, res) {
         gmailMessageId = gmailData.id;
         gmailThreadId = gmailData.threadId;
 
-        // Apply Gmail label for the tour
+        // Apply Gmail label for the tour/lodge
         if (tourName) {
           try {
-            var labelName = tourLabelName(tourName);
+            // Label with TourName/LodgeName (e.g. "FoSA Apr 27/Hohewarte")
+            var labelName = tourLabelName(tourName, lodgeName);
             var labelId = await getOrCreateLabel(token, labelName);
             if (labelId) {
               await labelMessage(token, gmailMessageId, labelId);

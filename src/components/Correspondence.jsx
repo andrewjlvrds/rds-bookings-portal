@@ -34,7 +34,7 @@ export default function Correspondence() {
   const [expanded, setExpanded] = useState(null)
   const [search, setSearch] = useState('')
   const [directionFilter, setDirectionFilter] = useState('all')
-  const [labelSource, setLabelSource] = useState('inbox')
+  const [labelSource, setLabelSource] = useState('tour')
   const [summary, setSummary] = useState(null)
   const [loadingSummary, setLoadingSummary] = useState(false)
 
@@ -44,7 +44,11 @@ export default function Correspondence() {
       .then(r => r.json())
       .then(d => {
         if (d.success) {
-          setLabels([...(d.inbox_labels || []), ...(d.lodge_booking_labels || [])])
+          setLabels([
+            ...(d.inbox_labels || []),
+            ...(d.lodge_booking_labels || []),
+            ...(d.tour_labels || []).map(l => ({ ...l, _source: 'tour' })),
+          ])
         }
         setLoadingLabels(false)
       })
@@ -55,7 +59,9 @@ export default function Correspondence() {
   const { tours, lodgesByTour } = useMemo(() => {
     const activeLabels = labels.filter(l => {
       if (labelSource === 'inbox') return l.name.startsWith('INBOX/')
-      return l.name.startsWith('Lodge Bookings/')
+      if (labelSource === 'lodgeBookings') return l.name.startsWith('Lodge Bookings/')
+      if (labelSource === 'tour') return l._source === 'tour'
+      return false
     })
 
     const tourMap = {}
@@ -193,8 +199,9 @@ export default function Correspondence() {
       {/* Source toggle */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 14, width: 'fit-content', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '0.5px solid var(--border-default)' }}>
         {[
-          { key: 'inbox', label: 'Inbox labels' },
-          { key: 'lodgeBookings', label: 'Lodge Bookings labels' },
+          { key: 'tour', label: 'Tour labels' },
+          { key: 'inbox', label: 'Inbox (legacy)' },
+          { key: 'lodgeBookings', label: 'Lodge Bookings (legacy)' },
         ].map(g => (
           <button
             key={g.key}

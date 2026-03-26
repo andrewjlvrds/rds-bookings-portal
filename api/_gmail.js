@@ -125,7 +125,10 @@ export async function labelMessage(token, messageId, labelId) {
   }
 }
 
-// Build a tour label name from tour name, e.g. "FoSA Mar 27" → "Lodge Bookings/FoSA Mar 27"
-export function tourLabelName(tourName) {
-  return 'Lodge Bookings/' + (tourName || 'Unassigned');
+// Build a tour label name: "FoSA Mar 27" → "FoSA Mar 27"
+// With lodge: "FoSA Mar 27" + "Hohewarte" → "FoSA Mar 27/Hohewarte"
+export function tourLabelName(tourName, lodgeName) {
+  var base = tourName || 'Unassigned';
+  if (lodgeName) return base + '/' + lodgeName;
+  return base;
 }
