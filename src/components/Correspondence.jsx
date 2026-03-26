@@ -61,10 +61,10 @@ export default function Correspondence({ tours, onSelectBooking, allBookings }) 
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter(em =>
-        (em.subject || '').toLowerCase().includes(q) ||
-        (em.from || '').toLowerCase().includes(q) ||
-        (em.to || '').toLowerCase().includes(q) ||
-        (em.body || '').toLowerCase().includes(q)
+        (em.subject || em.email_subject || '').toLowerCase().includes(q) ||
+        (em.from || em.email_from || '').toLowerCase().includes(q) ||
+        (em.to || em.email_to || '').toLowerCase().includes(q) ||
+        (em.body || em.email_content || '').toLowerCase().includes(q)
       )
     }
 
@@ -146,7 +146,13 @@ export default function Correspondence({ tours, onSelectBooking, allBookings }) 
           ) : (
             filtered.slice(0, 100).map((em) => {
               const isOut = em.direction === 'outbound'
-              const isExpanded = expanded === em.id
+              const isExpanded = expanded === (em.id || em.message_id)
+              // Normalize field names — handle both old and new storage formats
+              const emFrom = em.from || em.email_from || ''
+              const emTo = em.to || em.email_to || ''
+              const emSubject = em.subject || em.email_subject || ''
+              const emBody = em.body || em.email_content || ''
+              const emDate = em.date || em.email_date || ''
               const lodge = em.booking_id && bookingMap[em.booking_id]
                 ? (bookingMap[em.booking_id].Lodge_Name || bookingMap[em.booking_id].Name || '').split(' - ')[0]
                 : ''
@@ -176,13 +182,13 @@ export default function Correspondence({ tours, onSelectBooking, allBookings }) 
                       fontWeight: 500, width: 160, flexShrink: 0,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
-                      {lodge || (isOut ? 'to lodge' : (em.from || '').split('<')[0].trim())}
+                      {lodge || (isOut ? 'to lodge' : emFrom.split('<')[0].trim())}
                     </span>
                     <span style={{
                       color: 'var(--text-secondary)', flex: 1,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
-                      {em.subject || '(no subject)'}
+                      {emSubject || '(no subject)'}
                     </span>
                     {em.attachments && em.attachments.length > 0 && (
                       <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
@@ -190,24 +196,24 @@ export default function Correspondence({ tours, onSelectBooking, allBookings }) 
                       </span>
                     )}
                     <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
-                      {fmtDate(em.date || em.email_date)}
+                      {fmtDate(emDate)}
                     </span>
                   </div>
 
                   {isExpanded && (
                     <div style={{ padding: '0 14px 12px 76px' }}>
                       <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                        <span>From: {em.from || '—'}</span>
-                        <span>To: {em.to || '—'}</span>
+                        <span>From: {emFrom || '—'}</span>
+                        <span>To: {emTo || '—'}</span>
                       </div>
-                      {em.subject && (
-                        <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}>{em.subject}</div>
+                      {emSubject && (
+                        <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}>{emSubject}</div>
                       )}
                       <div style={{
                         fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
                         whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto',
                       }}>
-                        {em.body || '(no content)'}
+                        {emBody || '(no content)'}
                       </div>
                       {em.attachments && em.attachments.length > 0 && (
                         <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
