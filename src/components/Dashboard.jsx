@@ -27,42 +27,95 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
 
   return (
     <div>
-      <h1 style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Lodge bookings</h1>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-        {activeTours.length + newBuild.length} active tour{activeTours.length + newBuild.length !== 1 ? 's' : ''} · {totalLodges} bookings
-      </p>
-
-      {/* Top metrics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 24 }}>
-        <div className="metric-card">
-          <div className="metric-label">Active tours</div>
-          <div className="metric-value">{activeTours.length + newBuild.length}</div>
-          <div className="metric-sub">{years.map(y => y + ': ' + yearGroups[y].length).join(', ')}</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-label">Total lodges</div>
-          <div className="metric-value">{totalLodges}</div>
-          <div className="metric-sub">{confirmed} confirmed ({totalLodges ? Math.round(confirmed / totalLodges * 100) : 0}%)</div>
-        </div>
-        <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => onSelectView('payments')}>
-          <div className="metric-label">Overdue payments</div>
-          <div className="metric-value" style={{ color: payments.overdue > 0 ? 'var(--red-text)' : 'var(--green-text)' }}>
-            {payments.overdue > 0 ? payments.overdue : 'None'}
-          </div>
-          <div className="metric-sub">{payments.overdue > 0 ? 'R ' + payments.overdueTotal.toLocaleString() : 'All up to date'}</div>
-        </div>
-        <div className="metric-card" style={{ cursor: needsAttention.length > 0 ? 'pointer' : 'default' }} onClick={() => needsAttention.length > 0 && setShowAttention(!showAttention)}>
-          <div className="metric-label">Needs attention</div>
-          <div className="metric-value" style={{ color: needsAttention.length > 0 ? 'var(--red-text)' : 'var(--green-text)' }}>
-            {needsAttention.length}
-          </div>
-          <div className="metric-sub">
-            {needsAttention.length === 0 ? 'All good' : summarizeAttention(needsAttention)}
-          </div>
-        </div>
+      {/* Hero */}
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>RDS Lodge Bookings</h1>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          {activeTours.length + newBuild.length} active tours · {totalLodges} lodge bookings · {confirmed} confirmed
+        </p>
       </div>
 
-      {/* Needs attention — shown on click */}
+      {/* Navigation panels */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
+        <NavPanel
+          title="Tours"
+          icon="🗺"
+          desc={`${activeTours.length} active tours across ${years.join(', ')}`}
+          detail={`${confirmed} of ${totalLodges} lodges confirmed (${totalLodges ? Math.round(confirmed / totalLodges * 100) : 0}%)`}
+          color="#1565C0"
+          bg="#E3F2FD"
+          onClick={() => onSelectView('dashboard-tours')}
+        />
+        <NavPanel
+          title="Payments"
+          icon="💰"
+          desc={payments.overdue > 0 ? `${payments.overdue} overdue · R ${payments.overdueTotal.toLocaleString()}` : 'All payments up to date'}
+          detail={`${payments.upcoming} upcoming · ${payments.dueSoon} due this week`}
+          color={payments.overdue > 0 ? '#C62828' : '#2E7D32'}
+          bg={payments.overdue > 0 ? '#FFEBEE' : '#E8F5E9'}
+          onClick={() => onSelectView('payments')}
+        />
+        <NavPanel
+          title="Correspondence"
+          icon="📧"
+          desc="Lodge email inbox"
+          detail="View and manage all lodge communications"
+          color="#6A1B9A"
+          bg="#F3E5F5"
+          onClick={() => onSelectView('correspondence')}
+        />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
+        <NavPanel
+          title="Transfers"
+          icon="✈️"
+          desc="Client airport transfers"
+          detail="Flight details, Capey status, transfer tracking"
+          color="#E65100"
+          bg="#FFF3E0"
+          onClick={() => onSelectView('transfers')}
+        />
+        <NavPanel
+          title="Lodges"
+          icon="🏨"
+          desc="Lodge directory"
+          detail="Contact details, STO rates, guide room policies"
+          color="#2E7D32"
+          bg="#E8F5E9"
+          onClick={() => onSelectView('lodges')}
+        />
+        <NavPanel
+          title="Getting Started"
+          icon="📖"
+          desc="New here? Start here"
+          detail="Step-by-step guide to the booking portal"
+          color="#00695C"
+          bg="#E0F2F1"
+          onClick={() => onSelectView('getting-started')}
+          highlight
+        />
+      </div>
+
+      {/* Needs attention — collapsible */}
+      {needsAttention.length > 0 && (
+        <div
+          className="metric-card"
+          style={{ marginBottom: 20, cursor: 'pointer', borderLeft: '3px solid var(--red-text)' }}
+          onClick={() => setShowAttention(!showAttention)}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div className="metric-label">Needs attention</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--red-text)' }}>
+                {needsAttention.length} items — {summarizeAttention(needsAttention)}
+              </div>
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', transform: showAttention ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▾</span>
+          </div>
+        </div>
+      )}
+
       {showAttention && needsAttention.length > 0 && (
         <div className="panel" style={{ marginBottom: 24 }}>
           <div className="panel-head">
@@ -307,4 +360,34 @@ function summarizeAttention(items) {
   const types = {}
   items.forEach(i => { types[i.type] = (types[i.type] || 0) + 1 })
   return Object.entries(types).map(([t, n]) => n + ' ' + t).join(', ')
+}
+
+function NavPanel({ title, icon, desc, detail, color, bg, onClick, highlight }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left',
+        padding: '18px 20px',
+        border: highlight ? '2px solid ' + color : '0.5px solid var(--border-default)',
+        borderRadius: 'var(--radius-lg)',
+        background: 'var(--bg-primary)',
+        cursor: 'pointer',
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.boxShadow = '0 2px 8px ' + bg }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = highlight ? color : 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span style={{
+          width: 34, height: 34, borderRadius: 8, background: bg,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 18, flexShrink: 0,
+        }}>{icon}</span>
+        <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
+      </div>
+      <div style={{ fontSize: 13, color: color, fontWeight: 500, marginBottom: 4 }}>{desc}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{detail}</div>
+    </button>
+  )
 }
