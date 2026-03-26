@@ -10,6 +10,7 @@ import GettingStarted from './components/GettingStarted'
 import Lodges from './components/Lodges'
 import Correspondence from './components/Correspondence'
 import Transfers from './components/Transfers'
+import Guests from './components/Guests'
 import './styles/global.css'
 
 const API = ''
@@ -223,6 +224,10 @@ export default function App() {
 
     if (activeView === 'transfers') {
       return <Transfers tours={tours} />
+    }
+
+    if (activeView === 'guests') {
+      return <Guests tours={tours} />
     }
 
     if (activeTour && activeView === 'enquiry-preview') {
