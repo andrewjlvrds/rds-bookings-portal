@@ -146,14 +146,14 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
           onClick={() => { onSelectTour(null); onSelectView('correspondence') }}
         />
         <NavItem
-          label="Lodges"
-          active={activeView === 'lodges' && !activeTour}
-          onClick={() => { onSelectTour(null); onSelectView('lodges') }}
-        />
-        <NavItem
           label="Transfers"
           active={activeView === 'transfers' && !activeTour}
           onClick={() => { onSelectTour(null); onSelectView('transfers') }}
+        />
+        <NavItem
+          label="Lodges"
+          active={activeView === 'lodges' && !activeTour}
+          onClick={() => { onSelectTour(null); onSelectView('lodges') }}
         />
       </div>
 
