@@ -13,9 +13,8 @@ export default async function(req, res) {
       'Request_Capey_Leg_1','Capey_Status_Leg_1',
       'Departure_Flight_Details','No_of_Pax_Departure',
       'Request_Capey_Departure','Capey_Status_Departure',
-      'Departure_Flight_Details_CT_to_home','No_of_Pax_Home_departure',
+      'No_of_Pax_Home_departure',
       'Request_Capey_home_departure','Capey_Status_Home_Departure',
-      'Departure_Flight_from_CT_to_Home',
       'Additional_Transfers_Required','Airport_Transfers_Required',
       'Booking_Status','id'
     ].join(',');
@@ -23,16 +22,37 @@ export default async function(req, res) {
     var allBookings = [];
     var page = 1;
     var hasMore = true;
+    var apiError = null;
 
     while (hasMore && page <= 5) {
-      var result = await zohoApi('GET',
-        'Bookings?fields=' + fields +
-        '&sort_by=Tour_start_date&sort_order=asc&per_page=200&page=' + page
-      );
-      var data = (result && result.data) || [];
-      allBookings = allBookings.concat(data);
-      hasMore = result && result.info && result.info.more_records;
-      page++;
+      try {
+        var result = await zohoApi('GET',
+          'Bookings?fields=' + fields +
+          '&sort_by=Tour_start_date&sort_order=asc&per_page=200&page=' + page
+        );
+        if (!result || !result.data) {
+          // Try with module API name if display name fails
+          if (page === 1) {
+            console.log('Bookings returned no data, trying CustomModule4...');
+            result = await zohoApi('GET',
+              'CustomModule4?fields=' + fields +
+              '&sort_by=Tour_start_date&sort_order=asc&per_page=200&page=' + page
+            );
+          }
+          if (!result || !result.data) {
+            apiError = 'No data returned from Zoho. Module may not be accessible.';
+            break;
+          }
+        }
+        var data = result.data || [];
+        allBookings = allBookings.concat(data);
+        hasMore = result.info && result.info.more_records;
+        page++;
+      } catch (fetchErr) {
+        apiError = fetchErr.message;
+        console.error('transfers fetch error page ' + page + ':', fetchErr.message);
+        break;
+      }
     }
 
     // Filter to only bookings that have transfer data or airport transfers required
@@ -50,6 +70,7 @@ export default async function(req, res) {
       bookings: allBookings,
       transfers: transfers.length,
       total: allBookings.length,
+      api_error: apiError || undefined,
     });
   } catch (err) {
     console.error('transfers-data error:', err.message);

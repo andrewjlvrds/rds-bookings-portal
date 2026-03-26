@@ -4,6 +4,7 @@ import { fmtDate, fmtDateFull } from '../utils/helpers'
 export default function Transfers() {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
+  const [apiError, setApiError] = useState(null)
   const [tourFilter, setTourFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -11,8 +12,8 @@ export default function Transfers() {
   useEffect(() => {
     fetch('/api/transfers-data')
       .then(r => r.json())
-      .then(d => { setBookings(d.bookings || []); setLoading(false) })
-      .catch(() => setLoading(false))
+      .then(d => { setBookings(d.bookings || []); if (d.api_error) setApiError(d.api_error); setLoading(false) })
+      .catch(err => { setApiError(err.message); setLoading(false) })
   }, [])
 
   // Build transfer rows — each booking can have up to 3 transfer legs
@@ -155,6 +156,12 @@ export default function Transfers() {
       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
         {loading ? 'Loading...' : `${transferRows.length} transfer legs across ${bookings.length} bookings`}
       </p>
+
+      {apiError && (
+        <div style={{ padding: '8px 12px', marginBottom: 12, background: '#FEF5F5', border: '1px solid #E57373', borderRadius: 6, fontSize: 13, color: '#C62828' }}>
+          API error: {apiError}
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
