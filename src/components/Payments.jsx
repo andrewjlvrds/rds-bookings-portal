@@ -14,7 +14,18 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const lastClickedIdx = useRef(null)
 
   const now = today()
-  const payments = extractPayments(allBookings, now)
+  const allPayments = extractPayments(allBookings, now)
+
+  // Only include payments from tours with end/departure date >= today (or no date)
+  const futureTourNames = new Set(
+    (tours || []).filter(t => {
+      if (!t.departure_date) return true
+      if (typeof t.id === 'string' && t.id.startsWith('local_')) return false
+      const endDate = t.end_date || t.departure_date
+      return endDate >= now
+    }).map(t => t.name)
+  )
+  const payments = allPayments.filter(p => futureTourNames.has(p.tour))
 
   // Apply filters
   let filtered = payments
@@ -228,15 +239,37 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
           className={'filter-btn' + (tourFilter === 'all' ? ' active' : '')}
           onClick={() => setTourFilter('all')}
         >All tours</button>
-        {tours.map(t => (
-          <button
-            key={t.id}
-            className={'filter-btn' + (tourFilter === t.name ? ' active' : '')}
-            onClick={() => handleTourFilter(t.name)}
-          >
-            {t.name}
-          </button>
-        ))}
+        {(() => {
+          // Only show future Zoho tours, grouped by year
+          const todayStr = now
+          const futureTours = (tours || []).filter(t => {
+            if (!t.departure_date) return false
+            if (typeof t.id === 'string' && t.id.startsWith('local_')) return false
+            const endDate = t.end_date || t.departure_date
+            return endDate >= todayStr
+          })
+          const byYear = {}
+          futureTours.forEach(t => {
+            const year = (t.departure_date || '').substring(0, 4)
+            if (!byYear[year]) byYear[year] = []
+            byYear[year].push(t)
+          })
+          const years = Object.keys(byYear).sort()
+          return years.map(year => (
+            <React.Fragment key={year}>
+              <span style={{ fontSize: 10, color: 'var(--text-hint)', padding: '5px 2px', fontWeight: 500 }}>{year}:</span>
+              {byYear[year].sort((a, b) => (a.departure_date || '').localeCompare(b.departure_date || '')).map(t => (
+                <button
+                  key={t.id}
+                  className={'filter-btn' + (tourFilter === t.name ? ' active' : '')}
+                  onClick={() => handleTourFilter(t.name)}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </React.Fragment>
+          ))
+        })()}
       </div>
 
       {/* Bulk action bar */}
