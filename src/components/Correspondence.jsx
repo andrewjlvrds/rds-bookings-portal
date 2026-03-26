@@ -201,43 +201,15 @@ export default function Correspondence({ tours, onSelectBooking, allBookings }) 
                   </div>
 
                   {isExpanded && (
-                    <div style={{ padding: '0 14px 12px 76px' }}>
-                      <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                        <span>From: {emFrom || '—'}</span>
-                        <span>To: {emTo || '—'}</span>
-                      </div>
-                      {emSubject && (
-                        <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}>{emSubject}</div>
-                      )}
-                      <div style={{
-                        fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
-                        whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto',
-                      }}>
-                        {emBody || '(no content)'}
-                      </div>
-                      {em.attachments && em.attachments.length > 0 && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                          Attachments: {em.attachments.map(a => a.filename || a).join(', ')}
-                        </div>
-                      )}
-                      {em.ai_summary && (
-                        <div style={{
-                          marginTop: 6, padding: '4px 8px', background: 'var(--blue-bg)',
-                          borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--blue-text)',
-                        }}>
-                          AI: {em.ai_summary}
-                        </div>
-                      )}
-                      {em.booking_id && bookingMap[em.booking_id] && (
-                        <button
-                          className="btn btn-sm"
-                          style={{ marginTop: 8, fontSize: 11 }}
-                          onClick={(e) => { e.stopPropagation(); handleViewBooking(em) }}
-                        >
-                          View booking
-                        </button>
-                      )}
-                    </div>
+                    <EmailExpanded
+                      em={em}
+                      emFrom={emFrom}
+                      emTo={emTo}
+                      emSubject={emSubject}
+                      emBody={emBody}
+                      bookingMap={bookingMap}
+                      onViewBooking={handleViewBooking}
+                    />
                   )}
                 </div>
               )
@@ -250,6 +222,63 @@ export default function Correspondence({ tours, onSelectBooking, allBookings }) 
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onViewBooking }) {
+  const [body, setBody] = useState(emBody)
+  const [fetching, setFetching] = useState(false)
+
+  // Auto-fetch from Gmail if body is empty and we have a message_id
+  useEffect(() => {
+    if (!body && (em.message_id || em.gmail_id)) {
+      setFetching(true)
+      fetch('/api/gmail-fetch-body?message_id=' + encodeURIComponent(em.message_id || em.gmail_id))
+        .then(r => r.json())
+        .then(d => { if (d.body) setBody(d.body) })
+        .catch(() => {})
+        .finally(() => setFetching(false))
+    }
+  }, [])
+
+  return (
+    <div style={{ padding: '0 14px 12px 76px' }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+        <span>From: {emFrom || '—'}</span>
+        <span>To: {emTo || '—'}</span>
+      </div>
+      {emSubject && (
+        <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}>{emSubject}</div>
+      )}
+      <div style={{
+        fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
+        whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto',
+      }}>
+        {fetching ? 'Loading content from Gmail...' : (body || '(no content)')}
+      </div>
+      {em.attachments && em.attachments.length > 0 && (
+        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+          Attachments: {em.attachments.map(a => a.filename || a).join(', ')}
+        </div>
+      )}
+      {em.ai_summary && (
+        <div style={{
+          marginTop: 6, padding: '4px 8px', background: 'var(--blue-bg)',
+          borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--blue-text)',
+        }}>
+          AI: {em.ai_summary}
+        </div>
+      )}
+      {em.booking_id && bookingMap[em.booking_id] && (
+        <button
+          className="btn btn-sm"
+          style={{ marginTop: 8, fontSize: 11 }}
+          onClick={(e) => { e.stopPropagation(); onViewBooking(em) }}
+        >
+          View booking
+        </button>
+      )}
     </div>
   )
 }
