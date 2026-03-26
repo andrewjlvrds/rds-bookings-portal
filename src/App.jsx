@@ -120,6 +120,8 @@ export default function App() {
   const handleSelectTour = (tour) => {
     setActiveTour(tour)
     setActiveBooking(null)
+    // Layout handles routing to itinerary vs guest-tour based on section
+    // This is the fallback for programmatic calls
     setActiveView('itinerary')
   }
 
@@ -226,8 +228,28 @@ export default function App() {
       return <Transfers tours={tours} />
     }
 
-    if (activeView === 'guests') {
+    if (activeView === 'guest-dashboard' || activeView === 'guests') {
       return <Guests tours={tours} />
+    }
+
+    if (activeTour && activeView === 'guest-tour') {
+      return <Guests tours={tours} filterTour={activeTour.name} />
+    }
+
+    if (activeView === 'guest-excursions') {
+      return <Guests tours={tours} subView="excursions" />
+    }
+
+    if (activeView === 'guest-accommodation') {
+      return <Guests tours={tours} subView="accommodation" />
+    }
+
+    if (activeView === 'guest-payments') {
+      return <Guests tours={tours} subView="payments" />
+    }
+
+    if (activeView === 'guest-bikes') {
+      return <Guests tours={tours} subView="bikes" />
     }
 
     if (activeTour && activeView === 'enquiry-preview') {

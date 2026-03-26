@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency } from '../utils/helpers'
 
-export default function Guests({ tours }) {
+export default function Guests({ tours, filterTour, subView }) {
   const [guests, setGuests] = useState([])
   const [loading, setLoading] = useState(true)
   const [apiError, setApiError] = useState(null)
-  const [tourFilter, setTourFilter] = useState('all')
+  const [tourFilter, setTourFilter] = useState(filterTour || 'all')
   const [search, setSearch] = useState('')
   const [selectedGuest, setSelectedGuest] = useState(null)
   const [showPast, setShowPast] = useState(false)
@@ -20,6 +20,19 @@ export default function Guests({ tours }) {
       })
       .catch(err => { setApiError(err.message); setLoading(false) })
   }, [])
+
+  // Sync filterTour prop
+  useEffect(() => {
+    if (filterTour) setTourFilter(filterTour)
+  }, [filterTour])
+
+  const SUB_VIEW_TITLES = {
+    excursions: 'Excursions',
+    accommodation: 'Accommodation',
+    payments: 'Guest Payments',
+    bikes: 'Bikes & Gear',
+  }
+  const pageTitle = SUB_VIEW_TITLES[subView] || (filterTour ? filterTour : 'Tour Guests')
 
   const tourLookup = useMemo(() => {
     const map = {}
@@ -82,7 +95,7 @@ export default function Guests({ tours }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 18, fontWeight: 500 }}>Tour Guests</h1>
+          <h1 style={{ fontSize: 18, fontWeight: 500 }}>{pageTitle}</h1>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
             {totalGuests} guest{totalGuests !== 1 ? 's' : ''} across {tourGroups.length} tour{tourGroups.length !== 1 ? 's' : ''}
           </div>
@@ -90,11 +103,13 @@ export default function Guests({ tours }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="text" placeholder="Search guests..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ fontSize: 13, padding: '6px 10px', width: 200, border: '0.5px solid var(--border-default)', borderRadius: 6, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
-          <select value={tourFilter} onChange={e => setTourFilter(e.target.value)}
-            style={{ fontSize: 13, padding: '6px 10px', border: '0.5px solid var(--border-default)', borderRadius: 6, background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-            <option value="all">All tours</option>
-            {tourNames.map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
+          {!filterTour && (
+            <select value={tourFilter} onChange={e => setTourFilter(e.target.value)}
+              style={{ fontSize: 13, padding: '6px 10px', border: '0.5px solid var(--border-default)', borderRadius: 6, background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+              <option value="all">All tours</option>
+              {tourNames.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
           <button className="btn" onClick={() => setShowPast(!showPast)} style={{ fontSize: 12 }}>
             {showPast ? 'Hide past' : 'Show past'}
           </button>
