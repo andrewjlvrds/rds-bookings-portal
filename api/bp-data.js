@@ -48,10 +48,10 @@ export default async function(req, res) {
       'Name','Lodge_Name','Check_in_Date','Check_out_Date','Nights','Status',
       'Sgl_Twin_Dbl_Guides','Meals','Total_Amount','Deposit_Amount',
       'Lodge_Currency','Booking_Reference','Booking_Notes','Reservation_Comments',
-      'Lodge_Availability','Lodge','Lodge_Contact','Tour',
+      'Lodge','Tour',
       'RDS_Reference','Lodge_Reference','Cancel_Free_Before','Cancellation_Policy_Text',
       'Credit_Amount','Enquiry_Sent_Date','Last_Response_Date',
-      'Follow_up_Date','Excursion','Excursion_booking_status',
+      'Follow_up_Date','Excursion','Excursion_booking_status','Excursion_Date','Excursion_notes',
       'Deposit_Due_Date','Second_Payment_Amount','Second_Payment_Due_Date',
       'Third_Payment_Amount','Third_Payment_Due_Date',
       'Fourth_Payment_Amount','Fourth_Payment_Due_Date',
@@ -59,8 +59,8 @@ export default async function(req, res) {
       'rd_Payment_Paid_Date','th_Payment_Paid_Date',
       'Deposit_Paid_Amount','nd_Payment_Paid_Amount',
       'rd_Payment_Paid_Amount','th_Payment_Paid_Amount',
-      'Payment_Note',
-      'Email','Contact_Name','Exchange_Rate','Currency',
+      'Payment_Note','Balance_Due_calculated',
+      'Email','Contact_Name','Currency',
       'Day_Description','id'
     ].join(',');
 
