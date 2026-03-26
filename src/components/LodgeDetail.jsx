@@ -9,6 +9,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
   const [polling, setPolling] = useState(false)
   const [gmailResults, setGmailResults] = useState([])
   const [searchingGmail, setSearchingGmail] = useState(false)
+  const [lastDismissed, setLastDismissed] = useState(null)
 
   const bookingId = booking.id || booking['Record Id']
   const lodgeName = (booking.Lodge_Name || booking.Name || '').split(' - ')[0]
@@ -382,13 +383,23 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
                   style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11 }}
                 >Clear</button>
               </div>
+              {lastDismissed && (
+                <div style={{ padding: '6px 14px', fontSize: 12, background: '#FFF8E1', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Dismissed: {lastDismissed.subject || 'email'}</span>
+                  <button
+                    onClick={() => { setGmailResults(prev => [...prev, lastDismissed]); setLastDismissed(null) }}
+                    className="btn btn-sm"
+                    style={{ fontSize: 11, padding: '2px 8px' }}
+                  >Undo</button>
+                </div>
+              )}
               {gmailResults.map((gm) => (
                 <GmailResultRow
                   key={gm.gmail_id}
                   email={gm}
                   bookingId={bookingId}
                   onImported={() => { fetchEmails(); setGmailResults(prev => prev.filter(g => g.gmail_id !== gm.gmail_id)) }}
-                  onDismiss={() => setGmailResults(prev => prev.filter(g => g.gmail_id !== gm.gmail_id))}
+                  onDismiss={() => { setLastDismissed(gm); setGmailResults(prev => prev.filter(g => g.gmail_id !== gm.gmail_id)) }}
                 />
               ))}
             </div>

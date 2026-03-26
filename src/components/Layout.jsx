@@ -239,6 +239,16 @@ function Sidebar({ tours, activeTour, onSelectTour, activeView, onSelectView, on
           ))}
         </div>
       )}
+
+      {/* Bottom spacer and help link */}
+      <div style={{ flex: 1 }} />
+      <div style={{ borderTop: '0.5px solid var(--border-default)', padding: '8px 0' }}>
+        <NavItem
+          label="Getting started"
+          active={activeView === 'getting-started'}
+          onClick={() => { onSelectTour(null); onSelectView('getting-started') }}
+        />
+      </div>
     </nav>
   )
 }

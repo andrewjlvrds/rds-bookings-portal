@@ -6,6 +6,7 @@ import ItineraryEditor from './components/ItineraryEditor'
 import EnquiryPreview from './components/EnquiryPreview'
 import Payments from './components/Payments'
 import LodgeDetail from './components/LodgeDetail'
+import GettingStarted from './components/GettingStarted'
 import './styles/global.css'
 
 const API = ''
@@ -203,6 +204,10 @@ export default function App() {
 
     if (activeView === 'payments') {
       return <Payments allBookings={allBookings} tours={tours} onSelectBooking={handleSelectBooking} onRefresh={() => refreshData()} />
+    }
+
+    if (activeView === 'getting-started') {
+      return <GettingStarted onSelectView={setActiveView} />
     }
 
     if (activeTour && activeView === 'enquiry-preview') {
