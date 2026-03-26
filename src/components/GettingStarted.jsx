@@ -29,6 +29,11 @@ export default function GettingStarted({ onSelectView }) {
           desc="Add a new tour and build its itinerary"
           onClick={() => onSelectView('dashboard')}
         />
+        <QuickLink
+          title="Correspondence"
+          desc="Browse lodge emails by tour, AI summaries"
+          onClick={() => onSelectView('correspondence')}
+        />
       </div>
 
       <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 14 }}>How it works</h2>
@@ -68,18 +73,22 @@ Namibian lodges automatically get the Foreign Tour Operator number (FOR01225) in
         />
         <StepCard
           num="4"
-          title="Track responses"
+          title="Track responses & correspondence"
           expanded={expanded === 4}
           onClick={() => toggle(4)}
-          body={`Click "Check for replies" on a booking's lodge detail view, or the portal polls Gmail automatically.
+          body={`The Correspondence tab lets you browse all lodge emails organised by tour and lodge.
 
-When a lodge replies, Claude AI parses the email to extract:
-• Availability status
-• Rates, deposit amounts, payment due dates
-• Cancellation terms
-• Lodge booking references
+How it works:
+• When you send an enquiry, the portal auto-creates Gmail labels: TourName/LodgeName (e.g. "FoSA Apr 27/Hohewarte")
+• When lodges reply, poll-gmail matches the reply to the booking and labels it under the same tour/lodge
+• Tour buttons are colour-coded by year: blue = 2026, purple = 2027, amber = 2028
+• Click a tour to see its lodges, click a lodge to filter to that conversation
 
-These are written back to Zoho automatically. You can review and edit any field inline.`}
+AI features:
+• Claude AI parses lodge replies to extract availability, rates, deposit amounts, payment due dates, and cancellation terms — these are written back to Zoho automatically
+• Click "Summarise" on any lodge conversation to get an AI-generated summary of the full email thread — booking status, key terms, and next actions needed
+
+You can also check for replies from individual booking detail views using "Check for replies".`}
         />
         <StepCard
           num="5"
@@ -139,7 +148,19 @@ Draft tours show an orange "draft" badge. Once pushed, they become full Zoho rec
           onClick={() => toggle('ai')}
           body={`Lodge replies are parsed by Claude AI to extract structured data — availability, rates, payment terms, cancellation policy. Only medium-to-high confidence extractions are written to Zoho automatically. Low-confidence items are flagged for manual review.
 
-The AI also detects payment confirmations (receipts) and auto-fills the paid date and amount on the correct payment slot.`}
+The AI also detects payment confirmations (receipts) and auto-fills the paid date and amount on the correct payment slot.
+
+In the Correspondence tab, you can click "Summarise" on any lodge conversation to get a full thread summary — booking status, rates quoted, deposit terms, and what action is needed next.`}
+        />
+        <InfoCard
+          title="Gmail labels & correspondence"
+          expanded={expanded === 'gmail'}
+          onClick={() => toggle('gmail')}
+          body={`The portal organises all lodge emails using Gmail labels in a TourName/LodgeName structure (e.g. "FoSA Apr 27/Hohewarte"). Labels are created automatically when enquiries are sent, and incoming replies are matched and labelled under the same tour/lodge.
+
+The Correspondence tab shows all tours as filter buttons with year-colour coding. Click a tour to see its lodge sub-labels, and click a lodge to view just that conversation. Legacy labels from the old INBOX/ structure are also visible.
+
+This means you can browse correspondence both in the portal and directly in Gmail — the labels work the same way in both.`}
         />
         <InfoCard
           title="50-field limit"
