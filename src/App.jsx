@@ -222,7 +222,7 @@ export default function App() {
     }
 
     if (activeView === 'transfers') {
-      return <Transfers />
+      return <Transfers tours={tours} />
     }
 
     if (activeTour && activeView === 'enquiry-preview') {

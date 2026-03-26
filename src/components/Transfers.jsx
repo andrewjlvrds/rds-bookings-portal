@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { fmtDate, fmtDateFull } from '../utils/helpers'
 
-export default function Transfers() {
+export default function Transfers({ tours }) {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [apiError, setApiError] = useState(null)
@@ -9,6 +9,19 @@ export default function Transfers() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [showPast, setShowPast] = useState(false)
   const [search, setSearch] = useState('')
+
+  // Build set of future tour names from portal's tour data (which has real dates)
+  const futureTourNames = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    const names = new Set()
+    ;(tours || []).forEach(t => {
+      const endDate = t.end_date || t.departure_date || ''
+      if (!endDate || endDate >= today) {
+        if (t.name) names.add(t.name)
+      }
+    })
+    return names
+  }, [tours])
   const [transferStatuses, setTransferStatuses] = useState(() => {
     try { return JSON.parse(localStorage.getItem('rds_transfer_statuses') || '{}') } catch (e) { return {} }
   })
@@ -53,6 +66,9 @@ export default function Transfers() {
 
       // Skip cancelled bookings
       if (status === 'Cancelled' || status === 'Refunded') return
+
+      // Skip past tours using portal's tour data
+      if (futureTourNames.size > 0 && tourName && !futureTourNames.has(tourName)) return
 
       // Arrival transfer
       if (bk.Arrival_Flight_Details || bk.Request_Capey_Leg_1) {
