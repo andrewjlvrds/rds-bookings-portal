@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, today, daysBetween, getTourName, getStatus } from '../utils/helpers'
 
 const API = window.location.hostname === 'localhost' ? 'http://localhost:3000' : ''
@@ -8,6 +8,10 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const [tourFilter, setTourFilter] = useState('all')
   const [paying, setPaying] = useState(null)
   const [payError, setPayError] = useState(null)
+  const [selected, setSelected] = useState(new Set())
+  const [bulkPaying, setBulkPaying] = useState(false)
+  const [lastPaidKeys, setLastPaidKeys] = useState([]) // for undo
+  const lastClickedIdx = useRef(null)
 
   const now = today()
   const payments = extractPayments(allBookings, now)
@@ -30,67 +34,148 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const overdueTotal = overdue.reduce((s, p) => s + (p.amount || 0), 0)
   const weekTotal = dueThisWeek.reduce((s, p) => s + (p.amount || 0), 0)
 
-  // Handle tour filter — clicking active tour deselects it
   const handleTourFilter = (tourName) => {
     setTourFilter(tourFilter === tourName ? 'all' : tourName)
   }
 
-  // Mark payment as paid
+  // Checkbox handling with shift-click support
+  const handleCheck = (key, idx, e) => {
+    const next = new Set(selected)
+    if (e.shiftKey && lastClickedIdx.current !== null) {
+      const start = Math.min(lastClickedIdx.current, idx)
+      const end = Math.max(lastClickedIdx.current, idx)
+      for (let i = start; i <= end; i++) {
+        next.add(filtered[i].key)
+      }
+    } else {
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+    }
+    lastClickedIdx.current = idx
+    setSelected(next)
+  }
+
+  const handleSelectAll = () => {
+    if (selected.size === filtered.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map(p => p.key)))
+    }
+  }
+
+  // Get Zoho field names for a payment slot
+  const getSlotFields = (slot) => {
+    if (slot === 'Deposit') return { date: 'Deposit_Paid_Date', amount: 'Deposit_Paid_Amount' }
+    if (slot === '2nd payment') return { date: 'nd_Payment_Paid_Date', amount: 'nd_Payment_Paid_Amount' }
+    if (slot === '3rd payment') return { date: 'rd_Payment_Paid_Date', amount: 'rd_Payment_Paid_Amount' }
+    if (slot === '4th payment') return { date: 'th_Payment_Paid_Date', amount: 'th_Payment_Paid_Amount' }
+    return null
+  }
+
+  // Mark single payment as paid
   const handleMarkPaid = async (p) => {
     if (!confirm(`Mark ${p.label} for ${p.lodge} as paid (${p.currency} ${p.amount ? p.amount.toLocaleString() : '—'})?`)) return
+    await markPaid([p])
+  }
 
-    setPaying(p.key)
+  // Mark multiple payments as paid
+  const handleBulkPaid = async () => {
+    const toPay = filtered.filter(p => selected.has(p.key) && p.statusKey !== 'paid')
+    if (toPay.length === 0) return
+    const total = toPay.reduce((s, p) => s + (p.amount || 0), 0)
+    if (!confirm(`Mark ${toPay.length} payment${toPay.length > 1 ? 's' : ''} as paid (total: R ${total.toLocaleString()})?`)) return
+    await markPaid(toPay)
+  }
+
+  const markPaid = async (paymentsList) => {
+    setBulkPaying(true)
     setPayError(null)
-    try {
-      const paidDate = new Date().toISOString().split('T')[0]
-      const updates = { id: p.bookingId }
+    const paidDate = new Date().toISOString().split('T')[0]
+    const paidKeys = []
 
-      // Map slot to Zoho field names
-      if (p.slot === 'Deposit') {
-        updates.Deposit_Paid_Date = paidDate
-        updates.Deposit_Paid_Amount = p.amount || 0
-      } else if (p.slot === '2nd payment') {
-        updates.nd_Payment_Paid_Date = paidDate
-        updates.nd_Payment_Paid_Amount = p.amount || 0
-      } else if (p.slot === '3rd payment') {
-        updates.rd_Payment_Paid_Date = paidDate
-        updates.rd_Payment_Paid_Amount = p.amount || 0
-      } else if (p.slot === '4th payment') {
-        updates.th_Payment_Paid_Date = paidDate
-        updates.th_Payment_Paid_Amount = p.amount || 0
+    // Group by bookingId to batch updates
+    const byBooking = {}
+    paymentsList.forEach(p => {
+      if (!byBooking[p.bookingId]) byBooking[p.bookingId] = { updates: { id: p.bookingId }, payments: [] }
+      const fields = getSlotFields(p.slot)
+      if (fields) {
+        byBooking[p.bookingId].updates[fields.date] = paidDate
+        byBooking[p.bookingId].updates[fields.amount] = p.amount || 0
       }
+      byBooking[p.bookingId].payments.push(p)
+      paidKeys.push(p.key)
+    })
 
-      // Update booking status based on what's being paid
-      const siblingPayments = payments.filter(sp => sp.bookingId === p.bookingId && sp.key !== p.key)
-      const allOthersPaid = siblingPayments.every(sp => sp.statusKey === 'paid')
-      if (allOthersPaid) {
+    // Determine status updates
+    Object.values(byBooking).forEach(({ updates, payments: bkPayments }) => {
+      const allForBooking = payments.filter(sp => sp.bookingId === updates.id)
+      const willBePaid = new Set(bkPayments.map(p => p.key))
+      const allPaidAfter = allForBooking.every(sp => sp.statusKey === 'paid' || willBePaid.has(sp.key))
+      if (allPaidAfter) {
         updates.Status = 'Balance Paid'
-      } else if (p.slot === 'Deposit') {
+      } else if (bkPayments.some(p => p.slot === 'Deposit')) {
         updates.Status = 'Deposit Paid'
       }
+    })
 
+    try {
+      const data = Object.values(byBooking).map(b => b.updates)
       const res = await fetch(API + '/api/zoho-update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module: 'Lodge_Bookings', data: [updates] }),
+        body: JSON.stringify({ module: 'Lodge_Bookings', data }),
       })
       const result = await res.json()
-      if (!res.ok || result.error) {
-        throw new Error(result.error || 'Update failed')
-      }
+      if (!res.ok || result.error) throw new Error(result.error || 'Update failed')
+      setLastPaidKeys(paidKeys)
+      setSelected(new Set())
       if (onRefresh) onRefresh()
     } catch (err) {
       console.error('Mark paid error:', err)
-      setPayError(p.lodge + ' ' + p.label + ': ' + err.message)
+      setPayError(err.message)
     } finally {
+      setBulkPaying(false)
       setPaying(null)
     }
   }
 
-  // Handle View — navigate to lodge detail
+  // Undo last bulk paid (clear the paid dates)
+  const handleUndo = async () => {
+    if (lastPaidKeys.length === 0) return
+    setBulkPaying(true)
+    try {
+      const toPay = payments.filter(p => lastPaidKeys.includes(p.key))
+      const byBooking = {}
+      toPay.forEach(p => {
+        if (!byBooking[p.bookingId]) byBooking[p.bookingId] = { id: p.bookingId }
+        const fields = getSlotFields(p.slot)
+        if (fields) {
+          byBooking[p.bookingId][fields.date] = null
+          byBooking[p.bookingId][fields.amount] = null
+        }
+      })
+      const data = Object.values(byBooking)
+      await fetch(API + '/api/zoho-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: 'Lodge_Bookings', data }),
+      })
+      setLastPaidKeys([])
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      setPayError('Undo failed: ' + err.message)
+    } finally {
+      setBulkPaying(false)
+    }
+  }
+
   const handleView = (p) => {
     if (onSelectBooking && p.booking) onSelectBooking(p.booking)
   }
+
+  const selectedCount = filtered.filter(p => selected.has(p.key)).length
+  const selectedUnpaid = filtered.filter(p => selected.has(p.key) && p.statusKey !== 'paid').length
+  const allChecked = filtered.length > 0 && selected.size === filtered.length
 
   return (
     <div>
@@ -154,6 +239,57 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
         ))}
       </div>
 
+      {/* Bulk action bar */}
+      {selectedCount > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '8px 14px', marginBottom: 12, background: 'var(--blue-bg)',
+          borderRadius: 'var(--radius-md)', fontSize: 13,
+        }}>
+          <span style={{ fontWeight: 500, color: 'var(--blue-text)' }}>
+            {selectedCount} selected
+          </span>
+          {selectedUnpaid > 0 && (
+            <button
+              className="btn btn-sm"
+              style={{ fontSize: 11, padding: '3px 10px', background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7' }}
+              onClick={handleBulkPaid}
+              disabled={bulkPaying}
+            >
+              {bulkPaying ? 'Updating...' : `Mark ${selectedUnpaid} as paid`}
+            </button>
+          )}
+          <button
+            className="btn btn-sm"
+            style={{ fontSize: 11, padding: '3px 10px' }}
+            onClick={() => setSelected(new Set())}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      {/* Undo bar */}
+      {lastPaidKeys.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 14px', marginBottom: 12, background: '#FFF8E1',
+          borderRadius: 'var(--radius-md)', fontSize: 13,
+        }}>
+          <span style={{ color: 'var(--text-secondary)' }}>
+            Marked {lastPaidKeys.length} payment{lastPaidKeys.length > 1 ? 's' : ''} as paid
+          </span>
+          <button
+            className="btn btn-sm"
+            style={{ fontSize: 11, padding: '3px 10px' }}
+            onClick={handleUndo}
+            disabled={bulkPaying}
+          >
+            {bulkPaying ? 'Undoing...' : 'Undo'}
+          </button>
+        </div>
+      )}
+
       {payError && (
         <div style={{ background: '#FEF5F5', border: '1px solid #E57373', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 13, color: '#C62828' }}>
           {payError}
@@ -165,17 +301,26 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       <div className="table-wrap">
         <table style={{ tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: 85 }} />
-            <col style={{ width: 120 }} />
-            <col style={{ width: '25%' }} />
+            <col style={{ width: 36 }} />
             <col style={{ width: 80 }} />
-            <col style={{ width: 100 }} />
-            <col style={{ width: 50 }} />
-            <col style={{ width: 95 }} />
             <col style={{ width: 110 }} />
+            <col style={{ width: '22%' }} />
+            <col style={{ width: 75 }} />
+            <col style={{ width: 95 }} />
+            <col style={{ width: 45 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 100 }} />
           </colgroup>
           <thead>
             <tr>
+              <th style={{ textAlign: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  onChange={handleSelectAll}
+                  style={{ cursor: 'pointer' }}
+                />
+              </th>
               <th>Due</th>
               <th>Tour</th>
               <th>Lodge</th>
@@ -188,10 +333,21 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20 }}>No payments match this filter</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20 }}>No payments match this filter</td></tr>
             )}
-            {filtered.map((p) => (
-              <tr key={p.key} style={p.statusKey === 'overdue' ? { background: '#FEF5F5' } : {}}>
+            {filtered.map((p, idx) => (
+              <tr key={p.key} style={{
+                background: selected.has(p.key) ? 'var(--blue-bg)' :
+                  p.statusKey === 'overdue' ? '#FEF5F5' : undefined,
+              }}>
+                <td style={{ textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(p.key)}
+                    onChange={(e) => handleCheck(p.key, idx, e)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </td>
                 <td style={{
                   fontWeight: 500,
                   color: p.statusKey === 'overdue' ? 'var(--red-text)' :
@@ -219,7 +375,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
                         className="btn btn-sm"
                         style={{ fontSize: 11, padding: '3px 8px', background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7' }}
                         onClick={() => handleMarkPaid(p)}
-                        disabled={paying === p.key}
+                        disabled={paying === p.key || bulkPaying}
                       >
                         {paying === p.key ? '...' : 'Paid'}
                       </button>
@@ -257,7 +413,6 @@ function extractPayments(bookings, now) {
     const dayDesc = bk['Day Description'] || bk.Day_Description || ''
     const bookingId = bk['Record Id'] || bk.id || ''
 
-    // Skip alternatives
     if (dayDesc.startsWith('Z ') || dayDesc.startsWith('z ')) return
 
     const paymentSlots = [
@@ -296,8 +451,6 @@ function extractPayments(bookings, now) {
       const amt = parseFloat(ps.amount) || 0
 
       let statusKey, statusLabel
-
-      // Slot-level paid check first
       if (ps.paidDate) {
         statusKey = 'paid'
         statusLabel = 'Paid ' + fmtDate(ps.paidDate)
@@ -319,21 +472,16 @@ function extractPayments(bookings, now) {
 
       payments.push({
         key: bookingId + '_' + ps.label,
-        bookingId,
-        booking: bk,
+        bookingId, booking: bk,
         lodge, tour, currency, ref,
-        label: ps.label,
-        slot: ps.slot,
-        dueDate: ps.dueDate,
-        amount: amt,
-        paidDate: ps.paidDate,
-        paidAmount: ps.paidAmount,
+        label: ps.label, slot: ps.slot,
+        dueDate: ps.dueDate, amount: amt,
+        paidDate: ps.paidDate, paidAmount: ps.paidAmount,
         statusKey, statusLabel,
       })
     })
   })
 
-  // Sort: overdue first, then due-soon, upcoming, paid last
   payments.sort((a, b) => {
     const order = { overdue: 0, 'due-soon': 1, upcoming: 2, paid: 3 }
     const oa = order[a.statusKey] ?? 2
