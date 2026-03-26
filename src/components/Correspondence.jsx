@@ -84,18 +84,30 @@ export default function Correspondence({ tours, onSelectBooking, allBookings }) 
         {loading ? 'Loading...' : `${emails.length} emails across all bookings`}
       </p>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* Direction tabs */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-default)', marginBottom: 14 }}>
         {['all', 'inbound', 'outbound'].map(f => (
           <button
             key={f}
-            className={'filter-btn' + (directionFilter === f ? ' active' : '')}
             onClick={() => setDirectionFilter(f)}
+            style={{
+              padding: '8px 20px', fontSize: 13, fontWeight: 500, border: 'none',
+              background: 'transparent', cursor: 'pointer',
+              color: directionFilter === f ? 'var(--blue-text)' : 'var(--text-muted)',
+              borderBottom: directionFilter === f ? '2px solid var(--blue-mid)' : '2px solid transparent',
+              marginBottom: -1,
+            }}
           >
             {f === 'all' ? 'All' : f === 'inbound' ? 'Received' : 'Sent'}
+            <span style={{ fontSize: 11, marginLeft: 6, color: 'var(--text-hint)' }}>
+              {f === 'all' ? emails.length : emails.filter(e => e.direction === f).length}
+            </span>
           </button>
         ))}
-        <span style={{ fontSize: 12, color: 'var(--text-hint)', padding: '5px 4px' }}>|</span>
+      </div>
+
+      {/* Tour filters */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <button
           className={'filter-btn' + (tourFilter === 'all' ? ' active' : '')}
           onClick={() => setTourFilter('all')}
