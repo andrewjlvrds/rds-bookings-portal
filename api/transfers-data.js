@@ -28,7 +28,7 @@ export default async function(req, res) {
       try {
         var result = await zohoApi('GET',
           'Bookings?fields=' + fields +
-          '&sort_by=Tour_start_date&sort_order=asc&per_page=200&page=' + page
+          '&sort_by=Created_Time&sort_order=desc&per_page=200&page=' + page
         );
         if (!result || !result.data) {
           // Try with module API name if display name fails
@@ -36,7 +36,7 @@ export default async function(req, res) {
             console.log('Bookings returned no data, trying CustomModule4...');
             result = await zohoApi('GET',
               'CustomModule4?fields=' + fields +
-              '&sort_by=Tour_start_date&sort_order=asc&per_page=200&page=' + page
+              '&sort_by=Created_Time&sort_order=desc&per_page=200&page=' + page
             );
           }
           if (!result || !result.data) {
