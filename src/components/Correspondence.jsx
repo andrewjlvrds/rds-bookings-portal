@@ -227,17 +227,25 @@ export default function Correspondence({ tours, onSelectBooking, allBookings }) 
 }
 
 function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onViewBooking }) {
-  const [body, setBody] = useState(emBody)
+  const [body, setBody] = useState(emBody || '')
   const [fetching, setFetching] = useState(false)
+  const [fetchError, setFetchError] = useState(null)
 
   // Auto-fetch from Gmail if body is empty and we have a message_id
   useEffect(() => {
-    if (!body && (em.message_id || em.gmail_id)) {
+    const msgId = em.message_id || em.gmail_id
+    if (!emBody && msgId) {
       setFetching(true)
-      fetch('/api/gmail-fetch-body?message_id=' + encodeURIComponent(em.message_id || em.gmail_id))
-        .then(r => r.json())
-        .then(d => { if (d.body) setBody(d.body) })
-        .catch(() => {})
+      fetch('/api/gmail-fetch-body?message_id=' + encodeURIComponent(msgId))
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status)
+          return r.json()
+        })
+        .then(d => {
+          if (d.body) setBody(d.body)
+          else setFetchError('Empty response')
+        })
+        .catch(err => setFetchError(err.message))
         .finally(() => setFetching(false))
     }
   }, [])
@@ -255,7 +263,7 @@ function EmailExpanded({ em, emFrom, emTo, emSubject, emBody, bookingMap, onView
         fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
         whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto',
       }}>
-        {fetching ? 'Loading content from Gmail...' : (body || '(no content)')}
+        {fetching ? 'Loading content from Gmail...' : fetchError ? '(Failed to load: ' + fetchError + ')' : (body || '(no content)')}
       </div>
       {em.attachments && em.attachments.length > 0 && (
         <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>

@@ -53,6 +53,10 @@ export default function Transfers() {
       // Skip cancelled bookings
       if (status === 'Cancelled' || status === 'Refunded') return
 
+      // Skip past tours (client-side filter as backup)
+      const endOrStart = tourEnd || tourStart
+      if (endOrStart && endOrStart < today) return
+
       // Arrival transfer
       if (bk.Arrival_Flight_Details || bk.Request_Capey_Leg_1) {
         rows.push({
