@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency } from '../utils/helpers'
+import { getGuestReadiness, getGuestChecklist, getTourReadiness, getOutstandingItems, CATEGORIES } from '../utils/guestReadiness'
 
 export default function Guests({ tours, filterTour, subView }) {
   const [guests, setGuests] = useState([])
@@ -31,6 +32,7 @@ export default function Guests({ tours, filterTour, subView }) {
     accommodation: 'Accommodation',
     payments: 'Guest Payments',
     bikes: 'Bikes & Gear',
+    info: 'Guest Info & Admin',
   }
   const pageTitle = SUB_VIEW_TITLES[subView] || (filterTour ? filterTour : 'Tour Guests')
 
@@ -141,9 +143,10 @@ function TourGuestGroup({ group, onSelectGuest }) {
   const pillions = group.guests.filter(g => g.participant_type === 'Pillion').length
   const crew = group.guests.filter(g => ['Crew', 'Lead Guide', '2nd Guide', 'Support Vehicle Driver'].includes(g.participant_type)).length
   const carPax = group.guests.filter(g => g.participant_type === 'Car Passenger').length
-  const withPreAccom = group.guests.filter(g => g.pre_tour_reqd === 'Yes' || g.pre_tour_details).length
-  const withExcursions = group.guests.filter(g => g.excursions).length
-  const withFlights = group.guests.filter(g => g.arrival_flight || g.departure_flight).length
+
+  const readiness = useMemo(() => getTourReadiness(group.guests), [group.guests])
+  const pct = readiness.pct
+  const barColor = pct >= 80 ? '#2E7D32' : pct >= 50 ? '#F57F17' : pct > 0 ? '#E65100' : '#DDD'
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -167,9 +170,15 @@ function TourGuestGroup({ group, onSelectGuest }) {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {withPreAccom > 0 && <Badge label="Pre-tour" count={withPreAccom} />}
-          {withExcursions > 0 && <Badge label="Excursions" count={withExcursions} />}
-          {withFlights > 0 && <Badge label="Flights" count={withFlights} />}
+          <span style={{ fontSize: 11, fontWeight: 500, color: barColor }}>{pct}%</span>
+          <div style={{ width: 60, height: 4, borderRadius: 2, background: '#ECEFF1', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: pct + '%', background: barColor, borderRadius: 2 }} />
+          </div>
+          {readiness.actionItems > 0 && (
+            <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 8, background: '#FFF3E0', color: '#E65100' }}>
+              {readiness.actionItems} action{readiness.actionItems !== 1 ? 's' : ''}
+            </span>
+          )}
           <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)', display: 'inline-block', color: 'var(--text-muted)' }}>▾</span>
         </div>
       </button>
@@ -177,16 +186,17 @@ function TourGuestGroup({ group, onSelectGuest }) {
         <div className="table-wrap" style={{ marginTop: 0 }}>
           <table style={{ tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '12%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '10%' }} />
               <col style={{ width: '14%' }} />
-              <col style={{ width: '12%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '10%' }} />
             </colgroup>
             <thead><tr>
-              <th>Name</th><th>Type</th><th>Room</th><th>Motorcycle</th><th>Balance</th><th>Status</th><th></th>
+              <th>Name</th><th>Type</th><th>Room</th><th>Motorcycle</th><th>Balance</th><th>Status</th><th>Readiness</th><th></th>
             </tr></thead>
             <tbody>
               {group.guests.map(g => <GuestRow key={g.id} guest={g} onSelect={() => onSelectGuest(g)} />)}
@@ -198,9 +208,6 @@ function TourGuestGroup({ group, onSelectGuest }) {
   )
 }
 
-function Badge({ label, count }) {
-  return <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 6px', background: 'var(--blue-bg)', color: 'var(--blue-text)', borderRadius: 4 }}>{label}: {count}</span>
-}
 
 const STATUS_STYLES = {
   'Balance Paid': { bg: '#E8F5E9', color: '#2E7D32' },
@@ -222,6 +229,10 @@ function GuestRow({ guest: g, onSelect }) {
   const hasSpecial = g.dietary || g.medical || g.physical_limitations || g.anything_else
   const bal = parseFloat(g.balance_due) || 0
   const cur = g.currency || 'USD'
+
+  const rd = useMemo(() => getGuestReadiness(g), [g])
+  const pct = rd.pct
+  const rColor = pct >= 80 ? '#2E7D32' : pct >= 50 ? '#F57F17' : pct > 0 ? '#E65100' : '#DDD'
 
   return (
     <tr onClick={onSelect} style={{ cursor: 'pointer' }}
@@ -250,6 +261,14 @@ function GuestRow({ guest: g, onSelect }) {
           {g.status || '—'}
         </span>
       </td>
+      <td>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: '#ECEFF1', overflow: 'hidden', flexShrink: 0 }}>
+            <div style={{ height: '100%', width: pct + '%', background: rColor, borderRadius: 2 }} />
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 500, color: rColor, fontVariantNumeric: 'tabular-nums' }}>{rd.done}/{rd.total}</span>
+        </div>
+      </td>
       <td style={{ textAlign: 'right' }}>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>View →</span>
       </td>
@@ -266,7 +285,7 @@ function Dot({ title, color }) {
 // ═══════════════════════════════════════
 
 function GuestDetail({ guest: g, onBack }) {
-  const [activeTab, setActiveTab] = useState('details')
+  const [activeTab, setActiveTab] = useState('readiness')
 
   return (
     <div>
@@ -285,7 +304,7 @@ function GuestDetail({ guest: g, onBack }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '0.5px solid var(--border-default)' }}>
-        {['details', 'logistics', 'correspondence'].map(tab => (
+        {['readiness', 'details', 'logistics', 'correspondence'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             style={{ padding: '8px 16px', fontSize: 13, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer',
               color: activeTab === tab ? 'var(--blue-text)' : 'var(--text-muted)',
@@ -294,9 +313,134 @@ function GuestDetail({ guest: g, onBack }) {
           </button>
         ))}
       </div>
+      {activeTab === 'readiness' && <ReadinessPanel g={g} />}
       {activeTab === 'details' && <DetailsPanel g={g} />}
       {activeTab === 'logistics' && <LogisticsPanel g={g} />}
       {activeTab === 'correspondence' && <CorrespondencePanel g={g} />}
+    </div>
+  )
+}
+
+function ReadinessPanel({ g }) {
+  const rd = getGuestReadiness(g)
+  const pct = rd.pct
+  const barColor = pct >= 80 ? '#2E7D32' : pct >= 50 ? '#F57F17' : pct > 0 ? '#E65100' : '#DDD'
+
+  // Group by category
+  const grouped = {}
+  rd.checklist.forEach(item => {
+    if (!grouped[item.category]) grouped[item.category] = []
+    grouped[item.category].push(item)
+  })
+
+  const STATUS_ICON = {
+    complete: '✓',
+    incomplete: '○',
+    action_needed: '!',
+    not_applicable: '—',
+  }
+  const STATUS_COLOR = {
+    complete: '#2E7D32',
+    incomplete: '#9E9E9E',
+    action_needed: '#E65100',
+    not_applicable: '#BDBDBD',
+  }
+  const STATUS_BG = {
+    complete: '#E8F5E9',
+    incomplete: '#F5F5F5',
+    action_needed: '#FFF3E0',
+    not_applicable: '#FAFAFA',
+  }
+
+  return (
+    <div>
+      {/* Summary bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px', marginBottom: 20,
+        background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)',
+        border: '0.5px solid var(--border-default)',
+      }}>
+        <div>
+          <span style={{ fontSize: 28, fontWeight: 600, color: barColor, fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 8 }}>ready</span>
+        </div>
+        <div style={{ flex: 1, maxWidth: 200 }}>
+          <div style={{ height: 6, borderRadius: 3, background: '#ECEFF1', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: pct + '%', background: barColor, borderRadius: 3, transition: 'width 0.3s' }} />
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {rd.done} of {rd.total} items complete
+          {rd.actionNeeded > 0 && <span style={{ color: '#E65100', fontWeight: 500 }}> · {rd.actionNeeded} need action</span>}
+        </div>
+      </div>
+
+      {/* Checklist by category */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        {Object.keys(CATEGORIES).map(cat => {
+          const items = grouped[cat]
+          if (!items || items.length === 0) return null
+          const catInfo = CATEGORIES[cat]
+          const catDone = items.filter(i => i.status === 'complete').length
+          const catTotal = items.filter(i => i.status !== 'not_applicable').length
+
+          return (
+            <div key={cat}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: catInfo.color }} />
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.3 }}>{catInfo.label}</span>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{catDone}/{catTotal}</span>
+              </div>
+              {items.map(item => (
+                <div key={item.key} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 10px',
+                  marginBottom: 2, borderRadius: 6,
+                  background: item.status === 'action_needed' ? STATUS_BG.action_needed : 'transparent',
+                }}>
+                  <span style={{
+                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: item.status === 'action_needed' ? 11 : 10,
+                    fontWeight: 600,
+                    background: STATUS_BG[item.status],
+                    color: STATUS_COLOR[item.status],
+                    border: '1px solid ' + (item.status === 'complete' ? '#A5D6A7' : item.status === 'action_needed' ? '#FFB74D' : '#E0E0E0'),
+                  }}>
+                    {STATUS_ICON[item.status]}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 13,
+                      color: item.status === 'complete' ? 'var(--text-secondary)' : 'var(--text-primary)',
+                      textDecoration: item.status === 'complete' ? 'line-through' : 'none',
+                      opacity: item.status === 'complete' ? 0.7 : 1,
+                    }}>
+                      {item.label}
+                    </div>
+                    {item.note && item.status !== 'complete' && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.note}
+                      </div>
+                    )}
+                    {item.status === 'action_needed' && (
+                      <div style={{ fontSize: 10, color: '#E65100', fontWeight: 500, marginTop: 1 }}>
+                        Needs action from team
+                      </div>
+                    )}
+                    {item.status === 'incomplete' && (
+                      <div style={{ fontSize: 10, color: '#9E9E9E', marginTop: 1 }}>
+                        Waiting on guest
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

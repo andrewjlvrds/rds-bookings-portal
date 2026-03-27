@@ -267,6 +267,10 @@ export default function App() {
       return <Guests tours={tours} subView="bikes" />
     }
 
+    if (activeView === 'guest-info') {
+      return <Guests tours={tours} subView="info" />
+    }
+
     if (activeTour && activeView === 'enquiry-preview') {
       return (
         <EnquiryPreview
