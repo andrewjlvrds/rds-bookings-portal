@@ -646,6 +646,45 @@ ${nights.map(n => {
     setTimeout(() => win.print(), 300)
   }
 
+  // Copy email-friendly text version to clipboard
+  const [copied, setCopied] = useState(false)
+  const handleCopyProposal = () => {
+    const totalKm = nights.reduce((sum, n) => sum + (parseInt(n.km) || 0), 0)
+    const tourNights = nights.filter(n => !n.pre_tour)
+    const totalDays = tourNights.length + 1
+
+    const fmtShort = (d) => {
+      if (!d) return ''
+      const dt = new Date(d)
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+      return days[dt.getDay()] + ' ' + dt.getDate() + ' ' + months[dt.getMonth()]
+    }
+
+    const lines = []
+    lines.push(tour.name)
+    lines.push(totalDays + ' days · ' + nights.length + ' nights' + (totalKm > 0 ? ' · ' + totalKm.toLocaleString() + ' km' : ''))
+    lines.push('')
+
+    nights.forEach(n => {
+      const dayLabel = n.pre_tour ? '—' : 'Day ' + n.day
+      const km = n.km && parseInt(n.km) > 0 ? ' (' + n.km + ' km)' : ''
+      lines.push(dayLabel + '  ' + fmtShort(n.date))
+      lines.push((n.route || '—') + km)
+      lines.push('Accommodation: ' + (n.lodge || 'TBC'))
+      if (n.route_notes && n.route_notes.trim()) lines.push(n.route_notes.trim())
+      if (n.excursion && n.excursion.trim()) lines.push('★ ' + n.excursion.trim())
+      lines.push('')
+    })
+
+    if (totalKm > 0) lines.push('Total distance: ' + totalKm.toLocaleString() + ' km')
+
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
   return (
     <div>
       <button
@@ -677,6 +716,7 @@ ${nights.map(n => {
             <button className="btn" onClick={handleDownloadExcel} title="Download as CSV (Excel)">↓ Excel</button>
             <button className="btn" onClick={handleDownloadPDF} title="Print / Save as PDF">↓ PDF</button>
             <button className="btn" onClick={handleClientProposal} title="Client-facing route proposal (no internal details)" style={{ color: 'var(--amber-text, #b8860b)' }}>↓ Proposal</button>
+            <button className="btn" onClick={handleCopyProposal} title="Copy route summary to clipboard for email" style={{ color: 'var(--amber-text, #b8860b)' }}>{copied ? '✓ Copied' : '⎘ Copy'}</button>
             <button className="btn" onClick={handleClear}>Clear</button>
             {isLocalTour && (
               <input
