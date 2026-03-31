@@ -505,6 +505,147 @@ ${nights.map(n => `<tr>
     setTimeout(() => win.print(), 300)
   }
 
+  // Download as client-facing proposal PDF (no internal details)
+  const handleClientProposal = () => {
+    const totalKm = nights.reduce((sum, n) => sum + (parseInt(n.km) || 0), 0)
+    const tourNights = nights.filter(n => !n.pre_tour)
+    const totalDays = tourNights.length + 1
+    const firstDate = nights.length > 0 ? nights[0].date : departureDate
+    const lastNight = nights[nights.length - 1]
+    const endDate = lastNight ? (() => { const d = new Date(lastNight.date); d.setDate(d.getDate() + 1); return d })() : null
+
+    const fmtProposalDate = (d) => {
+      if (!d) return ''
+      const dt = new Date(d)
+      const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
+      return dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear()
+    }
+
+    const fmtShortDate = (d) => {
+      if (!d) return ''
+      const dt = new Date(d)
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+      return days[dt.getDay()] + ' ' + dt.getDate() + ' ' + months[dt.getMonth()]
+    }
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>${tour.name} — Route Proposal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; font-size: 11px; color: #2a2a2a; }
+  
+  .cover { padding: 60px 50px 40px; min-height: 160px; }
+  .cover h1 { font-size: 28px; font-weight: 600; color: #1a1a1a; letter-spacing: -0.5px; }
+  .cover .dates { font-size: 14px; color: #666; margin-top: 8px; font-weight: 400; }
+  .cover .summary { font-size: 12px; color: #888; margin-top: 6px; }
+  .cover .brand { font-size: 11px; color: #b8860b; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
+  
+  .divider { height: 1px; background: #e0d5c1; margin: 0 50px; }
+  
+  .content { padding: 30px 50px 40px; }
+  
+  table { width: 100%; border-collapse: collapse; }
+  thead th { 
+    text-align: left; font-size: 9px; font-weight: 600; color: #999; 
+    text-transform: uppercase; letter-spacing: 0.8px; padding: 8px 10px; 
+    border-bottom: 1.5px solid #d4c5a9; 
+  }
+  tbody td { 
+    padding: 10px 10px; border-bottom: 0.5px solid #eee; vertical-align: top; 
+    font-size: 11px; line-height: 1.5;
+  }
+  tbody tr:last-child td { border-bottom: 1.5px solid #d4c5a9; }
+  
+  .day-num { font-weight: 600; color: #b8860b; width: 36px; font-size: 12px; }
+  .date-col { width: 80px; color: #888; font-size: 10px; }
+  .route-col { }
+  .route-name { font-weight: 500; color: #2a2a2a; }
+  .route-km { font-size: 10px; color: #999; margin-top: 2px; }
+  .route-notes { font-size: 10px; color: #777; font-style: italic; margin-top: 3px; line-height: 1.4; }
+  .excursion { font-size: 10px; color: #b8860b; margin-top: 3px; }
+  .lodge-col { font-weight: 500; color: #2a2a2a; }
+  
+  .total-row td { font-weight: 600; background: #faf7f0; color: #666; font-size: 11px; }
+  
+  .footer { 
+    padding: 24px 50px; font-size: 9px; color: #aaa; 
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 0.5px solid #eee; margin-top: 20px;
+  }
+  .footer a { color: #b8860b; text-decoration: none; }
+  
+  @media print { 
+    body { padding: 0; } 
+    .cover { padding: 40px 30px 30px; min-height: auto; }
+    .divider { margin: 0 30px; }
+    .content { padding: 20px 30px 30px; }
+    .footer { padding: 16px 30px; }
+  }
+</style>
+</head><body>
+
+<div class="cover">
+  <div class="brand">Ride Down South</div>
+  <h1>${tour.name}</h1>
+  <div class="dates">${fmtProposalDate(firstDate)}${endDate ? ' — ' + fmtProposalDate(endDate) : ''}</div>
+  <div class="summary">${totalDays} days · ${nights.length} nights · ${totalKm > 0 ? totalKm.toLocaleString() + ' km' : ''}</div>
+</div>
+
+<div class="divider"></div>
+
+<div class="content">
+  <table>
+    <thead>
+      <tr>
+        <th>Day</th>
+        <th>Date</th>
+        <th>Route</th>
+        <th>Accommodation</th>
+      </tr>
+    </thead>
+    <tbody>
+${nights.map(n => {
+  const hasKm = n.km && parseInt(n.km) > 0
+  const hasNotes = n.route_notes && n.route_notes.trim()
+  const hasExcursion = n.excursion && n.excursion.trim()
+  return `      <tr>
+        <td class="day-num">${n.pre_tour ? '—' : n.day}</td>
+        <td class="date-col">${fmtShortDate(n.date)}</td>
+        <td class="route-col">
+          <div class="route-name">${n.route || '—'}</div>
+          ${hasKm ? '<div class="route-km">' + n.km + ' km</div>' : ''}
+          ${hasNotes ? '<div class="route-notes">' + n.route_notes.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : ''}
+          ${hasExcursion ? '<div class="excursion">★ ' + n.excursion.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : ''}
+        </td>
+        <td class="lodge-col">${n.lodge || '—'}</td>
+      </tr>`
+}).join('\n')}
+      <tr class="total-row">
+        <td></td>
+        <td></td>
+        <td>${totalKm > 0 ? 'Total: ' + totalKm.toLocaleString() + ' km' : ''}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  <span>Ride Down South · <a href="https://ridedownsouth.com">ridedownsouth.com</a></span>
+  <span>Proposal generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+</div>
+
+</body></html>`
+
+    const win = window.open('', '_blank')
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => win.print(), 300)
+  }
+
   return (
     <div>
       <button
@@ -535,6 +676,7 @@ ${nights.map(n => `<tr>
             </button>
             <button className="btn" onClick={handleDownloadExcel} title="Download as CSV (Excel)">↓ Excel</button>
             <button className="btn" onClick={handleDownloadPDF} title="Print / Save as PDF">↓ PDF</button>
+            <button className="btn" onClick={handleClientProposal} title="Client-facing route proposal (no internal details)" style={{ color: 'var(--amber-text, #b8860b)' }}>↓ Proposal</button>
             <button className="btn" onClick={handleClear}>Clear</button>
             {isLocalTour && (
               <input
