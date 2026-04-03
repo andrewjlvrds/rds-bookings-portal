@@ -42,12 +42,13 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const handleSendEnquiry = async (bookingGroup) => {
     const firstBk = bookingGroup[0]
     const bkId = firstBk.id || firstBk['Record Id']
-    const lodge = (firstBk.Lodge_Name || firstBk['Lodge Booking Name'] || firstBk.Name || '').split(' - ')[0]
+    const rawLodge = firstBk.Lodge_Name || firstBk['Lodge Booking Name'] || firstBk.Name || ''
+    const lodge = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
     const lodgeRecord = lookupLodge(lodge)
-    const email = lodgeRecord ? (lodgeRecord.email || '') : (firstBk.Email || firstBk.Lodge_Email || '')
+    const email = lodgeRecord ? (lodgeRecord.email || lodgeRecord.email2 || '') : (firstBk.Email || firstBk.Lodge_Email || '')
 
     if (!email) {
-      alert('No email address found for ' + lodge + '. Add one in Zoho first.')
+      alert('No email address found for ' + lodge + '. Check the lodge directory in Zoho.')
       return
     }
 
@@ -688,9 +689,10 @@ ${merged.map((bk, i) => {
                 {(() => {
                   const bkId = bk.id || bk['Record Id']
                   if (previewId !== bkId) return null
-                  const lodge = (bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || '').split(' - ')[0]
+                  const rawLodge = bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || ''
+                  const lodge = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
                   const lodgeRecord = lookupLodge(lodge)
-                  const email = lodgeRecord ? (lodgeRecord.email || '') : (bk.Email || bk.Lodge_Email || '')
+                  const email = lodgeRecord ? (lodgeRecord.email || lodgeRecord.email2 || '') : (bk.Email || bk.Lodge_Email || '')
                   const group = lodgeGroupMap[bkId] || [bk]
                   const subject = generateSubject(bk, tour.name)
                   const body = generateEnquiryEmail(
