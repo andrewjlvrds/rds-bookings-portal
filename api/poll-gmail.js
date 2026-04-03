@@ -236,11 +236,33 @@ export default async function(req, res) {
           attachments: attachments,
         });
 
-        // AI parse the email to extract booking data
+        // Detect auto-replies — store but don't update booking status
+        var isAutoReply = false;
+        var autoReplyHeader = getHeader(headers, 'Auto-Submitted');
+        var precedenceHeader = getHeader(headers, 'Precedence');
+        var xAutoResponse = getHeader(headers, 'X-Autoreply');
+        if (autoReplyHeader && autoReplyHeader !== 'no') isAutoReply = true;
+        if (precedenceHeader === 'auto_reply' || precedenceHeader === 'bulk') isAutoReply = true;
+        if (xAutoResponse) isAutoReply = true;
+        // Also check body patterns for common auto-reply phrases
+        var bodyLower = (body || '').toLowerCase();
+        if (!isAutoReply && (
+          bodyLower.includes('this is an automated response') ||
+          bodyLower.includes('this is an auto-generated') ||
+          bodyLower.includes('automatic reply') ||
+          bodyLower.includes('out of office') ||
+          bodyLower.includes('auto-reply') ||
+          bodyLower.includes('autoreply') ||
+          bodyLower.includes('we have received your email') ||
+          bodyLower.includes('thank you for contacting') ||
+          bodyLower.includes('we will get back to you')
+        )) isAutoReply = true;
+
+        // AI parse the email to extract booking data (skip for auto-replies)
         var aiResult = null;
         var zohoUpdates = { Last_Response_Date: new Date().toISOString().split('T')[0] };
 
-        if (body && body.trim().length > 10) {
+        if (!isAutoReply && body && body.trim().length > 10) {
           try {
             var bookingContext = {
               lodge_name: matchedBooking.Lodge_Name || matchedBooking.Name || '',
@@ -274,13 +296,17 @@ export default async function(req, res) {
           }
         }
 
-        // Update Zoho with extracted fields + Last_Response_Date
-        try {
-          zohoUpdates.id = bookingId;
-          await zohoApi('PUT', 'Lodge_Bookings', { data: [zohoUpdates] });
-          console.log('Updated booking', bookingId, 'with', Object.keys(zohoUpdates).length - 1, 'fields');
-        } catch (zohoErr) {
-          console.error('Failed to update booking', bookingId, zohoErr.message);
+        // Update Zoho with extracted fields + Last_Response_Date (skip for auto-replies)
+        if (!isAutoReply) {
+          try {
+            zohoUpdates.id = bookingId;
+            await zohoApi('PUT', 'Lodge_Bookings', { data: [zohoUpdates] });
+            console.log('Updated booking', bookingId, 'with', Object.keys(zohoUpdates).length - 1, 'fields');
+          } catch (zohoErr) {
+            console.error('Failed to update booking', bookingId, zohoErr.message);
+          }
+        } else {
+          console.log('Auto-reply detected for', matchedBooking.Name || bookingId, '— stored but no status change');
         }
 
         // Apply Gmail label based on tour/lodge name
@@ -310,9 +336,10 @@ export default async function(req, res) {
           matched_booking: matchedBooking.Name || matchedBooking.Lodge_Name,
           match_method: matchMethod,
           attachments: attachments.length,
-          ai_summary: aiResult ? aiResult.summary : null,
-          ai_status: aiResult && aiResult.extracted && aiResult.extracted.suggested_status ? aiResult.extracted.suggested_status.value : null,
-          fields_updated: Object.keys(zohoUpdates).length - 1,
+          auto_reply: isAutoReply,
+          ai_summary: isAutoReply ? 'Auto-reply — no status change' : (aiResult ? aiResult.summary : null),
+          ai_status: isAutoReply ? null : (aiResult && aiResult.extracted && aiResult.extracted.suggested_status ? aiResult.extracted.suggested_status.value : null),
+          fields_updated: isAutoReply ? 0 : Object.keys(zohoUpdates).length - 1,
         });
 
       } catch (msgErr) {

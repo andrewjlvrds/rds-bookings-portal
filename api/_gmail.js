@@ -116,7 +116,6 @@ export async function labelMessage(token, messageId, labelId) {
       },
       body: JSON.stringify({
         addLabelIds: [labelId],
-        removeLabelIds: ['INBOX'],
       }),
     });
     return res.ok;
