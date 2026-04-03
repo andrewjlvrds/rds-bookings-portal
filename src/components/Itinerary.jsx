@@ -606,28 +606,31 @@ ${merged.map((bk, i) => {
                       {(() => {
                         const bkId = bk.id || bk['Record Id']
                         const s = getStatus(bk)
-                        const canSend = s === 'Ready to Send' || s === 'Ready to send' || s === 'Not Started'
                         const isSent = sentIds[bkId] === 'sent'
                         const isError = sentIds[bkId] && sentIds[bkId].startsWith('error')
                         const isSending = sendingId === bkId
                         const group = lodgeGroupMap[bkId] || [bk]
                         const isFirstInGroup = group[0] === bk
+                        const alreadySent = s === 'Enquiry Sent'
 
-                        if (s === 'Enquiry Sent' || isSent) return <span style={{ fontSize: 10, color: 'var(--green-text)' }}>✓</span>
-                        if (isError) return <span style={{ fontSize: 10, color: 'var(--red-text)' }} title={sentIds[bkId]}>✗</span>
-                        if (!canSend || !isFirstInGroup) return null
+                        if (!isFirstInGroup) return null
+                        if (!lodge) return null
 
                         return (
-                          <button
-                            onClick={() => setPreviewId(previewId === bkId ? null : bkId)}
-                            disabled={isSending}
-                            style={{
-                              fontSize: 10, padding: '3px 6px',
-                              border: '0.5px solid var(--blue-mid)', borderRadius: 4,
-                              background: previewId === bkId ? 'var(--blue-bg)' : 'var(--bg-primary)',
-                              cursor: 'pointer', color: 'var(--blue-text)', whiteSpace: 'nowrap',
-                            }}
-                          >{isSending ? '...' : group.length > 1 ? 'Email (' + group.length + 'n)' : 'Email'}</button>
+                          <>
+                            {(alreadySent || isSent) && <span style={{ fontSize: 10, color: 'var(--green-text)' }}>✓</span>}
+                            {isError && <span style={{ fontSize: 10, color: 'var(--red-text)' }} title={sentIds[bkId]}>✗</span>}
+                            <button
+                              onClick={() => setPreviewId(previewId === bkId ? null : bkId)}
+                              disabled={isSending}
+                              style={{
+                                fontSize: 10, padding: '3px 6px',
+                                border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+                                background: previewId === bkId ? 'var(--blue-bg)' : 'var(--bg-primary)',
+                                cursor: 'pointer', color: 'var(--blue-text)', whiteSpace: 'nowrap',
+                              }}
+                            >{isSending ? '...' : group.length > 1 ? 'Email (' + group.length + 'n)' : 'Email'}</button>
+                          </>
                         )
                       })()}
                     </div>
