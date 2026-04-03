@@ -78,6 +78,32 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
     return dA.localeCompare(dB)
   })
 
+  // Merge draft data into Zoho bookings — draft holds fields Zoho doesn't store (km, route_notes, etc)
+  const draftByDate = {}
+  draftNights.forEach(n => { if (n.date) draftByDate[n.date] = n })
+
+  const merged = sorted.map(bk => {
+    const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
+    const draft = draftByDate[checkIn]
+    if (!draft) return bk
+    // Overlay draft-only fields onto Zoho booking (draft enriches, doesn't override Zoho status/amounts)
+    return {
+      ...bk,
+      _km: draft.km || '',
+      _route_notes: draft.route_notes || '',
+      _backup: draft.backup || '',
+      // Use draft lodge if Zoho has no lodge name (the write-to-Zoho failed)
+      Lodge_Name: bk.Lodge_Name || draft.lodge || bk.Name || '',
+      // Use draft excursion if Zoho doesn't have one
+      Excursion: bk.Excursion || draft.excursion || '',
+      Excursion_Date: bk.Excursion_Date || draft.excursion_date || '',
+    }
+  })
+
+  // Find draft nights that aren't in Zoho yet (new additions in editor)
+  const zohoCheckInDates = new Set(sorted.map(bk => bk.Check_in_Date || bk['Check-in'] || ''))
+  const draftOnlyNights = draftNights.filter(n => n.date && !zohoCheckInDates.has(n.date))
+
   // Decide what to show: Zoho bookings take priority, then draft
   const hasZohoBookings = sorted.length > 0
   const hasContent = hasZohoBookings || hasDraft
@@ -215,8 +241,8 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
           {sorted.length > 0 && (
             <>
               <button className="btn" onClick={() => {
-                const headers = ['Day', 'Date', 'Route', 'Lodge', 'Meals', 'Amount', 'Status']
-                const rows = sorted.map((bk, i) => {
+                const headers = ['Day', 'Date', 'Route', 'Km', 'Lodge', 'Meals', 'Amount', 'Status']
+                const rows = merged.map((bk, i) => {
                   const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
                   const dayDesc = bk.Day_Description || bk['Day Description'] || ''
                   const routeMatch = dayDesc.match(/Day\s*\d+:\s*(.+)/)
@@ -225,7 +251,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                   const amount = bk.Total_Amount || bk['Total Amount'] || ''
                   const currency = bk.Currency || bk.Lodge_Currency || ''
                   const status = getStatus(bk)
-                  return [i + 1, checkIn, route, lodge, bk.Meals || '', amount ? currency + ' ' + amount : '', status]
+                  return [i + 1, checkIn, route, bk._km || '', lodge, bk.Meals || '', amount ? currency + ' ' + amount : '', status]
                 })
                 const csv = [headers, ...rows].map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n')
                 const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -254,14 +280,14 @@ tr:last-child td { border-bottom:1.5px solid #333; }
 </style></head><body>
 <h1>${tour.name}</h1>
 <div class="sub">${tour.departure_date ? 'Departure: ' + fmtDateFull(tour.departure_date) : ''}</div>
-<table><thead><tr><th>Day</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr></thead><tbody>
-${sorted.map((bk, i) => {
+<table><thead><tr><th>Day</th><th>Date</th><th>Route</th><th>Km</th><th>Lodge</th><th>Meals</th></tr></thead><tbody>
+${merged.map((bk, i) => {
   const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
   const dayDesc = bk.Day_Description || bk['Day Description'] || ''
   const routeMatch = dayDesc.match(/Day\s*\d+:\s*(.+)/)
   const route = routeMatch ? routeMatch[1] : dayDesc
   const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
-  return '<tr><td>' + (i+1) + '</td><td>' + fmtDate(checkIn) + '</td><td>' + route + '</td><td class="lodge">' + lodge + '</td><td>' + (bk.Meals || '') + '</td></tr>'
+  return '<tr><td>' + (i+1) + '</td><td>' + fmtDate(checkIn) + '</td><td>' + route + '</td><td>' + (bk._km || '') + '</td><td class="lodge">' + lodge + '</td><td>' + (bk.Meals || '') + '</td></tr>'
 }).join('')}
 </tbody></table>
 <div class="footer">Ride Down South · ${tour.name} · Generated ${new Date().toLocaleDateString()}</div>
@@ -340,7 +366,7 @@ ${sorted.map((bk, i) => {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((bk, i) => {
+            {merged.map((bk, i) => {
               const status = getStatus(bk)
               const badge = getStatusBadge(status)
               const lodge = (bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || '').split(' - ')[0]
@@ -359,6 +385,8 @@ ${sorted.map((bk, i) => {
                   <td>{fmtDate(checkIn)}</td>
                   <td>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{route}</div>
+                    {bk._km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{bk._km} km</div>}
+                    {bk._route_notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 1 }}>{bk._route_notes}</div>}
                     {bk.Booking_Notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>{bk.Booking_Notes}</div>}
                     {bk.Excursion && (
                       <div style={{ fontSize: 10, color: 'var(--blue-text)', marginTop: 2 }}>
@@ -408,6 +436,9 @@ ${sorted.map((bk, i) => {
                       <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
                         Tried: {bk.Previously_Tried || bk['Previously Tried']}
                       </div>
+                    )}
+                    {bk._backup && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Backup: {bk._backup}</div>
                     )}
                   </td>
                   <td>
@@ -519,6 +550,57 @@ ${sorted.map((bk, i) => {
         <span><strong style={{ color: 'var(--text-primary)' }}>{readyToSend}</strong> ready to send</span>
         <span><strong style={{ color: 'var(--text-primary)' }}>{notStarted}</strong> not started</span>
       </div>
+
+      {/* Draft-only nights not yet in Zoho */}
+      {draftOnlyNights.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{
+            padding: '10px 16px', background: 'var(--amber-bg)',
+            borderRadius: 'var(--radius-md)', fontSize: 12, color: 'var(--amber-text)',
+            marginBottom: 8,
+          }}>
+            <strong>{draftOnlyNights.length} night{draftOnlyNights.length !== 1 ? 's' : ''}</strong> in draft not yet pushed to Zoho — edit itinerary to push
+          </div>
+          <div className="table-wrap">
+            <table style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: 50 }} />
+                <col style={{ width: 80 }} />
+                <col style={{ width: '28%' }} />
+                <col style={{ width: '30%' }} />
+                <col style={{ width: 60 }} />
+              </colgroup>
+              <thead>
+                <tr><th>Day</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr>
+              </thead>
+              <tbody>
+                {draftOnlyNights.map((n, i) => {
+                  const lr = lookupLodge(n.lodge)
+                  return (
+                    <tr key={'draft_' + i} style={{ opacity: 0.7 }}>
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{n.pre_tour ? 'Pre' : n.day}</td>
+                      <td>{fmtDate(n.date)}</td>
+                      <td>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{n.route || ''}</div>
+                        {n.km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{n.km} km</div>}
+                        {n.route_notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>{n.route_notes}</div>}
+                        {n.excursion && <div style={{ fontSize: 10, color: 'var(--blue-text)', marginTop: 2 }}>Excursion: {n.excursion}</div>}
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>{n.lodge || '—'}</div>
+                        {n.lodge && lr && lr.email && <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{lr.email}</div>}
+                        {n.lodge && !lr && <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>}
+                        {n.backup && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Backup: {n.backup}</div>}
+                      </td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{n.meals || ''}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       </div>
       )}
     </div>

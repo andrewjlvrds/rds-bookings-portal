@@ -41,7 +41,7 @@ export function generateEnquiryEmail(bookings, tourName, lodgeName, opts = {}) {
 
   let body = `Hi team,
 
-Ride Down South has another motorcycle tour coming your way. Can you please let us know your room availability?
+Ride Down South has another motorcycle tour coming your way. Can you please let us know your room availability at ${lodgeName}?
 
 Check-in: ${checkIn}
 Check-out: ${checkOut}
