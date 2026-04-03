@@ -31,8 +31,16 @@ export function generateEnquiryEmail(bookings, tourName, lodgeName, opts = {}) {
   const checkOut = emailDate(last.Check_out_Date)
   const totalNights = bookings.reduce((sum, b) => sum + (parseInt(b.Nights) || 1), 0)
 
-  const excursion = first.Excursion || first.excursion || ''
-  const excursionDate = (first.Excursion_Date || first.excursion_date) ? emailDate(first.Excursion_Date || first.excursion_date) : ''
+  // Collect excursions from all bookings in the group (multi-night stays may have different excursions)
+  const excursions = []
+  bookings.forEach(b => {
+    const exc = b.Excursion || b.excursion || ''
+    if (!exc) return
+    const excDate = (b.Excursion_Date || b.excursion_date) ? emailDate(b.Excursion_Date || b.excursion_date) : ''
+    // Use check-in date as fallback for excursion date
+    const fallbackDate = b.Check_in_Date ? emailDate(b.Check_in_Date) : ''
+    excursions.push({ name: exc, date: excDate || fallbackDate })
+  })
 
   const refs = bookings.map(b => b.RDS_Reference).filter(Boolean)
   const refStr = refs.join(', ')
@@ -53,8 +61,11 @@ Room requirements:
 * ${pax_twin * 2} pax in ${pax_twin} shared room${pax_twin > 1 ? 's' : ''} (twin beds)
 * ${numGuides} guide${numGuides > 1 ? 's' : ''} in available rooms`
 
-  if (excursion) {
-    body += '\n\nExcursion: ' + excursion + ' for ' + totalPax + ' pax' + (excursionDate ? ' on ' + excursionDate : '')
+  if (excursions.length > 0) {
+    body += '\n\nExcursions:'
+    excursions.forEach(e => {
+      body += '\n* ' + e.name + ' for ' + totalPax + ' pax + ' + numGuides + ' guides' + (e.date ? ' on ' + e.date : '')
+    })
   }
 
   body += refRequest + '\n\n\n\nThanks,\n\n' + sender + '\nRide Down South\nbookings@ridedownsouth.com'

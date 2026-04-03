@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
+import { generateSubject, generateEnquiryEmail } from '../utils/emailTemplates'
 
 export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh }) {
   const [marking, setMarking] = useState(false)
@@ -8,6 +9,10 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [editingDate, setEditingDate] = useState(false)
   const [newDate, setNewDate] = useState(tour.departure_date || '')
   const [savingDate, setSavingDate] = useState(false)
+  const [sendingId, setSendingId] = useState(null) // booking id currently sending
+  const [sentIds, setSentIds] = useState({}) // { id: 'sent' | 'error: ...' }
+  const [previewId, setPreviewId] = useState(null) // booking id showing preview
+  const [sender, setSender] = useState('Helen')
 
   const handleSaveDate = async () => {
     if (!newDate || newDate === tour.departure_date) {
@@ -28,6 +33,59 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
       alert('Error: ' + err.message)
     } finally {
       setSavingDate(false)
+    }
+  }
+
+  // Send enquiry for a single lodge booking (or group of consecutive nights at same lodge)
+  const handleSendEnquiry = async (bookingGroup) => {
+    const firstBk = bookingGroup[0]
+    const bkId = firstBk.id || firstBk['Record Id']
+    const lodge = (firstBk.Lodge_Name || firstBk['Lodge Booking Name'] || firstBk.Name || '').split(' - ')[0]
+    const lodgeRecord = lookupLodge(lodge)
+    const email = lodgeRecord ? (lodgeRecord.email || '') : (firstBk.Email || firstBk.Lodge_Email || '')
+
+    if (!email) {
+      alert('No email address found for ' + lodge + '. Add one in Zoho first.')
+      return
+    }
+
+    setSendingId(bkId)
+    try {
+      const subject = generateSubject(firstBk, tour.name)
+      const body = generateEnquiryEmail(
+        bookingGroup, tour.name, lodge,
+        { sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
+      )
+
+      const res = await fetch('/api/send-enquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: email,
+          subject,
+          body,
+          booking_ids: bookingGroup.map(b => b.id || b['Record Id']).filter(Boolean),
+          tour_name: tour.name,
+          lodge_name: lodge,
+        }),
+      })
+
+      if (res.ok) {
+        const result = await res.json()
+        if (result.email_sent) {
+          setSentIds(prev => ({ ...prev, [bkId]: 'sent' }))
+          setPreviewId(null)
+        } else {
+          setSentIds(prev => ({ ...prev, [bkId]: 'error: ' + (result.email_error || 'Failed') }))
+        }
+      } else {
+        const err = await res.json()
+        setSentIds(prev => ({ ...prev, [bkId]: 'error: ' + (err.error || 'Failed') }))
+      }
+    } catch (err) {
+      setSentIds(prev => ({ ...prev, [bkId]: 'error: ' + err.message }))
+    } finally {
+      setSendingId(null)
     }
   }
 
@@ -103,6 +161,20 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   // Find draft nights that aren't in Zoho yet (new additions in editor)
   const zohoCheckInDates = new Set(sorted.map(bk => bk.Check_in_Date || bk['Check-in'] || ''))
   const draftOnlyNights = draftNights.filter(n => n.date && !zohoCheckInDates.has(n.date))
+
+  // Group consecutive nights at the same lodge (for sending one email per stay)
+  const lodgeGroupMap = {} // booking id → array of bookings in the group
+  let currentGroup = []
+  merged.forEach((bk, i) => {
+    const lodge = (bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || '').split(' - ')[0]
+    const prevLodge = i > 0 ? (merged[i-1].Lodge_Name || merged[i-1]['Lodge Booking Name'] || merged[i-1].Name || '').split(' - ')[0] : ''
+    if (lodge === prevLodge && lodge) {
+      currentGroup.push(bk)
+    } else {
+      currentGroup = [bk]
+    }
+    lodgeGroupMap[bk.id || bk['Record Id']] = currentGroup
+  })
 
   // Decide what to show: Zoho bookings take priority, then draft
   const hasZohoBookings = sorted.length > 0
@@ -380,7 +452,8 @@ ${merged.map((bk, i) => {
               const route = routeMatch ? routeMatch[1] : dayDesc
 
               return (
-                <tr key={bk['Record Id'] || bk.id || i} style={status === 'Not Available' ? { opacity: 0.6 } : {}}>
+                <React.Fragment key={bk['Record Id'] || bk.id || i}>
+                <tr style={status === 'Not Available' ? { opacity: 0.6 } : {}}>
                   <td style={{ fontVariantNumeric: 'tabular-nums' }}>{nightNum}</td>
                   <td>{fmtDate(checkIn)}</td>
                   <td>
@@ -524,15 +597,105 @@ ${merged.map((bk, i) => {
                     )}
                   </td>
                   <td>
-                    <button
-                      className="btn btn-sm"
-                      onClick={() => onSelectBooking(bk)}
-                      style={{ fontSize: 12, padding: '4px 8px' }}
-                    >
-                      View
-                    </button>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => onSelectBooking(bk)}
+                        style={{ fontSize: 11, padding: '3px 6px' }}
+                      >View</button>
+                      {(() => {
+                        const bkId = bk.id || bk['Record Id']
+                        const s = getStatus(bk)
+                        const canSend = s === 'Ready to Send' || s === 'Ready to send' || s === 'Not Started'
+                        const isSent = sentIds[bkId] === 'sent'
+                        const isError = sentIds[bkId] && sentIds[bkId].startsWith('error')
+                        const isSending = sendingId === bkId
+                        const group = lodgeGroupMap[bkId] || [bk]
+                        const isFirstInGroup = group[0] === bk
+
+                        if (s === 'Enquiry Sent' || isSent) return <span style={{ fontSize: 10, color: 'var(--green-text)' }}>✓</span>
+                        if (isError) return <span style={{ fontSize: 10, color: 'var(--red-text)' }} title={sentIds[bkId]}>✗</span>
+                        if (!canSend || !isFirstInGroup) return null
+
+                        return (
+                          <button
+                            onClick={() => setPreviewId(previewId === bkId ? null : bkId)}
+                            disabled={isSending}
+                            style={{
+                              fontSize: 10, padding: '3px 6px',
+                              border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+                              background: previewId === bkId ? 'var(--blue-bg)' : 'var(--bg-primary)',
+                              cursor: 'pointer', color: 'var(--blue-text)', whiteSpace: 'nowrap',
+                            }}
+                          >{isSending ? '...' : group.length > 1 ? 'Email (' + group.length + 'n)' : 'Email'}</button>
+                        )
+                      })()}
+                    </div>
                   </td>
                 </tr>
+                {/* Inline email preview */}
+                {(() => {
+                  const bkId = bk.id || bk['Record Id']
+                  if (previewId !== bkId) return null
+                  const lodge = (bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || '').split(' - ')[0]
+                  const lodgeRecord = lookupLodge(lodge)
+                  const email = lodgeRecord ? (lodgeRecord.email || '') : (bk.Email || bk.Lodge_Email || '')
+                  const group = lodgeGroupMap[bkId] || [bk]
+                  const subject = generateSubject(bk, tour.name)
+                  const body = generateEnquiryEmail(
+                    group, tour.name, lodge,
+                    { sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
+                  )
+
+                  return (
+                    <tr>
+                      <td colSpan="6" style={{ padding: 0 }}>
+                        <div style={{
+                          margin: '0 16px 8px', padding: '12px 16px',
+                          background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)',
+                          border: '0.5px solid var(--border-default)',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div style={{ fontSize: 12 }}>
+                              <span style={{ color: 'var(--text-muted)' }}>To: </span>
+                              <span style={{ fontWeight: 500 }}>{email || 'No email on file'}</span>
+                              <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>Subject: </span>
+                              <span>{subject}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <div style={{ display: 'flex', gap: 0 }}>
+                                {['Helen', 'Andrew'].map(s => (
+                                  <button key={s} onClick={() => setSender(s)} style={{
+                                    fontSize: 10, padding: '2px 8px', border: 'none', cursor: 'pointer',
+                                    background: sender === s ? 'var(--blue-bg)' : 'transparent',
+                                    color: sender === s ? 'var(--blue-text)' : 'var(--text-muted)',
+                                    borderRadius: s === 'Helen' ? '3px 0 0 3px' : '0 3px 3px 0', fontWeight: 500,
+                                  }}>{s}</button>
+                                ))}
+                              </div>
+                              <button
+                                onClick={() => setPreviewId(null)}
+                                style={{ fontSize: 11, padding: '2px 6px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                              >×</button>
+                              <button
+                                onClick={() => handleSendEnquiry(group)}
+                                disabled={!email || sendingId}
+                                className="btn btn-primary"
+                                style={{ fontSize: 11, padding: '3px 10px' }}
+                              >{sendingId ? 'Sending...' : 'Send'}</button>
+                            </div>
+                          </div>
+                          <pre style={{
+                            fontSize: 11, lineHeight: 1.6, color: 'var(--text-primary)',
+                            whiteSpace: 'pre-wrap', fontFamily: 'var(--font-sans)',
+                            margin: 0, maxHeight: 200, overflow: 'auto',
+                          }}>{body}</pre>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })()}
+                </React.Fragment>
               )
             })}
           </tbody>
