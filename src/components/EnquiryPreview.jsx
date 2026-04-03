@@ -28,9 +28,10 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
   let current = null
 
   bookings.forEach(bk => {
-    const lodge = bk.Lodge_Name || bk.Name || ''
+    const rawLodge = bk.Lodge_Name || bk.Name || ''
+    const lodge = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
     const lodgeRecord = lookupLodge(lodge)
-    const email = lodgeRecord ? (lodgeRecord.email || '') : (bk.Email || bk.Lodge_Email || '')
+    const email = lodgeRecord ? (lodgeRecord.email || lodgeRecord.email2 || '') : (bk.Email || bk.Lodge_Email || '')
 
     if (current && current.lodge === lodge) {
       current.bookings.push(bk)
