@@ -64,7 +64,7 @@ Room requirements:
   if (excursions.length > 0) {
     body += '\n\nExcursions:'
     excursions.forEach(e => {
-      body += '\n* ' + e.name + ' for ' + totalPax + ' pax + ' + numGuides + ' guides' + (e.date ? ' on ' + e.date : '')
+      body += '\n* ' + e.name + ' for ' + totalPax + ' pax' + (e.date ? ' on ' + e.date : '')
     })
   }
 
