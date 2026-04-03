@@ -13,6 +13,8 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [sentIds, setSentIds] = useState({}) // { id: 'sent' | 'error: ...' }
   const [previewId, setPreviewId] = useState(null) // booking id showing preview
   const [sender, setSender] = useState('Helen')
+  const [polling, setPolling] = useState(false)
+  const [pollResult, setPollResult] = useState(null)
 
   const handleSaveDate = async () => {
     if (!newDate || newDate === tour.departure_date) {
@@ -384,6 +386,34 @@ ${merged.map((bk, i) => {
               Enquire all ready ({readyToSend})
             </button>
           )}
+          <button
+            className="btn"
+            onClick={async () => {
+              setPolling(true)
+              setPollResult(null)
+              try {
+                const res = await fetch('/api/poll-gmail')
+                const data = await res.json()
+                setPollResult(data)
+                if (data.stored > 0 && onRefresh) onRefresh()
+              } catch (err) {
+                setPollResult({ error: err.message })
+              } finally {
+                setPolling(false)
+              }
+            }}
+            disabled={polling}
+            style={{ fontSize: 12, padding: '4px 8px' }}
+            title="Check Gmail for lodge replies"
+          >{polling ? 'Checking...' : '↓ Check replies'}</button>
+          {onRefresh && (
+            <button
+              className="btn"
+              onClick={onRefresh}
+              style={{ fontSize: 12, padding: '4px 8px' }}
+              title="Refresh data from Zoho"
+            >↻</button>
+          )}
           {onDeleteTour && (
             <button
               onClick={onDeleteTour}
@@ -399,6 +429,24 @@ ${merged.map((bk, i) => {
           )}
         </div>
       </div>
+
+      {/* Poll result notification */}
+      {pollResult && (
+        <div style={{
+          padding: '8px 16px', marginBottom: 12,
+          borderRadius: 'var(--radius-md)', fontSize: 12,
+          background: pollResult.error ? 'var(--red-bg)' : pollResult.stored > 0 ? 'var(--green-bg)' : 'var(--bg-secondary)',
+          color: pollResult.error ? 'var(--red-text)' : pollResult.stored > 0 ? 'var(--green-text)' : 'var(--text-muted)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span>
+            {pollResult.error ? 'Error: ' + pollResult.error
+              : pollResult.stored > 0 ? pollResult.stored + ' new repl' + (pollResult.stored === 1 ? 'y' : 'ies') + ' processed — statuses updated'
+              : 'No new replies found'}
+          </span>
+          <button onClick={() => setPollResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14 }}>×</button>
+        </div>
+      )}
 
       {/* Tour config — room requirements for enquiries */}
       <TourConfig tour={tour} />
