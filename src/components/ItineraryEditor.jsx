@@ -311,9 +311,14 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   const isLocalTour = (tour.id || '').startsWith('local_') || tour.local
   const [zohoTourName, setZohoTourName] = useState(tour.name || '')
 
-  // Push to Zoho (create lodge bookings) — the big commit
+  // Push to Zoho (create lodge bookings) — only pushes new nights
+  const newNights = nights.filter(n => !n.zoho_id)
   const handlePushToZoho = async () => {
-    if (!confirm('Push ' + nights.length + ' nights to Zoho? This will create the tour and lodge bookings.')) return
+    if (!newNights.length) {
+      alert('All nights are already in Zoho. Nothing to push.')
+      return
+    }
+    if (!confirm('Push ' + newNights.length + ' new night' + (newNights.length !== 1 ? 's' : '') + ' to Zoho? (' + (nights.length - newNights.length) + ' existing nights will not be affected)')) return
     setPushing(true)
 
     try {
@@ -346,7 +351,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
         } catch (e) {}
       }
 
-      // Now create the bookings
+      // Only create the new bookings (no zoho_id)
       const response = await fetch('/api/create-itinerary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -354,7 +359,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
           tour_id: tourId,
           tour_name: tourName,
           departure_date: departureDate,
-          nights: nights.map(n => ({
+          nights: newNights.map(n => ({
             date: n.date,
             route: n.route,
             lodge: n.lodge,
@@ -737,7 +742,7 @@ ${nights.map(n => {
               onClick={handlePushToZoho}
               disabled={pushing || pushed || !departureDate || (isLocalTour && !zohoTourName.trim())}
             >
-              {pushing ? 'Pushing...' : pushed ? 'Pushed to Zoho' : 'Push to Zoho (' + nights.length + ' nights)'}
+              {pushing ? 'Pushing...' : pushed ? 'Pushed to Zoho' : newNights.length === nights.length ? 'Push to Zoho (' + nights.length + ' nights)' : newNights.length > 0 ? 'Push ' + newNights.length + ' new night' + (newNights.length !== 1 ? 's' : '') + ' to Zoho' : 'All in Zoho'}
             </button>
           </div>
         )}
