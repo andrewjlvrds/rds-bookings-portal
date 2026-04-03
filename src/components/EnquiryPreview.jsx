@@ -9,14 +9,33 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
   const [sender, setSender] = useState('Andrew')
 
   // Build lodge lookup from directory
-  const lodgeLookup = {}
-  ;(lodges || []).forEach(l => {
-    if (l.name) lodgeLookup[l.name.toLowerCase()] = l
-  })
+  const lodgeList = (lodges || []).filter(l => l.name).map(l => ({
+    ...l,
+    _lower: l.name.toLowerCase().trim(),
+    _words: l.name.toLowerCase().trim().split(/\s+/),
+  }))
 
   const lookupLodge = (name) => {
     if (!name) return null
-    return lodgeLookup[name.toLowerCase()] || null
+    const q = name.toLowerCase().trim()
+    // Exact match
+    let match = lodgeList.find(l => l._lower === q)
+    // Substring match
+    if (!match) match = lodgeList.find(l => l._lower.includes(q) || q.includes(l._lower))
+    // Word overlap
+    if (!match) {
+      const qWords = q.split(/\s+/).filter(w => w.length > 2)
+      if (qWords.length > 0) {
+        let best = null, bestScore = 0
+        for (const l of lodgeList) {
+          const hits = qWords.filter(w => l._lower.includes(w)).length
+          const score = hits / Math.max(qWords.length, l._words.length)
+          if (hits >= 2 && score > bestScore) { best = l; bestScore = score }
+        }
+        if (best) match = best
+      }
+    }
+    return match || null
   }
 
   const bookings = (tour.bookings || [])
