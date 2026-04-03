@@ -99,9 +99,9 @@ export default async function(req, res) {
   try {
     var token = await getGmailToken();
 
-    // Fetch recent inbox messages (last 3 days, max 20)
-    // Filter: in inbox, not from us, is a reply (has Re:) or mentions RDS/booking
-    var query = 'in:inbox newer_than:3d -from:bookings@ridedownsouth.com';
+    // Fetch recent messages (last 3 days, max 20)
+    // Search everywhere — not just inbox — so labelled replies are found
+    var query = 'newer_than:3d -from:bookings@ridedownsouth.com';
     var listResult = await gmailApi(token, 'messages?q=' + encodeURIComponent(query) + '&maxResults=20');
 
     var messages = listResult.messages || [];
