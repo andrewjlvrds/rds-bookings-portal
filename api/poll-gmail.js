@@ -138,63 +138,75 @@ function extractTextFromPlain(base64urlData) {
   }
 }
 
-// Send document (PDF or Word) to Claude API for text extraction
-async function extractTextFromDocument(base64urlData, filename, mimeType) {
-  var apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-
+// Extract text from a document attachment
+// PDF: Claude document API. DOC: word-extractor. CSV/text: direct decode.
+async function extractTextFromAttachment(base64urlData, filename, mimeType) {
   var b64 = base64urlToBase64(base64urlData);
+  var buffer = Buffer.from(b64, 'base64');
+  var mt = mimeType || '';
 
-  // Map MIME types for Claude API document support
-  var claudeMediaType = mimeType;
-  if (mimeType === 'application/msword') {
-    // Old .doc format — Claude may not support directly, try as generic
-    claudeMediaType = 'application/msword';
+  // PDF → Claude document API
+  if (mt === 'application/pdf') {
+    var apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return null;
+    try {
+      var response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+              { type: 'text', text: 'Extract ALL text content from this PDF. Include every number, date, amount, reference, line item, and note. Preserve table structure with | separators. Do not summarise.' },
+            ],
+          }],
+        }),
+      });
+      if (!response.ok) { console.error('PDF extraction error:', response.status); return null; }
+      var data = await response.json();
+      var text = '';
+      for (var i = 0; i < data.content.length; i++) {
+        if (data.content[i].type === 'text') text += data.content[i].text;
+      }
+      return text || null;
+    } catch (e) { console.error('PDF extraction failed:', e.message); return null; }
   }
 
-  try {
-    var response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: claudeMediaType, data: b64 },
-            },
-            {
-              type: 'text',
-              text: 'Extract ALL text content from this document. Include every number, date, amount, reference, line item, and note. Output the text exactly as it appears, preserving table structure where possible (use | separators for columns). Do not summarise — extract everything verbatim. If it is a rate card, quote, or proforma invoice, capture every line item with amounts.',
-            },
-          ],
-        }],
-      }),
-    });
-
-    if (!response.ok) {
-      var errBody = await response.text();
-      console.error('Document extraction API error:', response.status, errBody.substring(0, 200));
-      return null;
-    }
-
-    var data = await response.json();
-    var text = '';
-    for (var i = 0; i < data.content.length; i++) {
-      if (data.content[i].type === 'text') text += data.content[i].text;
-    }
-    return text || null;
-  } catch (e) {
-    console.error('Document extraction failed for', filename, e.message);
-    return null;
+  // .doc → word-extractor
+  if (mt === 'application/msword' || (filename && filename.toLowerCase().endsWith('.doc') && !filename.toLowerCase().endsWith('.docx'))) {
+    try {
+      var WordExtractor = (await import('word-extractor')).default;
+      var extractor = new WordExtractor();
+      var doc = await extractor.extract(buffer);
+      return doc.getBody() || null;
+    } catch (e) { console.error('DOC extraction failed:', e.message); return null; }
   }
+
+  // .docx → basic XML text extraction (zip containing word/document.xml)
+  if (mt.indexOf('wordprocessingml') > -1 || (filename && filename.toLowerCase().endsWith('.docx'))) {
+    try {
+      var raw = buffer.toString('utf-8');
+      var matches = raw.match(/<w:t[^>]*>([^<]+)<\/w:t>/g) || [];
+      return matches.map(function(m) { return m.replace(/<[^>]+>/g, ''); }).join(' ') || null;
+    } catch (e) { return null; }
+  }
+
+  // Excel → raw printable string extraction
+  if (mt.indexOf('spreadsheet') > -1 || mt.indexOf('excel') > -1 || mt === 'application/vnd.ms-excel') {
+    try {
+      var raw = buffer.toString('utf-8');
+      return raw.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s{3,}/g, '\n').trim() || null;
+    } catch (e) { return null; }
+  }
+
+  return null;
 }
 
 export default async function(req, res) {
@@ -357,9 +369,8 @@ export default async function(req, res) {
 
                 if (mt === 'text/csv' || mt === 'application/csv' || mt === 'text/plain') {
                   extractedText = extractTextFromPlain(attData);
-                } else if (isExtractable(mt)) {
-                  // PDF, Word, Excel — all go through Claude document API
-                  extractedText = await extractTextFromDocument(attData, att.filename, mt);
+                } else {
+                  extractedText = await extractTextFromAttachment(attData, att.filename, mt);
                 }
 
                 if (extractedText) {

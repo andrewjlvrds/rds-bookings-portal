@@ -125,46 +125,20 @@ export default async function(req, res) {
     }
     L('Downloaded attachment: ' + attResult.data.length + ' chars of base64url data');
 
-    // 7. Send to Claude for extraction
-    L('Step 7: Sending to Claude API for text extraction...');
+    // 7. Extract text from attachment
+    L('Step 7: Extracting text from attachment...');
     var b64 = base64urlToBase64(attResult.data);
-    L('Converted to base64: ' + b64.length + ' chars');
+    var buffer = Buffer.from(b64, 'base64');
+    L('File size: ' + buffer.length + ' bytes');
 
-    var apiKey = process.env.ANTHROPIC_API_KEY;
-    var claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: att.mimeType, data: b64 },
-            },
-            {
-              type: 'text',
-              text: 'Extract ALL text from this document verbatim. Include every number, date, amount, reference, line item. Preserve table structure with | separators.',
-            },
-          ],
-        }],
-      }),
-    });
+    var extractedText = '';
+    var mt = att.mimeType || '';
 
-    L('Claude API response status: ' + claudeRes.status);
-    var claudeBody = await claudeRes.text();
-
-    if (!claudeRes.ok) {
-      L('Claude API ERROR: ' + claudeBody.substring(0, 500));
-      // If the mime type isn't supported, try as application/octet-stream
-      L('Retrying with generic content type...');
-      var retryRes = await fetch('https://api.anthropic.com/v1/messages', {
+    if (mt === 'application/pdf') {
+      // PDF: send to Claude document API
+      L('Type: PDF — sending to Claude document API');
+      var apiKey = process.env.ANTHROPIC_API_KEY;
+      var claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -177,32 +151,75 @@ export default async function(req, res) {
           messages: [{
             role: 'user',
             content: [
-              {
-                type: 'document',
-                source: { type: 'base64', media_type: 'application/pdf', data: b64 },
-              },
-              {
-                type: 'text',
-                text: 'Extract ALL text from this document verbatim. Include every number, date, amount, reference, line item.',
-              },
+              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+              { type: 'text', text: 'Extract ALL text from this document verbatim. Include every number, date, amount, reference, line item. Preserve table structure with | separators.' },
             ],
           }],
         }),
       });
-      L('Retry status: ' + retryRes.status);
-      claudeBody = await retryRes.text();
-      if (!retryRes.ok) {
-        L('Retry also failed: ' + claudeBody.substring(0, 500));
-        return res.status(200).json({ log: log, error: 'Claude API failed for both mime types' });
+      if (claudeRes.ok) {
+        var claudeData = await claudeRes.json();
+        for (var ci = 0; ci < claudeData.content.length; ci++) {
+          if (claudeData.content[ci].type === 'text') extractedText += claudeData.content[ci].text;
+        }
+        L('Claude extracted ' + extractedText.length + ' chars');
+      } else {
+        var errText = await claudeRes.text();
+        L('Claude API error: ' + errText.substring(0, 300));
       }
+    } else if (mt === 'application/msword' || att.filename.endsWith('.doc')) {
+      // .doc: use word-extractor
+      L('Type: DOC — using word-extractor');
+      try {
+        var WordExtractor = (await import('word-extractor')).default;
+        var extractor = new WordExtractor();
+        var doc = await extractor.extract(buffer);
+        extractedText = doc.getBody() || '';
+        L('word-extractor got ' + extractedText.length + ' chars');
+      } catch (docErr) {
+        L('word-extractor error: ' + docErr.message);
+      }
+    } else if (mt.indexOf('wordprocessingml') > -1 || att.filename.endsWith('.docx')) {
+      // .docx: these are zip-based, Claude API doesn't support them either
+      // Try basic extraction from the XML inside the zip
+      L('Type: DOCX — attempting basic XML extraction');
+      try {
+        var { Readable } = await import('stream');
+        // docx is a zip containing word/document.xml
+        // For now, try sending raw text extraction
+        var rawText = buffer.toString('utf-8');
+        // Extract text between XML tags
+        var matches = rawText.match(/<w:t[^>]*>([^<]+)<\/w:t>/g) || [];
+        extractedText = matches.map(function(m) { return m.replace(/<[^>]+>/g, ''); }).join(' ');
+        L('Basic XML extraction got ' + extractedText.length + ' chars');
+      } catch (docxErr) {
+        L('DOCX extraction error: ' + docxErr.message);
+      }
+    } else if (mt === 'text/csv' || mt === 'application/csv' || mt === 'text/plain') {
+      extractedText = buffer.toString('utf-8');
+      L('Plain text: ' + extractedText.length + ' chars');
+    } else if (mt.indexOf('spreadsheet') > -1 || mt.indexOf('excel') > -1) {
+      // Excel: Claude can't read these via document API either
+      // Extract raw strings from binary
+      L('Type: Excel — attempting raw string extraction');
+      try {
+        var rawText = buffer.toString('utf-8');
+        // Filter for printable strings
+        extractedText = rawText.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s{3,}/g, '\n').trim();
+        L('Raw string extraction got ' + extractedText.length + ' chars');
+      } catch (xlErr) {
+        L('Excel extraction error: ' + xlErr.message);
+      }
+    } else {
+      L('Unsupported type: ' + mt);
     }
 
-    var claudeData = JSON.parse(claudeBody);
-    var extractedText = '';
-    for (var ci = 0; ci < claudeData.content.length; ci++) {
-      if (claudeData.content[ci].type === 'text') extractedText += claudeData.content[ci].text;
+    if (!extractedText) {
+      L('No text extracted');
+      return res.status(200).json({ log: log, error: 'No text could be extracted from attachment' });
     }
-    L('Step 8: Extracted ' + extractedText.length + ' chars from document');
+
+    L('Step 8: Extracted ' + extractedText.length + ' chars');
     L('First 500 chars: ' + extractedText.substring(0, 500));
 
     // 8. Now run AI parser on body + extracted text
