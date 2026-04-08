@@ -16,10 +16,32 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
   const status = getStatus(booking)
   const badge = getStatusBadge(status)
 
-  // Lodge directory lookup
-  const lodgeLookup = {}
-  ;(lodges || []).forEach(l => { if (l.name) lodgeLookup[l.name.toLowerCase()] = l })
-  const lodgeRecord = lodgeName ? lodgeLookup[lodgeName.toLowerCase()] || null : null
+  // Lodge directory lookup — fuzzy match (exact → substring → word overlap)
+  const lodgeRecord = (() => {
+    if (!lodgeName) return null
+    const lower = lodgeName.toLowerCase().trim()
+    const list = lodges || []
+    // Exact match
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].name && list[i].name.toLowerCase().trim() === lower) return list[i]
+    }
+    // Substring match (lodge name contains or is contained in booking name)
+    for (let i = 0; i < list.length; i++) {
+      if (!list[i].name) continue
+      const ln = list[i].name.toLowerCase().trim()
+      if (ln.length > 3 && (lower.indexOf(ln) > -1 || ln.indexOf(lower) > -1)) return list[i]
+    }
+    // Word overlap
+    const words = lower.split(/\s+/).filter(w => w.length > 3)
+    if (words.length > 0) {
+      for (let i = 0; i < list.length; i++) {
+        if (!list[i].name) continue
+        const ln = list[i].name.toLowerCase()
+        if (words.some(w => ln.indexOf(w) > -1)) return list[i]
+      }
+    }
+    return null
+  })()
 
   const lodgeEmail = lodgeRecord
     ? (lodgeRecord.email || '')
