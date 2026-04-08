@@ -51,7 +51,46 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
 
   return (
     <div>
-      {/* New replies needing action */}
+      {/* Hero */}
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Lodge Bookings</h1>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          {activeTours.length + newBuild.length} active tours · {totalLodges} lodge bookings · {confirmed} confirmed
+        </p>
+      </div>
+
+      {/* Navigation panels */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
+        <NavPanel
+          title="Payments"
+          icon="💰"
+          desc={payments.overdue > 0 ? `${payments.overdue} overdue · R ${payments.overdueTotal.toLocaleString()}` : 'All payments up to date'}
+          detail={`${payments.upcoming} upcoming · ${payments.dueSoon} due this week`}
+          color={payments.overdue > 0 ? '#C62828' : '#2E7D32'}
+          bg={payments.overdue > 0 ? '#FFEBEE' : '#E8F5E9'}
+          onClick={() => onSelectView('payments')}
+        />
+        <NavPanel
+          title="Correspondence"
+          icon="📧"
+          desc="Lodge email inbox"
+          detail="View and manage all lodge communications"
+          color="#6A1B9A"
+          bg="#F3E5F5"
+          onClick={() => onSelectView('correspondence')}
+        />
+        <NavPanel
+          title="Lodges"
+          icon="🏨"
+          desc="Lodge directory"
+          detail="Contact details, STO rates, guide room policies"
+          color="#2E7D32"
+          bg="#E8F5E9"
+          onClick={() => onSelectView('lodges')}
+        />
+      </div>
+
+      {/* Lodge replies needing action */}
       {needsResponse.length > 0 && (
         <div className="panel" style={{ marginBottom: 24, borderLeft: '3px solid var(--blue-mid)' }}>
           <div
@@ -110,45 +149,6 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
           )}
         </div>
       )}
-
-      {/* Hero */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Lodge Bookings</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          {activeTours.length + newBuild.length} active tours · {totalLodges} lodge bookings · {confirmed} confirmed
-        </p>
-      </div>
-
-      {/* Navigation panels */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
-        <NavPanel
-          title="Payments"
-          icon="💰"
-          desc={payments.overdue > 0 ? `${payments.overdue} overdue · R ${payments.overdueTotal.toLocaleString()}` : 'All payments up to date'}
-          detail={`${payments.upcoming} upcoming · ${payments.dueSoon} due this week`}
-          color={payments.overdue > 0 ? '#C62828' : '#2E7D32'}
-          bg={payments.overdue > 0 ? '#FFEBEE' : '#E8F5E9'}
-          onClick={() => onSelectView('payments')}
-        />
-        <NavPanel
-          title="Correspondence"
-          icon="📧"
-          desc="Lodge email inbox"
-          detail="View and manage all lodge communications"
-          color="#6A1B9A"
-          bg="#F3E5F5"
-          onClick={() => onSelectView('correspondence')}
-        />
-        <NavPanel
-          title="Lodges"
-          icon="🏨"
-          desc="Lodge directory"
-          detail="Contact details, STO rates, guide room policies"
-          color="#2E7D32"
-          bg="#E8F5E9"
-          onClick={() => onSelectView('lodges')}
-        />
-      </div>
 
       {/* Needs attention — collapsible */}
       {needsAttention.length > 0 && (
