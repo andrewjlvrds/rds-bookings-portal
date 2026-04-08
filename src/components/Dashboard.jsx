@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiveBooking, today, daysBetween, getTourName, getStatus } from '../utils/helpers'
 import { categorizeTours } from './Layout'
 
-export default function Dashboard({ tours, allBookings, onSelectTour, onSelectView }) {
+export default function Dashboard({ tours, allBookings, onSelectTour, onSelectView, onSelectBooking }) {
   const [showAttention, setShowAttention] = useState(false)
   const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
   const now = today()
@@ -25,8 +25,78 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
   const totalLodges = allActiveBookings.length
   const confirmed = allActiveBookings.filter(b => isConfirmed(b)).length
 
+  // Bookings with recent replies needing action
+  // "Availability Confirmed" = AI parsed a reply, needs human review
+  // Also include "Enquiry Sent" with a Last_Response_Date (reply received but AI couldn't parse status)
+  const needsResponse = []
+  ;[...activeTours, ...newBuild].forEach(t => {
+    ;(t.bookings || []).filter(isActiveBooking).forEach(bk => {
+      const s = getStatus(bk)
+      const lastReply = bk.Last_Response_Date || ''
+      const lodge = typeof bk.Lodge_Name === 'object' ? (bk.Lodge_Name || {}).name || '' : (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
+      if (s === 'Availability Confirmed' || (s === 'Enquiry Sent' && lastReply)) {
+        needsResponse.push({
+          booking: bk,
+          tour: t,
+          lodge,
+          status: s,
+          lastReply,
+        })
+      }
+    })
+  })
+  // Sort by most recent reply first
+  needsResponse.sort((a, b) => (b.lastReply || '').localeCompare(a.lastReply || ''))
+
   return (
     <div>
+      {/* New replies needing action */}
+      {needsResponse.length > 0 && (
+        <div className="panel" style={{ marginBottom: 24, borderLeft: '3px solid var(--blue-mid)' }}>
+          <div className="panel-head" style={{ background: 'var(--blue-bg)' }}>
+            <span style={{ color: 'var(--blue-text)' }}>Lodge replies — needs response ({needsResponse.length})</span>
+          </div>
+          <div>
+            {needsResponse.map((item, i) => {
+              const bk = item.booking
+              const badge = getStatusBadge(item.status)
+              return (
+                <div
+                  key={bk.id || i}
+                  onClick={() => { onSelectTour(item.tour); if (onSelectBooking) onSelectBooking(bk); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 14px', cursor: 'pointer', fontSize: 13,
+                    borderBottom: i < needsResponse.length - 1 ? '0.5px solid var(--border-light)' : 'none',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span style={{ fontWeight: 500, width: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.lodge}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 12, width: 120, flexShrink: 0 }}>
+                    {item.tour.name}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 12, flex: 1 }}>
+                    {bk.Check_in_Date ? fmtDate(bk.Check_in_Date) : ''}
+                  </span>
+                  <span style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                    background: badge.bg, color: badge.color, fontWeight: 500,
+                  }}>{badge.label}</span>
+                  {item.lastReply && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 70, textAlign: 'right' }}>
+                      {fmtDate(item.lastReply)}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Hero */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Lodge Bookings</h1>

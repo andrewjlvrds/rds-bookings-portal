@@ -221,6 +221,7 @@ export default function App() {
           allBookings={allBookings}
           onSelectTour={(tour) => { setActiveTour(tour); setActiveView('itinerary') }}
           onSelectView={setActiveView}
+          onSelectBooking={handleSelectBooking}
         />
       )
     }
