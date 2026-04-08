@@ -261,16 +261,22 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
     })
     if (!isDuplicate) dateBookings[d].push(bk)
   })
-  // Mark which bookings are alternatives (fallback) — the one with higher status priority is primary
+  // Mark which bookings are alternatives (fallback) — auto-detected OR manually tagged
   const statusPriority = { 'Confirmed': 10, 'Balance Paid': 10, 'Deposit Paid': 9, 'Proforma Received': 8, 'Availability Confirmed': 7, 'Available': 6, 'Enquiry Sent': 5, 'Ready to Send': 4, 'Not Started': 3, 'Waitlisted': 2, 'Not Available': 1, 'Cancelled': 0 }
   const alternativeSet = new Set() // booking IDs that are fallback
+  // Auto-detect: same check-in date, different lodge
   Object.values(dateBookings).forEach(group => {
     if (group.length <= 1) return
-    // Sort by status priority descending — highest status = primary
     const ranked = group.slice().sort((a, b) => (statusPriority[getStatus(b)] || 0) - (statusPriority[getStatus(a)] || 0))
-    // First is primary, rest are alternatives
     for (let ri = 1; ri < ranked.length; ri++) {
       alternativeSet.add(ranked[ri].id || ranked[ri]['Record Id'])
+    }
+  })
+  // Manual: Booking_Notes contains "FALLBACK"
+  merged.forEach(bk => {
+    const notes = (bk.Booking_Notes || bk['Booking Notes'] || '').toUpperCase()
+    if (notes.indexOf('FALLBACK') > -1) {
+      alternativeSet.add(bk.id || bk['Record Id'])
     }
   })
 
@@ -943,6 +949,33 @@ ${merged.map((bk, i) => {
                             }}
                           >↻ Try backup</button>
                         )}
+                        <button
+                          onClick={() => {
+                            const currentNotes = bk.Booking_Notes || bk['Booking Notes'] || ''
+                            const isFb = currentNotes.toUpperCase().indexOf('FALLBACK') > -1
+                            const newNotes = isFb
+                              ? currentNotes.replace(/\s*FALLBACK\s*/gi, '').trim()
+                              : (currentNotes ? currentNotes + ' FALLBACK' : 'FALLBACK')
+                            fetch('/api/update-bookings', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                booking_ids: [bk.id || bk['Record Id']],
+                                updates: { Booking_Notes: newNotes },
+                              }),
+                            }).then(res => {
+                              if (!res.ok) throw new Error('Failed')
+                              if (onRefresh) onRefresh()
+                            }).catch(err => alert('Error: ' + err.message))
+                          }}
+                          style={{
+                            fontSize: 9, padding: '2px 6px',
+                            border: '0.5px solid var(--border-default)', borderRadius: 3,
+                            background: isFallback ? 'rgba(245,158,11,0.15)' : 'var(--bg-primary)',
+                            cursor: 'pointer',
+                            color: isFallback ? '#b45309' : 'var(--text-muted)',
+                          }}
+                        >{isFallback ? '✕ Unfallback' : '⇄ Fallback'}</button>
                       </div>
                     )}
                   </td>
