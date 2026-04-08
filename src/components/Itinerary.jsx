@@ -407,6 +407,26 @@ ${merged.map((bk, i) => {
             style={{ fontSize: 12, padding: '4px 8px' }}
             title="Check Gmail for lodge replies"
           >{polling ? 'Checking...' : '↓ Check replies'}</button>
+          <button
+            className="btn"
+            onClick={async () => {
+              setPolling(true)
+              setPollResult(null)
+              try {
+                const res = await fetch('/api/poll-gmail?refetch=true')
+                const data = await res.json()
+                setPollResult(data)
+                if (data.stored > 0 && onRefresh) onRefresh()
+              } catch (err) {
+                setPollResult({ error: err.message })
+              } finally {
+                setPolling(false)
+              }
+            }}
+            disabled={polling}
+            style={{ fontSize: 11, padding: '3px 6px', color: 'var(--text-muted)' }}
+            title="Re-fetch all recent emails from Gmail (fixes missing content)"
+          >↓ Re-fetch</button>
           {onRefresh && (
             <button
               className="btn"

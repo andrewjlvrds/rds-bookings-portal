@@ -3,6 +3,7 @@ import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiv
 import { categorizeTours } from './Layout'
 
 export default function Dashboard({ tours, allBookings, onSelectTour, onSelectView, onSelectBooking }) {
+  const [showReplies, setShowReplies] = useState(false)
   const [showAttention, setShowAttention] = useState(false)
   const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
   const now = today()
@@ -53,9 +54,21 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
       {/* New replies needing action */}
       {needsResponse.length > 0 && (
         <div className="panel" style={{ marginBottom: 24, borderLeft: '3px solid var(--blue-mid)' }}>
-          <div className="panel-head" style={{ background: 'var(--blue-bg)' }}>
-            <span style={{ color: 'var(--blue-text)' }}>Lodge replies — needs response ({needsResponse.length})</span>
+          <div
+            className="panel-head"
+            style={{ background: 'var(--blue-bg)', cursor: 'pointer' }}
+            onClick={() => setShowReplies(!showReplies)}
+          >
+            <span style={{ color: 'var(--blue-text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              Lodge replies — needs response
+              <span style={{
+                background: 'var(--blue-mid)', color: 'white',
+                fontSize: 11, padding: '1px 7px', borderRadius: 10, fontWeight: 500,
+              }}>{needsResponse.length}</span>
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', transform: showReplies ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▾</span>
           </div>
+          {showReplies && (
           <div>
             {needsResponse.map((item, i) => {
               const bk = item.booking
@@ -94,6 +107,7 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
               )
             })}
           </div>
+          )}
         </div>
       )}
 

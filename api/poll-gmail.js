@@ -98,6 +98,7 @@ export default async function(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
+    var refetch = req.query && req.query.refetch === 'true';
     var token = await getGmailToken();
 
     // Fetch recent messages (last 3 days, max 20)
@@ -211,11 +212,13 @@ export default async function(req, res) {
 
         var bookingId = matchedBooking.id;
 
-        // Check if already stored (dedup by message ID)
-        var alreadyStored = await isEmailStored(bookingId, msgId);
-        if (alreadyStored) {
-          skipped++;
-          continue;
+        // Check if already stored (dedup by message ID) — skip if refetching
+        if (!refetch) {
+          var alreadyStored = await isEmailStored(bookingId, msgId);
+          if (alreadyStored) {
+            skipped++;
+            continue;
+          }
         }
 
         // Extract body and attachments
