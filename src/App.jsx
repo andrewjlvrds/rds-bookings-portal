@@ -54,7 +54,7 @@ export default function App() {
   const [error, setError] = useState(null)
 
   const [activeTour, setActiveTour] = useState(null)
-  const [activeView, setActiveView] = useState('dashboard')
+  const [activeView, setActiveView] = useState('lodge-dashboard')
   const [activeBooking, setActiveBooking] = useState(null)
 
   // Refresh data from API without losing current view

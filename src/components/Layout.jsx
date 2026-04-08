@@ -43,12 +43,10 @@ const GUEST_VIEWS = ['guest-dashboard', 'guest-tour', 'guest-detail', 'transfers
 
 function getSection(activeView) {
   if (GUEST_VIEWS.includes(activeView)) return 'guests'
-  if (LODGE_VIEWS.includes(activeView)) return 'lodges'
-  return 'planner'
+  return 'lodges'
 }
 
 const TABS = [
-  { id: 'planner', label: 'Tour planner', defaultView: 'dashboard' },
   { id: 'lodges', label: 'Lodge bookings', defaultView: 'lodge-dashboard' },
   { id: 'guests', label: 'Guest bookings', defaultView: 'guest-dashboard' },
 ]
