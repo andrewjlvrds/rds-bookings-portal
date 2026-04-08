@@ -11,6 +11,9 @@
     },
     "api/gmail-attachment.js": {
       "maxDuration": 30
+    },
+    "api/reparse-email.js": {
+      "maxDuration": 60
     }
   }
 }

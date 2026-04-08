@@ -362,17 +362,22 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
               onClick={async () => {
                 setPolling(true)
                 try {
-                  const res = await fetch('/api/poll-gmail?refetch=true')
+                  const res = await fetch('/api/reparse-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ booking_id: bookingId }),
+                  })
                   const result = await res.json()
-                  if (result.stored > 0) { fetchEmails(); if (onRefresh) onRefresh() }
-                  else fetchEmails()
-                } catch (err) { console.error('Re-fetch error:', err) }
+                  console.log('Reparse result:', result)
+                  fetchEmails()
+                  if (onRefresh) onRefresh()
+                } catch (err) { console.error('Re-parse error:', err) }
                 finally { setPolling(false) }
               }}
               disabled={polling}
               style={{ fontSize: 11, padding: '3px 10px', color: 'var(--text-muted)' }}
-              title="Re-fetch emails from Gmail (fixes missing content)"
-            >Re-fetch</button>
+              title="Re-download attachments and re-parse with AI (extracts payment data from PDFs)"
+            >{polling ? 'Parsing...' : '↻ Re-parse'}</button>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
               {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
             </span>
