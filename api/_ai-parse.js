@@ -81,7 +81,7 @@ var FIELD_MAP = {
   availability: {
     zoho: 'Lodge_Availability',
     transform: function(v) {
-      var map = { confirmed: 'Available', denied: 'Not Available', waitlisted: 'Waitlisted', alternatives_offered: 'Alternatives Offered', partial: 'Partial' };
+      var map = { confirmed: 'Available', denied: 'Not Available', waitlisted: 'Waitlisted', alternatives_offered: 'Alternatives Offered', partial: 'Partially Available' };
       return map[v] || v;
     }
   },
