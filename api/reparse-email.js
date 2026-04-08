@@ -226,11 +226,12 @@ export default async function(req, res) {
 
               if (attData) {
                 var extractedText = null;
+                var mt = att.mimeType || '';
 
-                if ((att.mimeType || '') === 'application/pdf' || (att.mimeType || '').indexOf('word') > -1 || att.mimeType === 'application/msword') {
-                  extractedText = await extractTextFromDocument(attData, att.filename, att.mimeType);
-                } else if ((att.mimeType || '').indexOf('csv') > -1 || att.mimeType === 'text/plain') {
+                if (mt === 'text/csv' || mt === 'application/csv' || mt === 'text/plain') {
                   extractedText = extractTextFromPlain(attData);
+                } else if (isExtractable(mt)) {
+                  extractedText = await extractTextFromDocument(attData, att.filename, mt);
                 }
 
                 if (extractedText) {

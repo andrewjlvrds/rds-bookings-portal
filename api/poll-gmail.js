@@ -355,12 +355,11 @@ export default async function(req, res) {
                 var extractedText = null;
                 var mt = att.mimeType || '';
 
-                if (mt === 'application/pdf' || mt.indexOf('word') > -1 || mt === 'application/msword') {
-                  // Use Claude API to extract text from PDF or Word doc
-                  extractedText = await extractTextFromDocument(attData, att.filename, mt);
-                } else if (mt === 'text/csv' || mt === 'application/csv' || mt === 'text/plain') {
-                  // Direct text decode
+                if (mt === 'text/csv' || mt === 'application/csv' || mt === 'text/plain') {
                   extractedText = extractTextFromPlain(attData);
+                } else if (isExtractable(mt)) {
+                  // PDF, Word, Excel — all go through Claude document API
+                  extractedText = await extractTextFromDocument(attData, att.filename, mt);
                 }
 
                 if (extractedText) {
