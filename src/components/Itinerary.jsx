@@ -949,6 +949,7 @@ ${merged.map((bk, i) => {
                             }}
                           >↻ Try backup</button>
                         )}
+                        {(isFallback || (status !== 'Confirmed' && status !== 'Deposit Paid' && status !== 'Balance Paid' && status !== 'Proforma Received')) && (
                         <button
                           onClick={() => {
                             const currentNotes = bk.Booking_Notes || bk['Booking Notes'] || ''
@@ -976,6 +977,7 @@ ${merged.map((bk, i) => {
                             color: isFallback ? '#b45309' : 'var(--text-muted)',
                           }}
                         >{isFallback ? '✕ Unfallback' : '⇄ Fallback'}</button>
+                        )}
                       </div>
                     )}
                   </td>
