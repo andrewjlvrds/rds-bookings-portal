@@ -114,9 +114,24 @@ export default async function(req, res) {
     var allTexts = [];
     var updatedAtts = [];
 
+    // Match stored attachment text by filename
+    var storedAtts = email.attachments || [];
+    var storedTextMap = {};
+    storedAtts.forEach(function(sa) {
+      if (sa.filename && sa.extractedText) storedTextMap[sa.filename] = sa.extractedText;
+    });
+
     for (var ai = 0; ai < attachments.length; ai++) {
       var att = attachments[ai];
       L('Att ' + ai + ': "' + att.filename + '" (' + att.mimeType + ', ' + att.size + 'B)');
+
+      // Reuse stored extraction if available
+      if (storedTextMap[att.filename]) {
+        L('  Reusing stored text: ' + storedTextMap[att.filename].length + ' chars');
+        allTexts.push('--- ATTACHMENT: ' + att.filename + ' ---\n' + storedTextMap[att.filename] + '\n--- END ATTACHMENT ---');
+        updatedAtts.push(Object.assign({}, att, { extractedText: storedTextMap[att.filename] }));
+        continue;
+      }
 
       if (!att.attachmentId || att.size > 5 * 1024 * 1024) {
         L('  Skipped');
