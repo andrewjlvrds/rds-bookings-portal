@@ -18,7 +18,9 @@ var SYSTEM_PROMPT = [
   '',
   '1. email_type: "availability_confirmation" | "availability_denial" | "proforma_invoice" | "cancellation_response" | "payment_confirmation" | "general_correspondence" | "rate_card" | "partial_availability"',
   '2. availability: "confirmed" | "denied" | "waitlisted" | "alternatives_offered" | "partial" | null',
-  '   Use "partial" when the lodge can offer SOME but not all requested rooms (e.g. they have 11 but we asked for 13).',
+  '   Use "partial" when the lodge offers FEWER rooms than requested. Compare rooms offered against "Rooms requested" in the booking context.',
+  '   If the lodge says they cannot accommodate all rooms, or offers fewer than requested, or mentions rooms being short — this is "partial".',
+  '   If they mention a specific number of rooms and it is less than the requested total, this is "partial".',
   '3. booking_reference: Lodge\'s booking/reservation reference number',
   '4. total_amount: Total accommodation cost (numeric only, no symbols)',
   '5. currency: "ZAR" | "USD" | "EUR" | "BWP" | "NAD" | "SZL" | "ZMW" | "MZN" | null',
@@ -127,6 +129,9 @@ export async function parseEmail(emailBody, bookingContext) {
     userMessage += 'Check-out: ' + (bookingContext.check_out || 'Unknown') + '\n';
     userMessage += 'Nights: ' + (bookingContext.nights || 'Unknown') + '\n';
     userMessage += 'Current status: ' + (bookingContext.status || 'Unknown') + '\n';
+    if (bookingContext.rooms_requested) {
+      userMessage += 'Rooms requested: ' + bookingContext.rooms_requested + ' total\n';
+    }
     if (bookingContext.deposit_amount) {
       userMessage += 'Deposit amount: ' + bookingContext.deposit_amount + ' (paid: ' + (bookingContext.deposit_paid || 'unknown') + ')\n';
     }
