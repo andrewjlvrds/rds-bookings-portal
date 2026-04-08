@@ -13,6 +13,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [sentIds, setSentIds] = useState({}) // { id: 'sent' | 'error: ...' }
   const [previewId, setPreviewId] = useState(null) // booking id showing preview
   const [confirmId, setConfirmId] = useState(null) // booking id showing confirm preview
+  const [showTourPayments, setShowTourPayments] = useState(false)
   const [sender, setSender] = useState('Helen')
   const [polling, setPolling] = useState(false)
   const [pollResult, setPollResult] = useState(null)
@@ -579,26 +580,104 @@ ${merged.map((bk, i) => {
         }).length
         const notStarted = bks.filter(b => getStatus(b) === 'Not Started' || getStatus(b) === 'Ready to Send').length
 
+        // Build payment detail rows for expandable view
+        const paymentRows = []
+        bks.forEach(bk => {
+          const s = getStatus(bk)
+          if (s === 'Balance Paid') return
+          const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
+          const currency = bk.Lodge_Currency || bk.Currency || ''
+          const slots = [
+            ['Deposit', bk.Deposit_Due_Date, bk.Deposit_Amount, bk.Deposit_Paid_Date],
+            ['2nd', bk.Second_Payment_Due_Date, bk.Second_Payment_Amount, bk.nd_Payment_Paid_Date],
+            ['3rd', bk.Third_Payment_Due_Date, bk.Third_Payment_Amount, bk.rd_Payment_Paid_Date],
+            ['4th', bk.Fourth_Payment_Due_Date, bk.Fourth_Payment_Amount, bk.th_Payment_Paid_Date],
+          ]
+          slots.forEach(([label, due, amount, paid]) => {
+            if (!due && !amount) return
+            const amt = parseFloat(amount) || 0
+            let statusKey = 'upcoming', statusLabel = 'Upcoming'
+            if (paid) { statusKey = 'paid'; statusLabel = 'Paid' }
+            else if (due && due < now) { const d = Math.round((new Date(now) - new Date(due)) / 86400000); statusKey = 'overdue'; statusLabel = d + 'd overdue' }
+            else if (due && due <= sevenDays) { statusKey = 'due-soon'; statusLabel = 'Due soon' }
+            paymentRows.push({ lodge, label, due, amount: amt, currency, statusKey, statusLabel, booking: bk })
+          })
+        })
+        paymentRows.sort((a, b) => {
+          const order = { overdue: 0, 'due-soon': 1, upcoming: 2, paid: 3 }
+          return (order[a.statusKey] ?? 2) - (order[b.statusKey] ?? 2) || (a.due || '').localeCompare(b.due || '')
+        })
+
         return (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-            <div style={{
-              padding: '12px 16px', borderRadius: 'var(--radius-md)',
-              border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)',
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 15 }}>💰</span> Payments
-              </div>
-              {payOverdue > 0 ? (
-                <div style={{ fontSize: 12, color: '#C62828', fontWeight: 500 }}>
-                  {payOverdue} overdue · R {payOverdueAmt.toLocaleString()}
+            <div
+              onClick={() => setShowTourPayments(!showTourPayments)}
+              style={{
+                padding: '12px 16px', borderRadius: 'var(--radius-md)',
+                border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)',
+                cursor: 'pointer', gridColumn: showTourPayments ? '1 / -1' : undefined,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 15 }}>💰</span> Payments
+                  </div>
+                  {payOverdue > 0 ? (
+                    <div style={{ fontSize: 12, color: '#C62828', fontWeight: 500 }}>
+                      {payOverdue} overdue · R {payOverdueAmt.toLocaleString()}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--green-text)', fontWeight: 500 }}>No overdue payments</div>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {payDueSoon > 0 ? payDueSoon + ' due this week · ' : ''}{payUpcoming} upcoming · {payPaid} paid
+                  </div>
                 </div>
-              ) : (
-                <div style={{ fontSize: 12, color: 'var(--green-text)', fontWeight: 500 }}>No overdue payments</div>
-              )}
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                {payDueSoon > 0 ? payDueSoon + ' due this week · ' : ''}{payUpcoming} upcoming · {payPaid} paid
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', transform: showTourPayments ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▾</span>
               </div>
+              {showTourPayments && paymentRows.length > 0 && (
+                <div style={{ marginTop: 12, borderTop: '0.5px solid var(--border-light)', paddingTop: 8 }} onClick={e => e.stopPropagation()}>
+                  <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 500 }}>Lodge</th>
+                        <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 500 }}>Payment</th>
+                        <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 500 }}>Due</th>
+                        <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 500 }}>Amount</th>
+                        <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 500 }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paymentRows.map((p, pi) => (
+                        <tr
+                          key={pi}
+                          style={{ cursor: 'pointer', borderTop: '0.5px solid var(--border-light)' }}
+                          onClick={() => onSelectBooking(p.booking)}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <td style={{ padding: '6px 8px', fontWeight: 500 }}>{p.lodge}</td>
+                          <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>{p.label}</td>
+                          <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>{p.due ? fmtDate(p.due) : '—'}</td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                            {p.currency} {p.amount.toLocaleString()}
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                            <span style={{
+                              fontSize: 10, padding: '2px 6px', borderRadius: 8, fontWeight: 500,
+                              background: p.statusKey === 'overdue' ? '#FFEBEE' : p.statusKey === 'due-soon' ? '#FFF3E0' : p.statusKey === 'paid' ? '#E8F5E9' : 'var(--bg-secondary)',
+                              color: p.statusKey === 'overdue' ? '#C62828' : p.statusKey === 'due-soon' ? '#E65100' : p.statusKey === 'paid' ? '#2E7D32' : 'var(--text-muted)',
+                            }}>{p.statusLabel}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
+            {!showTourPayments && (
             <div style={{
               padding: '12px 16px', borderRadius: 'var(--radius-md)',
               border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)',
@@ -613,6 +692,7 @@ ${merged.map((bk, i) => {
                 {needsReply > 0 ? needsReply + ' need' + (needsReply === 1 ? 's' : '') + ' response · ' : ''}{notStarted > 0 ? notStarted + ' not started' : totalBookings + ' total'}
               </div>
             </div>
+            )}
           </div>
         )
       })()}
@@ -667,7 +747,15 @@ ${merged.map((bk, i) => {
 
               return (
                 <React.Fragment key={bk['Record Id'] || bk.id || i}>
-                <tr style={status === 'Not Available' ? { opacity: 0.6 } : {}}>
+                <tr
+                  style={Object.assign(
+                    { cursor: 'pointer' },
+                    status === 'Not Available' ? { opacity: 0.6 } : {}
+                  )}
+                  onClick={() => onSelectBooking(bk)}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
                   <td style={{ fontVariantNumeric: 'tabular-nums' }}>{nightNum}</td>
                   <td>{fmtDate(checkIn)}</td>
                   <td>
@@ -708,7 +796,7 @@ ${merged.map((bk, i) => {
                       </div>
                     ) : (
                       <div
-                        onClick={() => setEditing({ id: bk.id || bk['Record Id'], field: 'lodge', value: lodge, checkIn: checkIn })}
+                        onClick={(e) => { e.stopPropagation(); setEditing({ id: bk.id || bk['Record Id'], field: 'lodge', value: lodge, checkIn: checkIn }) }}
                         style={{ fontWeight: 500, cursor: 'pointer' }}
                         title="Click to edit lodge"
                       >{lodge}</div>
@@ -728,7 +816,7 @@ ${merged.map((bk, i) => {
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Backup: {bk._backup}</div>
                     )}
                   </td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     {editing && editing.id === (bk.id || bk['Record Id']) && editing.field === 'status' ? (
                       <select
                         value={editing.value}
@@ -810,7 +898,7 @@ ${merged.map((bk, i) => {
                       </div>
                     )}
                   </td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       <button
                         className="btn btn-sm"
