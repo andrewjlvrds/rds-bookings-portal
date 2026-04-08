@@ -532,14 +532,32 @@ function EditableCell({ value, display, field, type, onEdit }) {
 
 function EmailRow({ email }) {
   const [expanded, setExpanded] = useState(false)
+  const [showAttText, setShowAttText] = useState(null) // index of attachment text to show
   const isOutbound = email.direction === 'outbound'
   const date = email.date || email.email_date || ''
   const from = email.from || email.email_from || ''
   const subject = email.subject || email.email_subject || ''
   const body = email.body || email.email_content || ''
   const attachments = email.attachments || []
+  const gmailMsgId = email.gmail_message_id || email.message_id || ''
+  const hasExtracted = attachments.some(a => a && a.extractedText)
   const firstLine = body.split('\n').filter(l => l.trim())[0] || ''
   const preview = firstLine.length > 120 ? firstLine.substring(0, 120) + '...' : firstLine
+
+  const downloadUrl = (att) => {
+    if (!att.attachmentId || !gmailMsgId) return null
+    return '/api/gmail-attachment?messageId=' + encodeURIComponent(gmailMsgId) +
+      '&attachmentId=' + encodeURIComponent(att.attachmentId) +
+      '&filename=' + encodeURIComponent(att.filename || 'attachment') +
+      '&mimeType=' + encodeURIComponent(att.mimeType || 'application/octet-stream')
+  }
+
+  const fmtSize = (bytes) => {
+    if (!bytes) return ''
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB'
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  }
 
   return (
     <div style={{ borderBottom: '0.5px solid var(--border-light)' }}>
@@ -564,8 +582,12 @@ function EmailRow({ email }) {
           {expanded ? subject : (preview || subject)}
         </span>
         {attachments.length > 0 && (
-          <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
-            {attachments.length} file{attachments.length > 1 ? 's' : ''}
+          <span style={{
+            color: hasExtracted ? 'var(--green-text)' : 'var(--text-muted)',
+            fontSize: 11, flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: 3,
+          }}>
+            📎 {attachments.length}
           </span>
         )}
         <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
@@ -584,8 +606,81 @@ function EmailRow({ email }) {
             {body || '(no content)'}
           </div>
           {attachments.length > 0 && (
-            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-              Attachments: {attachments.map(a => a.filename || a).join(', ')}
+            <div style={{
+              marginTop: 8, padding: '8px 10px',
+              background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)',
+              border: '0.5px solid var(--border-light)',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                Attachments ({attachments.length})
+              </div>
+              {attachments.map((att, idx) => {
+                const url = downloadUrl(att)
+                const hasText = att && att.extractedText
+                return (
+                  <div key={idx} style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0',
+                    fontSize: 11, color: 'var(--text-primary)',
+                    borderTop: idx > 0 ? '0.5px solid var(--border-light)' : 'none',
+                  }}>
+                    <span style={{ fontSize: 13, flexShrink: 0 }}>
+                      {(att.mimeType || '').includes('pdf') ? '📄' :
+                       (att.mimeType || '').includes('sheet') || (att.mimeType || '').includes('excel') ? '📊' :
+                       (att.mimeType || '').includes('image') ? '🖼' : '📎'}
+                    </span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {att.filename || 'attachment'}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 10, flexShrink: 0 }}>
+                      {fmtSize(att.size)}
+                    </span>
+                    {hasText && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowAttText(showAttText === idx ? null : idx) }}
+                        style={{
+                          background: 'var(--green-bg)', color: 'var(--green-text)',
+                          border: 'none', borderRadius: 3, padding: '2px 6px',
+                          fontSize: 10, cursor: 'pointer', flexShrink: 0,
+                        }}
+                      >
+                        {showAttText === idx ? 'Hide text' : 'View text'}
+                      </button>
+                    )}
+                    {url && (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          background: 'var(--blue-bg)', color: 'var(--blue-text)',
+                          border: 'none', borderRadius: 3, padding: '2px 6px',
+                          fontSize: 10, cursor: 'pointer', textDecoration: 'none', flexShrink: 0,
+                        }}
+                      >
+                        Download
+                      </a>
+                    )}
+                    {!url && !hasText && (
+                      <span style={{ color: 'var(--text-hint)', fontSize: 10 }}>no download</span>
+                    )}
+                  </div>
+                )
+              })}
+              {showAttText !== null && attachments[showAttText] && attachments[showAttText].extractedText && (
+                <div style={{
+                  marginTop: 8, padding: '10px 12px',
+                  background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)',
+                  border: '0.5px solid var(--border-light)',
+                  fontSize: 11, lineHeight: 1.6, color: 'var(--text-secondary)',
+                  whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto',
+                }}>
+                  <div style={{ fontWeight: 500, marginBottom: 4, color: 'var(--text-primary)' }}>
+                    Extracted text: {attachments[showAttText].filename}
+                  </div>
+                  {attachments[showAttText].extractedText}
+                </div>
+              )}
             </div>
           )}
           {email.ai_summary && (

@@ -34,6 +34,7 @@ export default async function(req, res) {
     var record = {
       id: safeId,
       message_id: messageId,
+      gmail_message_id: messageId,
       type: data.type || 'lodge_inbound',
       direction: data.direction || 'inbound',
       lodge_id: lodgeId,

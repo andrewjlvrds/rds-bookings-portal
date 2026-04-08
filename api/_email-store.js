@@ -9,6 +9,7 @@ export async function storeEmail(emailData) {
   var record = {
     id: safeId,
     message_id: messageId,
+    gmail_message_id: emailData.gmail_message_id || messageId,
     type: emailData.type || 'lodge_inbound',
     direction: emailData.direction || 'inbound',
     lodge_id: lodgeId || null,

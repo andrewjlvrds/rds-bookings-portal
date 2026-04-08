@@ -8,6 +8,12 @@ var SYSTEM_PROMPT = [
   'RDS sends enquiry emails to lodges requesting availability for motorcycle tour groups.',
   'Lodges reply with availability confirmations, quotes, proforma invoices, or cancellation responses.',
   '',
+  'IMPORTANT: The email content may include text extracted from PDF or Excel attachments.',
+  'Attachment content appears between --- ATTACHMENT: filename --- and --- END ATTACHMENT --- markers.',
+  'Attachments often contain proforma invoices, rate cards, or booking confirmations with critical data.',
+  'When attachments are present, PRIORITISE data from attachments over email body text — the attachment',
+  'is usually the authoritative source for amounts, dates, payment terms, and cancellation policies.',
+  '',
   'EXTRACT THESE FIELDS (only if explicitly stated):',
   '',
   '1. email_type: "availability_confirmation" | "availability_denial" | "proforma_invoice" | "cancellation_response" | "payment_confirmation" | "general_correspondence" | "rate_card"',
@@ -120,6 +126,10 @@ export async function parseEmail(emailBody, bookingContext) {
     }
     if (bookingContext.payment_4_amount) {
       userMessage += '4th payment amount: ' + bookingContext.payment_4_amount + ' (paid: ' + (bookingContext.payment_4_paid || 'unknown') + ')\n';
+    }
+    if (bookingContext.has_attachments) {
+      userMessage += 'Attachments included: ' + (bookingContext.attachment_filenames || []).join(', ') + '\n';
+      userMessage += 'Note: Attachment text is appended below the email body. Prioritise data from attachments.\n';
     }
     userMessage += '--- END CONTEXT ---\n\n';
   }

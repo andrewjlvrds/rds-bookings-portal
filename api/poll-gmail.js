@@ -70,7 +70,7 @@ function getHeader(headers, name) {
   return '';
 }
 
-// Extract attachment info (names only, not content)
+// Extract attachment info including attachmentId for downloading
 function extractAttachments(payload) {
   var attachments = [];
   function walkParts(parts) {
@@ -82,6 +82,8 @@ function extractAttachments(payload) {
           filename: part.filename,
           mimeType: part.mimeType || '',
           size: part.body ? part.body.size || 0 : 0,
+          attachmentId: part.body ? part.body.attachmentId || null : null,
+          partId: part.partId || null,
         });
       }
       if (part.parts) walkParts(part.parts);
@@ -89,6 +91,96 @@ function extractAttachments(payload) {
   }
   if (payload.parts) walkParts(payload.parts);
   return attachments;
+}
+
+// MIME types we can extract text from
+var EXTRACTABLE_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+  'application/vnd.ms-excel', // xls
+  'text/csv',
+  'text/plain',
+  'application/csv',
+];
+
+function isExtractable(mimeType) {
+  if (!mimeType) return false;
+  return EXTRACTABLE_TYPES.indexOf(mimeType) > -1 || mimeType.indexOf('spreadsheet') > -1 || mimeType.indexOf('csv') > -1;
+}
+
+// Download attachment content from Gmail API
+async function downloadAttachment(token, messageId, attachmentId) {
+  var result = await gmailApi(token, 'messages/' + messageId + '/attachments/' + attachmentId);
+  if (!result || !result.data) return null;
+  // Gmail returns base64url-encoded data
+  return result.data;
+}
+
+// Convert base64url to standard base64
+function base64urlToBase64(str) {
+  if (!str) return '';
+  return str.replace(/-/g, '+').replace(/_/g, '/');
+}
+
+// Extract text from CSV/plain text attachment (base64url-encoded)
+function extractTextFromPlain(base64urlData) {
+  try {
+    var b64 = base64urlToBase64(base64urlData);
+    return Buffer.from(b64, 'base64').toString('utf-8');
+  } catch (e) {
+    return null;
+  }
+}
+
+// Send PDF to Claude API for text extraction
+async function extractTextFromPdf(base64urlData, filename) {
+  var apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  var b64 = base64urlToBase64(base64urlData);
+
+  try {
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: b64 },
+            },
+            {
+              type: 'text',
+              text: 'Extract ALL text content from this PDF document. Include every number, date, amount, reference, line item, and note. Output the text exactly as it appears, preserving table structure where possible (use | separators for columns). Do not summarise — extract everything verbatim. If it is a rate card or proforma invoice, capture every line item with amounts.',
+            },
+          ],
+        }],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('PDF extraction API error:', response.status);
+      return null;
+    }
+
+    var data = await response.json();
+    var text = '';
+    for (var i = 0; i < data.content.length; i++) {
+      if (data.content[i].type === 'text') text += data.content[i].text;
+    }
+    return text || null;
+  } catch (e) {
+    console.error('PDF extraction failed for', filename, e.message);
+    return null;
+  }
 }
 
 export default async function(req, res) {
@@ -222,11 +314,65 @@ export default async function(req, res) {
           }
         }
 
-        // Extract body and attachments
-        var body = extractBody(msg.payload);
+        // Attachments from message payload
         var attachments = extractAttachments(msg.payload);
 
-        // Store to blob
+        // Download and extract text from attachments (PDF, CSV, Excel, plain text)
+        // Size guard: skip attachments > 5MB (Claude API limit), limit 3 extractions per poll run
+        var MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024; // 5MB
+        var attachmentTexts = [];
+        var attachmentsWithText = [];
+        for (var ai = 0; ai < attachments.length; ai++) {
+          var att = attachments[ai];
+          var attCopy = {
+            filename: att.filename,
+            mimeType: att.mimeType,
+            size: att.size,
+            attachmentId: att.attachmentId,
+            extractedText: null,
+          };
+
+          if (att.attachmentId && isExtractable(att.mimeType) && att.size < MAX_ATTACHMENT_SIZE) {
+            try {
+              console.log('Downloading attachment:', att.filename, '(' + att.mimeType + ', ' + att.size + ' bytes)');
+              var attData = await downloadAttachment(token, msgId, att.attachmentId);
+
+              if (attData) {
+                var extractedText = null;
+
+                if (att.mimeType === 'application/pdf') {
+                  // Use Claude API to extract text from PDF
+                  extractedText = await extractTextFromPdf(attData, att.filename);
+                } else if (att.mimeType === 'text/csv' || att.mimeType === 'application/csv' || att.mimeType === 'text/plain') {
+                  // Direct text decode
+                  extractedText = extractTextFromPlain(attData);
+                }
+                // Note: Excel extraction skipped — would need xlsx dep. Most lodge proformas are PDF.
+
+                if (extractedText) {
+                  attCopy.extractedText = extractedText;
+                  attachmentTexts.push('--- ATTACHMENT: ' + att.filename + ' ---\n' + extractedText + '\n--- END ATTACHMENT ---');
+                  console.log('Extracted', extractedText.length, 'chars from', att.filename);
+                }
+              }
+
+              // Small delay between attachment downloads
+              await new Promise(function(r) { setTimeout(r, 300); });
+            } catch (attErr) {
+              console.error('Attachment extraction failed for', att.filename, attErr.message);
+            }
+          }
+
+          attachmentsWithText.push(attCopy);
+        }
+
+        // Build full content: email body + attachment texts
+        var fullContent = body || '';
+        if (attachmentTexts.length > 0) {
+          fullContent += '\n\n' + attachmentTexts.join('\n\n');
+        }
+
+        // Store to blob (with attachment extracted text)
         await storeEmail({
           booking_id: bookingId,
           message_id: msgId,
@@ -238,7 +384,8 @@ export default async function(req, res) {
           email_content: body,
           email_date: date ? new Date(date).toISOString() : new Date().toISOString(),
           gmail_thread_id: threadId,
-          attachments: attachments,
+          gmail_message_id: msgId,
+          attachments: attachmentsWithText,
         });
 
         // Detect auto-replies — store but don't update booking status
@@ -263,11 +410,13 @@ export default async function(req, res) {
           bodyLower.includes('we will get back to you')
         )) isAutoReply = true;
 
-        // AI parse the email to extract booking data (skip for auto-replies)
+        // AI parse the email + attachment text to extract booking data (skip for auto-replies)
         var aiResult = null;
         var zohoUpdates = { Last_Response_Date: new Date().toISOString().split('T')[0] };
 
-        if (!isAutoReply && body && body.trim().length > 10) {
+        // Use fullContent (body + attachment text) for AI parsing — much richer data source
+        var contentForParsing = fullContent || '';
+        if (!isAutoReply && contentForParsing && contentForParsing.trim().length > 10) {
           try {
             var bookingContext = {
               lodge_name: matchedBooking.Lodge_Name || matchedBooking.Name || '',
@@ -281,9 +430,11 @@ export default async function(req, res) {
               payment_3_paid: matchedBooking.rd_Payment_Paid_Date ? 'yes' : 'no',
               payment_4_amount: matchedBooking.Fourth_Payment_Amount || '',
               payment_4_paid: matchedBooking.th_Payment_Paid_Date ? 'yes' : 'no',
+              has_attachments: attachmentTexts.length > 0,
+              attachment_filenames: attachmentsWithText.filter(function(a) { return a.extractedText; }).map(function(a) { return a.filename; }),
             };
 
-            aiResult = await parseEmail(body, bookingContext);
+            aiResult = await parseEmail(contentForParsing, bookingContext);
             console.log('AI parse result for', matchedBooking.Name || bookingId, ':', JSON.stringify(aiResult).substring(0, 500));
 
             var fieldResult = extractionToZohoFields(aiResult);
@@ -334,6 +485,7 @@ export default async function(req, res) {
         }
 
         stored++;
+        var extractedAttCount = attachmentsWithText.filter(function(a) { return a.extractedText; }).length;
         details.push({
           message_id: msgId,
           subject: subject,
@@ -341,6 +493,7 @@ export default async function(req, res) {
           matched_booking: matchedBooking.Name || matchedBooking.Lodge_Name,
           match_method: matchMethod,
           attachments: attachments.length,
+          attachments_extracted: extractedAttCount,
           auto_reply: isAutoReply,
           ai_summary: isAutoReply ? 'Auto-reply — no status change' : (aiResult ? aiResult.summary : null),
           ai_status: isAutoReply ? null : (aiResult && aiResult.extracted && aiResult.extracted.suggested_status ? aiResult.extracted.suggested_status.value : null),

@@ -406,10 +406,12 @@ export default function Correspondence() {
                         </span>
                         {em.attachments && em.attachments.length > 0 && (
                           <span style={{
-                            fontSize: 10, flexShrink: 0, color: 'var(--text-muted)',
-                            background: 'var(--bg-secondary)', padding: '1px 5px', borderRadius: 3,
+                            fontSize: 10, flexShrink: 0,
+                            color: em.attachments.some(a => a && a.extractedText) ? 'var(--green-text)' : 'var(--text-muted)',
+                            background: em.attachments.some(a => a && a.extractedText) ? 'var(--green-bg)' : 'var(--bg-secondary)',
+                            padding: '1px 5px', borderRadius: 3,
                           }}>
-                            {em.attachments.length} file{em.attachments.length !== 1 ? 's' : ''}
+                            📎 {em.attachments.length}
                           </span>
                         )}
                         <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 72, textAlign: 'right' }}>
@@ -432,8 +434,45 @@ export default function Correspondence() {
                             {em.body || em.snippet || '(no content)'}
                           </div>
                           {em.attachments && em.attachments.length > 0 && (
-                            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                              Attachments: {em.attachments.map(a => a.filename).join(', ')}
+                            <div style={{
+                              marginTop: 8, padding: '6px 10px',
+                              background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)',
+                              border: '0.5px solid var(--border-light)',
+                            }}>
+                              <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                                Attachments ({em.attachments.length})
+                              </div>
+                              {em.attachments.map((att, aidx) => {
+                                const gmailMsgId = em.gmail_message_id || em.message_id || ''
+                                const attUrl = att.attachmentId && gmailMsgId
+                                  ? '/api/gmail-attachment?messageId=' + encodeURIComponent(gmailMsgId) +
+                                    '&attachmentId=' + encodeURIComponent(att.attachmentId) +
+                                    '&filename=' + encodeURIComponent(att.filename || 'attachment') +
+                                    '&mimeType=' + encodeURIComponent(att.mimeType || 'application/octet-stream')
+                                  : null
+                                return (
+                                  <div key={aidx} style={{
+                                    display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0',
+                                    fontSize: 11, color: 'var(--text-primary)',
+                                  }}>
+                                    <span style={{ fontSize: 12 }}>
+                                      {(att.mimeType || '').includes('pdf') ? '📄' : '📎'}
+                                    </span>
+                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {att.filename || 'attachment'}
+                                    </span>
+                                    {att.extractedText && (
+                                      <span style={{ color: 'var(--green-text)', fontSize: 10 }}>✓ extracted</span>
+                                    )}
+                                    {attUrl && (
+                                      <a href={attUrl} target="_blank" rel="noopener noreferrer"
+                                        style={{ color: 'var(--blue-text)', fontSize: 10, textDecoration: 'none' }}
+                                        onClick={(e) => e.stopPropagation()}
+                                      >Download</a>
+                                    )}
+                                  </div>
+                                )
+                              })}
                             </div>
                           )}
                         </div>
