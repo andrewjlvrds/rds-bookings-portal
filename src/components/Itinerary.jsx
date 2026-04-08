@@ -246,6 +246,34 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
     lodgeGroupMap[bk.id || bk['Record Id']] = currentGroup
   })
 
+  // Detect alternative lodges for same date (e.g. Klein Aus Vista + Bahnhof both on 25 Mar)
+  const dateBookings = {} // check-in date → array of bookings
+  merged.forEach(bk => {
+    const d = bk.Check_in_Date || bk['Check-in'] || ''
+    if (!d) return
+    const lodge = (bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || '').split(' - ')[0]
+    if (!dateBookings[d]) dateBookings[d] = []
+    // Only count as alternative if different lodge on same date
+    const existing = dateBookings[d]
+    const isDuplicate = existing.some(b => {
+      const l = (b.Lodge_Name || b['Lodge Booking Name'] || b.Name || '').split(' - ')[0]
+      return l === lodge
+    })
+    if (!isDuplicate) dateBookings[d].push(bk)
+  })
+  // Mark which bookings are alternatives (fallback) — the one with higher status priority is primary
+  const statusPriority = { 'Confirmed': 10, 'Balance Paid': 10, 'Deposit Paid': 9, 'Proforma Received': 8, 'Availability Confirmed': 7, 'Available': 6, 'Enquiry Sent': 5, 'Ready to Send': 4, 'Not Started': 3, 'Waitlisted': 2, 'Not Available': 1, 'Cancelled': 0 }
+  const alternativeSet = new Set() // booking IDs that are fallback
+  Object.values(dateBookings).forEach(group => {
+    if (group.length <= 1) return
+    // Sort by status priority descending — highest status = primary
+    const ranked = group.slice().sort((a, b) => (statusPriority[getStatus(b)] || 0) - (statusPriority[getStatus(a)] || 0))
+    // First is primary, rest are alternatives
+    for (let ri = 1; ri < ranked.length; ri++) {
+      alternativeSet.add(ranked[ri].id || ranked[ri]['Record Id'])
+    }
+  })
+
   // Decide what to show: Zoho bookings take priority, then draft
   const hasZohoBookings = sorted.length > 0
   const hasContent = hasZohoBookings || hasDraft
@@ -738,6 +766,12 @@ ${merged.map((bk, i) => {
               const lodge = (bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || '').split(' - ')[0]
               const dayDesc = bk['Day Description'] || bk.Day_Description || ''
               const checkIn = bk['Check-in'] || bk.Check_in_Date || ''
+              const bkId = bk.id || bk['Record Id']
+              const isFallback = alternativeSet.has(bkId)
+
+              // Don't show day number / date for fallback rows (same date as primary)
+              const prevCheckIn = i > 0 ? (merged[i-1].Check_in_Date || merged[i-1]['Check-in'] || '') : ''
+              const showDayDate = checkIn !== prevCheckIn
 
               const nightMatch = dayDesc.match(/Day\s*(\d+)/)
               const nightNum = nightMatch ? nightMatch[1] : String(i + 1).padStart(2, '0')
@@ -750,14 +784,19 @@ ${merged.map((bk, i) => {
                 <tr
                   style={Object.assign(
                     { cursor: 'pointer' },
-                    status === 'Not Available' ? { opacity: 0.6 } : {}
+                    status === 'Not Available' ? { opacity: 0.6 } : {},
+                    isFallback ? { borderLeft: '3px solid var(--amber-mid, #f59e0b)', background: 'rgba(245,158,11,0.04)' } : {}
                   )}
                   onClick={() => onSelectBooking(bk)}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  onMouseEnter={e => e.currentTarget.style.background = isFallback ? 'rgba(245,158,11,0.08)' : 'var(--bg-secondary)'}
+                  onMouseLeave={e => e.currentTarget.style.background = isFallback ? 'rgba(245,158,11,0.04)' : 'transparent'}
                 >
-                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>{nightNum}</td>
-                  <td>{fmtDate(checkIn)}</td>
+                  <td style={{ fontVariantNumeric: 'tabular-nums', color: isFallback ? 'var(--text-hint)' : undefined }}>
+                    {showDayDate ? nightNum : ''}
+                  </td>
+                  <td style={{ color: isFallback ? 'var(--text-hint)' : undefined }}>
+                    {showDayDate ? fmtDate(checkIn) : ''}
+                  </td>
                   <td>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{route}</div>
                     {bk._km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{bk._km} km</div>}
@@ -797,9 +836,18 @@ ${merged.map((bk, i) => {
                     ) : (
                       <div
                         onClick={(e) => { e.stopPropagation(); setEditing({ id: bk.id || bk['Record Id'], field: 'lodge', value: lodge, checkIn: checkIn }) }}
-                        style={{ fontWeight: 500, cursor: 'pointer' }}
+                        style={{ fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                         title="Click to edit lodge"
-                      >{lodge}</div>
+                      >
+                        {lodge}
+                        {isFallback && (
+                          <span style={{
+                            fontSize: 9, padding: '1px 5px', borderRadius: 3,
+                            background: 'rgba(245,158,11,0.15)', color: '#b45309',
+                            fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase',
+                          }}>Fallback</span>
+                        )}
+                      </div>
                     )}
                     {lodge && (() => {
                       const lr = lookupLodge(lodge)
