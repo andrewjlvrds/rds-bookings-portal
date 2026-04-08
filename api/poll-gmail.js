@@ -101,10 +101,11 @@ export default async function(req, res) {
     var refetch = req.query && req.query.refetch === 'true';
     var token = await getGmailToken();
 
-    // Fetch recent messages (last 3 days, max 20)
+    // Fetch recent messages — wider window for refetch
     // Search everywhere — not just inbox — so labelled replies are found
-    var query = 'newer_than:3d -from:bookings@ridedownsouth.com';
-    var listResult = await gmailApi(token, 'messages?q=' + encodeURIComponent(query) + '&maxResults=20');
+    var searchWindow = refetch ? '14d' : '3d';
+    var query = 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
+    var listResult = await gmailApi(token, 'messages?q=' + encodeURIComponent(query) + '&maxResults=' + (refetch ? '50' : '20'));
 
     var messages = listResult.messages || [];
     if (messages.length === 0) {
