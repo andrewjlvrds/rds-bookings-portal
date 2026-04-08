@@ -260,5 +260,13 @@ export function extractionToZohoFields(extraction) {
     updates.Payment_Note = updates.Payment_Note ? updates.Payment_Note + '\n' + methodNote : methodNote;
   }
 
+  // Truncate fields to Zoho character limits
+  if (updates.Reservation_Comments && updates.Reservation_Comments.length > 255) {
+    updates.Reservation_Comments = updates.Reservation_Comments.substring(0, 252) + '...';
+  }
+  if (updates.Cancellation_Policy_Text && updates.Cancellation_Policy_Text.length > 255) {
+    updates.Cancellation_Policy_Text = updates.Cancellation_Policy_Text.substring(0, 252) + '...';
+  }
+
   return { updates: updates, flagged: flagged, has_flags: Object.keys(flagged).length > 0 };
 }
