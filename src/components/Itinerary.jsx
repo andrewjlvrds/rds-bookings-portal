@@ -261,22 +261,34 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
     })
     if (!isDuplicate) dateBookings[d].push(bk)
   })
-  // Mark which bookings are alternatives (fallback) — auto-detected OR manually tagged
+  // Mark which bookings are alternatives (fallback) — manual tags take priority
   const statusPriority = { 'Confirmed': 10, 'Balance Paid': 10, 'Deposit Paid': 9, 'Proforma Received': 8, 'Availability Confirmed': 7, 'Available': 6, 'Enquiry Sent': 5, 'Ready to Send': 4, 'Not Started': 3, 'Waitlisted': 2, 'Not Available': 1, 'Cancelled': 0 }
   const alternativeSet = new Set() // booking IDs that are fallback
-  // Auto-detect: same check-in date, different lodge
-  Object.values(dateBookings).forEach(group => {
-    if (group.length <= 1) return
-    const ranked = group.slice().sort((a, b) => (statusPriority[getStatus(b)] || 0) - (statusPriority[getStatus(a)] || 0))
-    for (let ri = 1; ri < ranked.length; ri++) {
-      alternativeSet.add(ranked[ri].id || ranked[ri]['Record Id'])
-    }
-  })
-  // Manual: Booking_Notes contains "FALLBACK"
+
+  // First pass: manual FALLBACK tags
+  const manualFallbackIds = new Set()
   merged.forEach(bk => {
     const notes = (bk.Booking_Notes || bk['Booking Notes'] || '').toUpperCase()
     if (notes.indexOf('FALLBACK') > -1) {
-      alternativeSet.add(bk.id || bk['Record Id'])
+      const id = bk.id || bk['Record Id']
+      alternativeSet.add(id)
+      manualFallbackIds.add(id)
+    }
+  })
+
+  // Second pass: auto-detect same date, different lodge — but skip dates where a manual tag exists
+  const datesWithManualFallback = new Set()
+  merged.forEach(bk => {
+    if (manualFallbackIds.has(bk.id || bk['Record Id'])) {
+      datesWithManualFallback.add(bk.Check_in_Date || bk['Check-in'] || '')
+    }
+  })
+  Object.entries(dateBookings).forEach(([date, group]) => {
+    if (group.length <= 1) return
+    if (datesWithManualFallback.has(date)) return // manual tag handles this date
+    const ranked = group.slice().sort((a, b) => (statusPriority[getStatus(b)] || 0) - (statusPriority[getStatus(a)] || 0))
+    for (let ri = 1; ri < ranked.length; ri++) {
+      alternativeSet.add(ranked[ri].id || ranked[ri]['Record Id'])
     }
   })
 
