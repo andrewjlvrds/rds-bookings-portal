@@ -231,7 +231,7 @@ export default async function(req, res) {
     }
 
     // Fetch all bookings with Enquiry Sent or later status to match against
-    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Lodge,Tour,id,Deposit_Amount,Second_Payment_Amount,Third_Payment_Amount,Fourth_Payment_Amount,Deposit_Paid_Date,nd_Payment_Paid_Date,rd_Payment_Paid_Date,th_Payment_Paid_Date';
+    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Check_out_Date,Nights,Lodge,Tour,id,Deposit_Amount,Second_Payment_Amount,Third_Payment_Amount,Fourth_Payment_Amount,Deposit_Paid_Date,nd_Payment_Paid_Date,rd_Payment_Paid_Date,th_Payment_Paid_Date';
     var bookingsResult = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200');
     var allBookings = (bookingsResult && bookingsResult.data) || [];
 
@@ -445,6 +445,8 @@ export default async function(req, res) {
             var bookingContext = {
               lodge_name: matchedBooking.Lodge_Name || matchedBooking.Name || '',
               check_in: matchedBooking.Check_in_Date || '',
+              check_out: matchedBooking.Check_out_Date || '',
+              nights: matchedBooking.Nights || '',
               status: matchedBooking.Status || '',
               deposit_amount: matchedBooking.Deposit_Amount || '',
               deposit_paid: matchedBooking.Deposit_Paid_Date ? 'yes' : 'no',
