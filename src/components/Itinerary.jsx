@@ -787,9 +787,15 @@ ${merged.map((bk, i) => {
               const bkId = bk.id || bk['Record Id']
               const isFallback = alternativeSet.has(bkId)
 
-              // Don't show day number / date for fallback rows (same date as primary)
-              const prevCheckIn = i > 0 ? (merged[i-1].Check_in_Date || merged[i-1]['Check-in'] || '') : ''
-              const showDayDate = checkIn !== prevCheckIn
+              // Skip fallback rows — they render as sub-rows under primary
+              if (isFallback) return null
+
+              // Find fallback bookings for this date
+              const fallbacks = merged.filter(fb => {
+                const fbDate = fb.Check_in_Date || fb['Check-in'] || ''
+                const fbId = fb.id || fb['Record Id']
+                return fbDate === checkIn && alternativeSet.has(fbId)
+              })
 
               const nightMatch = dayDesc.match(/Day\s*(\d+)/)
               const nightNum = nightMatch ? nightMatch[1] : String(i + 1).padStart(2, '0')
@@ -802,19 +808,14 @@ ${merged.map((bk, i) => {
                 <tr
                   style={Object.assign(
                     { cursor: 'pointer' },
-                    status === 'Not Available' ? { opacity: 0.6 } : {},
-                    isFallback ? { borderLeft: '3px solid var(--amber-mid, #f59e0b)', background: 'rgba(245,158,11,0.04)' } : {}
+                    status === 'Not Available' ? { opacity: 0.6 } : {}
                   )}
                   onClick={() => onSelectBooking(bk)}
-                  onMouseEnter={e => e.currentTarget.style.background = isFallback ? 'rgba(245,158,11,0.08)' : 'var(--bg-secondary)'}
-                  onMouseLeave={e => e.currentTarget.style.background = isFallback ? 'rgba(245,158,11,0.04)' : 'transparent'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <td style={{ fontVariantNumeric: 'tabular-nums', color: isFallback ? 'var(--text-hint)' : undefined }}>
-                    {showDayDate ? nightNum : ''}
-                  </td>
-                  <td style={{ color: isFallback ? 'var(--text-hint)' : undefined }}>
-                    {showDayDate ? fmtDate(checkIn) : ''}
-                  </td>
+                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>{nightNum}</td>
+                  <td>{fmtDate(checkIn)}</td>
                   <td>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{route}</div>
                     {bk._km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{bk._km} km</div>}
@@ -858,13 +859,6 @@ ${merged.map((bk, i) => {
                         title="Click to edit lodge"
                       >
                         {lodge}
-                        {isFallback && (
-                          <span style={{
-                            fontSize: 9, padding: '1px 5px', borderRadius: 3,
-                            background: 'rgba(245,158,11,0.15)', color: '#b45309',
-                            fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase',
-                          }}>Fallback</span>
-                        )}
                       </div>
                     )}
                     {lodge && (() => {
@@ -1171,6 +1165,78 @@ ${merged.map((bk, i) => {
                     </tr>
                   )
                 })()}
+                {/* Fallback sub-rows for this date */}
+                {fallbacks.map(fb => {
+                  const fbLodge = (fb.Lodge_Name || fb['Lodge Booking Name'] || fb.Name || '').split(' - ')[0]
+                  const fbStatus = getStatus(fb)
+                  const fbBadge = getStatusBadge(fbStatus)
+                  const fbId = fb.id || fb['Record Id']
+                  const fbLr = lookupLodge(fbLodge)
+                  const fbEmail = fbLr ? (fbLr.email || '') : ''
+                  return (
+                    <tr
+                      key={'fb-' + fbId}
+                      style={{
+                        cursor: 'pointer',
+                        borderLeft: '3px solid #f59e0b',
+                        background: 'rgba(245,158,11,0.04)',
+                        fontSize: 12,
+                      }}
+                      onClick={() => onSelectBooking(fb)}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(245,158,11,0.08)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(245,158,11,0.04)'}
+                    >
+                      <td></td>
+                      <td></td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: 11, paddingLeft: 16 }}>
+                        <span style={{
+                          fontSize: 9, padding: '1px 5px', borderRadius: 3, marginRight: 6,
+                          background: 'rgba(245,158,11,0.15)', color: '#b45309',
+                          fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase',
+                        }}>Fallback</span>
+                      </td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {fbLodge}
+                        </div>
+                        {fbEmail && <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{fbEmail}</div>}
+                      </td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
+                          <span className={'badge ' + fbBadge.cls}>{fbBadge.label}</span>
+                          <button
+                            onClick={() => {
+                              const notes = (fb.Booking_Notes || fb['Booking Notes'] || '').replace(/\s*FALLBACK\s*/gi, '').trim()
+                              fetch('/api/update-bookings', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ booking_ids: [fbId], updates: { Booking_Notes: notes } }),
+                              }).then(r => { if (r.ok && onRefresh) onRefresh() })
+                            }}
+                            style={{
+                              fontSize: 9, padding: '2px 6px', border: '0.5px solid var(--border-default)',
+                              borderRadius: 3, background: 'rgba(245,158,11,0.15)', cursor: 'pointer', color: '#b45309',
+                            }}
+                          >✕ Remove fallback</button>
+                        </div>
+                      </td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <button className="btn btn-sm" onClick={() => onSelectBooking(fb)} style={{ fontSize: 11, padding: '3px 6px' }}>View</button>
+                          <button
+                            onClick={() => setPreviewId(previewId === fbId ? null : fbId)}
+                            style={{
+                              fontSize: 10, padding: '3px 6px',
+                              border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+                              background: previewId === fbId ? 'var(--blue-bg)' : 'var(--bg-primary)',
+                              cursor: 'pointer', color: 'var(--blue-text)',
+                            }}
+                          >Email</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
                 </React.Fragment>
               )
             })}
