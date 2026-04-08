@@ -787,8 +787,16 @@ ${merged.map((bk, i) => {
               const bkId = bk.id || bk['Record Id']
               const isFallback = alternativeSet.has(bkId)
 
-              // Skip fallback rows — they render as sub-rows under primary
-              if (isFallback) return null
+              // Skip fallback rows — but only if there's a primary on the same date to show under
+              if (isFallback) {
+                const hasPrimary = merged.some(other => {
+                  const otherDate = other.Check_in_Date || other['Check-in'] || ''
+                  const otherId = other.id || other['Record Id']
+                  return otherDate === checkIn && !alternativeSet.has(otherId)
+                })
+                if (hasPrimary) return null
+                // No primary exists — show as normal row (orphaned fallback)
+              }
 
               // Find fallback bookings for this date
               const fallbacks = merged.filter(fb => {
@@ -955,7 +963,7 @@ ${merged.map((bk, i) => {
                             }}
                           >↻ Try backup</button>
                         )}
-                        {(status === 'Waitlisted' || status === 'Enquiry Sent') && (
+                        {(status === 'Waitlisted' || status === 'Not Available') && (
                         <button
                           onClick={() => {
                             const fbLodge = prompt('Fallback lodge name:')
