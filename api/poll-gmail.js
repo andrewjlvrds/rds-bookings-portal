@@ -98,6 +98,8 @@ var EXTRACTABLE_TYPES = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
   'application/vnd.ms-excel', // xls
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
+  'application/msword', // doc
   'text/csv',
   'text/plain',
   'application/csv',
@@ -105,7 +107,11 @@ var EXTRACTABLE_TYPES = [
 
 function isExtractable(mimeType) {
   if (!mimeType) return false;
-  return EXTRACTABLE_TYPES.indexOf(mimeType) > -1 || mimeType.indexOf('spreadsheet') > -1 || mimeType.indexOf('csv') > -1;
+  return EXTRACTABLE_TYPES.indexOf(mimeType) > -1 ||
+    mimeType.indexOf('spreadsheet') > -1 ||
+    mimeType.indexOf('csv') > -1 ||
+    mimeType.indexOf('word') > -1 ||
+    mimeType.indexOf('msword') > -1;
 }
 
 // Download attachment content from Gmail API
@@ -132,12 +138,19 @@ function extractTextFromPlain(base64urlData) {
   }
 }
 
-// Send PDF to Claude API for text extraction
-async function extractTextFromPdf(base64urlData, filename) {
+// Send document (PDF or Word) to Claude API for text extraction
+async function extractTextFromDocument(base64urlData, filename, mimeType) {
   var apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
   var b64 = base64urlToBase64(base64urlData);
+
+  // Map MIME types for Claude API document support
+  var claudeMediaType = mimeType;
+  if (mimeType === 'application/msword') {
+    // Old .doc format — Claude may not support directly, try as generic
+    claudeMediaType = 'application/msword';
+  }
 
   try {
     var response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -155,11 +168,11 @@ async function extractTextFromPdf(base64urlData, filename) {
           content: [
             {
               type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: b64 },
+              source: { type: 'base64', media_type: claudeMediaType, data: b64 },
             },
             {
               type: 'text',
-              text: 'Extract ALL text content from this PDF document. Include every number, date, amount, reference, line item, and note. Output the text exactly as it appears, preserving table structure where possible (use | separators for columns). Do not summarise — extract everything verbatim. If it is a rate card or proforma invoice, capture every line item with amounts.',
+              text: 'Extract ALL text content from this document. Include every number, date, amount, reference, line item, and note. Output the text exactly as it appears, preserving table structure where possible (use | separators for columns). Do not summarise — extract everything verbatim. If it is a rate card, quote, or proforma invoice, capture every line item with amounts.',
             },
           ],
         }],
@@ -167,7 +180,8 @@ async function extractTextFromPdf(base64urlData, filename) {
     });
 
     if (!response.ok) {
-      console.error('PDF extraction API error:', response.status);
+      var errBody = await response.text();
+      console.error('Document extraction API error:', response.status, errBody.substring(0, 200));
       return null;
     }
 
@@ -178,7 +192,7 @@ async function extractTextFromPdf(base64urlData, filename) {
     }
     return text || null;
   } catch (e) {
-    console.error('PDF extraction failed for', filename, e.message);
+    console.error('Document extraction failed for', filename, e.message);
     return null;
   }
 }
@@ -339,15 +353,15 @@ export default async function(req, res) {
 
               if (attData) {
                 var extractedText = null;
+                var mt = att.mimeType || '';
 
-                if (att.mimeType === 'application/pdf') {
-                  // Use Claude API to extract text from PDF
-                  extractedText = await extractTextFromPdf(attData, att.filename);
-                } else if (att.mimeType === 'text/csv' || att.mimeType === 'application/csv' || att.mimeType === 'text/plain') {
+                if (mt === 'application/pdf' || mt.indexOf('word') > -1 || mt === 'application/msword') {
+                  // Use Claude API to extract text from PDF or Word doc
+                  extractedText = await extractTextFromDocument(attData, att.filename, mt);
+                } else if (mt === 'text/csv' || mt === 'application/csv' || mt === 'text/plain') {
                   // Direct text decode
                   extractedText = extractTextFromPlain(attData);
                 }
-                // Note: Excel extraction skipped — would need xlsx dep. Most lodge proformas are PDF.
 
                 if (extractedText) {
                   attCopy.extractedText = extractedText;

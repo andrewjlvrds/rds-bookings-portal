@@ -30,8 +30,8 @@ function extractTextFromPlain(base64urlData) {
   }
 }
 
-// Extract text from PDF via Claude API
-async function extractTextFromPdf(base64urlData, filename) {
+// Extract text from document (PDF or Word) via Claude API
+async function extractTextFromDocument(base64urlData, filename, mimeType) {
   var apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
@@ -53,11 +53,11 @@ async function extractTextFromPdf(base64urlData, filename) {
           content: [
             {
               type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: b64 },
+              source: { type: 'base64', media_type: mimeType, data: b64 },
             },
             {
               type: 'text',
-              text: 'Extract ALL text content from this PDF document. Include every number, date, amount, reference, line item, and note. Output the text exactly as it appears, preserving table structure where possible (use | separators for columns). Do not summarise — extract everything verbatim. If it is a rate card or proforma invoice, capture every line item with amounts.',
+              text: 'Extract ALL text content from this document. Include every number, date, amount, reference, line item, and note. Output the text exactly as it appears, preserving table structure where possible (use | separators for columns). Do not summarise — extract everything verbatim. If it is a rate card, quote, or proforma invoice, capture every line item with amounts.',
             },
           ],
         }],
@@ -65,7 +65,8 @@ async function extractTextFromPdf(base64urlData, filename) {
     });
 
     if (!response.ok) {
-      console.error('PDF extraction API error:', response.status);
+      var errBody = await response.text();
+      console.error('Document extraction API error:', response.status, errBody.substring(0, 200));
       return null;
     }
 
@@ -76,7 +77,7 @@ async function extractTextFromPdf(base64urlData, filename) {
     }
     return text || null;
   } catch (e) {
-    console.error('PDF extraction failed for', filename, e.message);
+    console.error('Document extraction failed for', filename, e.message);
     return null;
   }
 }
@@ -86,11 +87,17 @@ var EXTRACTABLE_TYPES = [
   'text/csv', 'application/csv', 'text/plain',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
 ];
 
 function isExtractable(mimeType) {
   if (!mimeType) return false;
-  return EXTRACTABLE_TYPES.indexOf(mimeType) > -1 || mimeType.indexOf('spreadsheet') > -1 || mimeType.indexOf('csv') > -1;
+  return EXTRACTABLE_TYPES.indexOf(mimeType) > -1 ||
+    mimeType.indexOf('spreadsheet') > -1 ||
+    mimeType.indexOf('csv') > -1 ||
+    mimeType.indexOf('word') > -1 ||
+    mimeType.indexOf('msword') > -1;
 }
 
 export default async function(req, res) {
@@ -220,8 +227,8 @@ export default async function(req, res) {
               if (attData) {
                 var extractedText = null;
 
-                if ((att.mimeType || '') === 'application/pdf') {
-                  extractedText = await extractTextFromPdf(attData, att.filename);
+                if ((att.mimeType || '') === 'application/pdf' || (att.mimeType || '').indexOf('word') > -1 || att.mimeType === 'application/msword') {
+                  extractedText = await extractTextFromDocument(attData, att.filename, att.mimeType);
                 } else if ((att.mimeType || '').indexOf('csv') > -1 || att.mimeType === 'text/plain') {
                   extractedText = extractTextFromPlain(attData);
                 }
