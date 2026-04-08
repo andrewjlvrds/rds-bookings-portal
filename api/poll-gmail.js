@@ -189,13 +189,22 @@ async function extractTextFromAttachment(base64urlData, filename, mimeType) {
     } catch (e) { console.error('DOC extraction failed:', e.message); return null; }
   }
 
-  // .docx → basic XML text extraction (zip containing word/document.xml)
+  // .docx → unzip and extract text from word/document.xml
   if (mt.indexOf('wordprocessingml') > -1 || (filename && filename.toLowerCase().endsWith('.docx'))) {
     try {
-      var raw = buffer.toString('utf-8');
-      var matches = raw.match(/<w:t[^>]*>([^<]+)<\/w:t>/g) || [];
-      return matches.map(function(m) { return m.replace(/<[^>]+>/g, ''); }).join(' ') || null;
-    } catch (e) { return null; }
+      var JSZip = (await import('jszip')).default;
+      var zip = await JSZip.loadAsync(buffer);
+      var docXml = await zip.file('word/document.xml').async('string');
+      // Extract text from <w:t> tags, add newlines for paragraph breaks
+      var text = docXml
+        .replace(/<\/w:p>/g, '\n')
+        .replace(/<w:tab\/>/g, ' | ')
+        .replace(/<w:t[^>]*>([^<]*)<\/w:t>/g, '$1')
+        .replace(/<[^>]+>/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      return text || null;
+    } catch (e) { console.error('DOCX extraction failed:', e.message); return null; }
   }
 
   // Excel → raw printable string extraction

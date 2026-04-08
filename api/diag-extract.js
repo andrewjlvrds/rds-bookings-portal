@@ -29,8 +29,26 @@ async function extractText(buffer, filename, mimeType, apiKey, L) {
     } catch (e) { L('  DOC error: ' + e.message); return null; }
   }
 
-  // PDF, DOCX, Excel - Claude document API
-  if (mt === 'application/pdf' || mt.indexOf('wordprocessingml') > -1 || mt.indexOf('spreadsheet') > -1 || mt.indexOf('excel') > -1) {
+  // .docx → unzip and extract from word/document.xml
+  if (mt.indexOf('wordprocessingml') > -1 || (filename && filename.toLowerCase().endsWith('.docx'))) {
+    try {
+      var JSZip = (await import('jszip')).default;
+      var zip = await JSZip.loadAsync(buffer);
+      var docXml = await zip.file('word/document.xml').async('string');
+      var text = docXml
+        .replace(/<\/w:p>/g, '\n')
+        .replace(/<w:tab\/>/g, ' | ')
+        .replace(/<w:t[^>]*>([^<]*)<\/w:t>/g, '$1')
+        .replace(/<[^>]+>/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      L('  DOCX extracted: ' + text.length + ' chars');
+      return text;
+    } catch (e) { L('  DOCX error: ' + e.message); return null; }
+  }
+
+  // PDF, Excel - Claude document API
+  if (mt === 'application/pdf' || mt.indexOf('spreadsheet') > -1 || mt.indexOf('excel') > -1) {
     try {
       var b64 = buffer.toString('base64');
       L('  Sending to Claude (' + mt + ')...');
