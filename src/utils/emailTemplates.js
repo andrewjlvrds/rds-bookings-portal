@@ -131,7 +131,7 @@ export function generateConfirmationEmail(bookings, lodgeName, opts = {}) {
 
 Thanks for coming back to us. Please go ahead and confirm the booking for ${checkIn} to ${checkOut} (${totalNights} night${totalNights > 1 ? 's' : ''})${refStr}.
 
-We'll arrange payment as per your terms.
+Can you confirm when the deposit is due and we'll arrange payment?
 
 Cheers,
 
