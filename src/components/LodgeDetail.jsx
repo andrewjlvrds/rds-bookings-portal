@@ -412,7 +412,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>No emails recorded for this booking yet.</div>
           ) : (
             <div>
-              {emails.map((em, i) => <EmailRow key={em.id || i} email={em} />)}
+              {emails.map((em, i) => <EmailRow key={em.id || i} email={em} bookingId={bookingId} onDelete={fetchEmails} />)}
             </div>
           )}
 
@@ -557,9 +557,10 @@ function EditableCell({ value, display, field, type, onEdit }) {
   )
 }
 
-function EmailRow({ email }) {
+function EmailRow({ email, bookingId, onDelete }) {
   const [expanded, setExpanded] = useState(false)
-  const [showAttText, setShowAttText] = useState(null) // index of attachment text to show
+  const [showAttText, setShowAttText] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const isOutbound = email.direction === 'outbound'
   const date = email.date || email.email_date || ''
   const from = email.from || email.email_from || ''
@@ -715,6 +716,30 @@ function EmailRow({ email }) {
               AI: {email.ai_summary}
             </div>
           )}
+          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={async (e) => {
+                e.stopPropagation()
+                if (!confirm('Delete this email from this booking?')) return
+                setDeleting(true)
+                try {
+                  await fetch('/api/delete-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ booking_id: bookingId, message_id: email.message_id || email.id }),
+                  })
+                  if (onDelete) onDelete()
+                } catch (err) { console.error(err) }
+                finally { setDeleting(false) }
+              }}
+              disabled={deleting}
+              style={{
+                fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--border-default)',
+                borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer',
+                color: 'var(--red-text)',
+              }}
+            >{deleting ? 'Deleting...' : 'Delete email'}</button>
+          </div>
         </div>
       )}
     </div>
