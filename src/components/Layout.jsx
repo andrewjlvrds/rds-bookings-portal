@@ -93,6 +93,21 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
             {tab.label}
           </button>
         ))}
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={() => { onSelectTour(null); onSelectView('dashboard') }}
+          style={{
+            padding: '12px 14px', fontSize: 12,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: PLANNER_VIEWS.includes(activeView) ? 'var(--text-primary)' : 'var(--text-hint)',
+            borderBottom: PLANNER_VIEWS.includes(activeView) ? '2px solid var(--text-muted)' : '2px solid transparent',
+            marginBottom: -0.5,
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+          onMouseLeave={e => { if (!PLANNER_VIEWS.includes(activeView)) e.currentTarget.style.color = 'var(--text-hint)' }}
+        >
+          Tour planner
+        </button>
       </div>
 
       {/* ═══ SIDEBAR + MAIN ═══ */}
