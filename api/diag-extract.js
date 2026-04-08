@@ -103,79 +103,78 @@ export default async function(req, res) {
 
     var inbound = emails.filter(function(e) { return e.direction === 'inbound'; });
     if (inbound.length === 0) return res.status(200).json({ log: log, error: 'No inbound emails' });
+    L('Found ' + inbound.length + ' inbound email(s)');
 
-    var email = inbound[0];
-    var gmailMsgId = email.gmail_message_id || email.message_id || '';
-    if (!gmailMsgId) return res.status(200).json({ log: log, error: 'No Gmail message ID' });
-
-    // 2. Fetch full message from Gmail for attachment IDs
-    L('Fetching Gmail message ' + gmailMsgId);
     var token = await getGmailToken();
-    var fullMsg = await gmailApi(token, 'messages/' + gmailMsgId + '?format=full');
-
-    var attachments = [];
-    function walkParts(parts) {
-      if (!parts) return;
-      for (var pi = 0; pi < parts.length; pi++) {
-        var p = parts[pi];
-        if (p.filename && p.filename.length > 0) {
-          attachments.push({ filename: p.filename, mimeType: p.mimeType || '', size: p.body ? p.body.size || 0 : 0, attachmentId: p.body ? p.body.attachmentId || null : null });
-        }
-        if (p.parts) walkParts(p.parts);
-      }
-    }
-    if (fullMsg.payload && fullMsg.payload.parts) walkParts(fullMsg.payload.parts);
-    L('Found ' + attachments.length + ' attachment(s)');
-
-    // 3. Download and extract ALL attachments
     var apiKey = process.env.ANTHROPIC_API_KEY;
     var allTexts = [];
-    var updatedAtts = [];
+    var allBodies = [];
+    var updatedEmails = [];
 
-    // Match stored attachment text by filename
-    var storedAtts = email.attachments || [];
-    var storedTextMap = {};
-    storedAtts.forEach(function(sa) {
-      if (sa.filename && sa.extractedText) storedTextMap[sa.filename] = sa.extractedText;
-    });
+    // Process ALL inbound emails
+    for (var ei = 0; ei < inbound.length; ei++) {
+      var email = inbound[ei];
+      var gmailMsgId = email.gmail_message_id || email.message_id || '';
+      if (!gmailMsgId) continue;
 
-    for (var ai = 0; ai < attachments.length; ai++) {
-      var att = attachments[ai];
-      L('Att ' + ai + ': "' + att.filename + '" (' + att.mimeType + ', ' + att.size + 'B)');
+      L('Processing inbound ' + ei + ': ' + (email.subject || '').substring(0, 60));
+      allBodies.push(email.body || '');
 
-      // Reuse stored extraction if available
-      if (storedTextMap[att.filename]) {
-        L('  Reusing stored text: ' + storedTextMap[att.filename].length + ' chars');
-        allTexts.push('--- ATTACHMENT: ' + att.filename + ' ---\n' + storedTextMap[att.filename] + '\n--- END ATTACHMENT ---');
-        updatedAtts.push(Object.assign({}, att, { extractedText: storedTextMap[att.filename] }));
-        continue;
+      // Get attachments from Gmail
+      var fullMsg = await gmailApi(token, 'messages/' + gmailMsgId + '?format=full');
+      var attachments = [];
+      function walkParts(parts) {
+        if (!parts) return;
+        for (var pi = 0; pi < parts.length; pi++) {
+          var p = parts[pi];
+          if (p.filename && p.filename.length > 0) {
+            attachments.push({ filename: p.filename, mimeType: p.mimeType || '', size: p.body ? p.body.size || 0 : 0, attachmentId: p.body ? p.body.attachmentId || null : null });
+          }
+          if (p.parts) walkParts(p.parts);
+        }
+      }
+      if (fullMsg.payload && fullMsg.payload.parts) walkParts(fullMsg.payload.parts);
+
+      // Match stored text by filename
+      var storedAtts = email.attachments || [];
+      var storedTextMap = {};
+      storedAtts.forEach(function(sa) { if (sa.filename && sa.extractedText) storedTextMap[sa.filename] = sa.extractedText; });
+
+      var updatedAtts = [];
+      for (var ai = 0; ai < attachments.length; ai++) {
+        var att = attachments[ai];
+        L('  Att: "' + att.filename + '" (' + att.mimeType + ')');
+
+        if (storedTextMap[att.filename]) {
+          L('    Reusing stored text: ' + storedTextMap[att.filename].length + ' chars');
+          allTexts.push('--- ATTACHMENT: ' + att.filename + ' ---\n' + storedTextMap[att.filename] + '\n--- END ATTACHMENT ---');
+          updatedAtts.push(Object.assign({}, att, { extractedText: storedTextMap[att.filename] }));
+          continue;
+        }
+
+        if (!att.attachmentId || att.size > 5 * 1024 * 1024) { updatedAtts.push(att); continue; }
+        var attResult = await gmailApi(token, 'messages/' + gmailMsgId + '/attachments/' + att.attachmentId);
+        if (!attResult || !attResult.data) { updatedAtts.push(att); continue; }
+        var b64std = base64urlToBase64(attResult.data);
+        var buffer = Buffer.from(b64std, 'base64');
+        var extracted = await extractText(buffer, att.filename, att.mimeType, apiKey, L);
+        if (extracted) {
+          allTexts.push('--- ATTACHMENT: ' + att.filename + ' ---\n' + extracted + '\n--- END ATTACHMENT ---');
+        }
+        updatedAtts.push(Object.assign({}, att, { extractedText: extracted || null }));
+        await new Promise(function(r) { setTimeout(r, 300); });
       }
 
-      if (!att.attachmentId || att.size > 5 * 1024 * 1024) {
-        L('  Skipped');
-        updatedAtts.push(att);
-        continue;
-      }
-
-      var attResult = await gmailApi(token, 'messages/' + gmailMsgId + '/attachments/' + att.attachmentId);
-      if (!attResult || !attResult.data) { L('  Empty'); updatedAtts.push(att); continue; }
-
-      var b64std = base64urlToBase64(attResult.data);
-      var buffer = Buffer.from(b64std, 'base64');
-
-      var extracted = await extractText(buffer, att.filename, att.mimeType, apiKey, L);
-      if (extracted) {
-        allTexts.push('--- ATTACHMENT: ' + att.filename + ' ---\n' + extracted + '\n--- END ATTACHMENT ---');
-      }
-      updatedAtts.push(Object.assign({}, att, { extractedText: extracted || null }));
-      await new Promise(function(r) { setTimeout(r, 300); });
+      email.attachments = updatedAtts;
+      email.gmail_message_id = gmailMsgId;
+      updatedEmails.push(email);
     }
 
-    L('Extracted from ' + allTexts.length + '/' + attachments.length + ' attachments');
+    L('Total: ' + allTexts.length + ' attachment texts from ' + inbound.length + ' emails');
 
-    // 4. Run AI parser
-    var body = email.body || '';
-    var fullContent = body + (allTexts.length > 0 ? '\n\n' + allTexts.join('\n\n') : '');
+    // 4. Run AI parser with all bodies + all attachments
+    var combinedBody = allBodies.filter(Boolean).join('\n\n---\n\n');
+    var fullContent = combinedBody + (allTexts.length > 0 ? '\n\n' + allTexts.join('\n\n') : '');
     L('AI input: ' + fullContent.length + ' chars');
 
     var bookingFields = 'Name,Lodge_Name,Status,Check_in_Date,Check_out_Date,Nights,id,' +
@@ -187,6 +186,9 @@ export default async function(req, res) {
     var lodgeName = booking.Lodge_Name || booking.Name || '';
     if (typeof lodgeName === 'object') lodgeName = lodgeName.name || '';
 
+    var allAttFilenames = [];
+    updatedEmails.forEach(function(em) { (em.attachments || []).forEach(function(a) { if (a.extractedText) allAttFilenames.push(a.filename); }); });
+
     var bookingContext = {
       lodge_name: lodgeName,
       check_in: booking.Check_in_Date || '',
@@ -194,7 +196,7 @@ export default async function(req, res) {
       nights: booking.Nights || '',
       status: booking.Status || '',
       has_attachments: allTexts.length > 0,
-      attachment_filenames: updatedAtts.filter(function(a) { return a.extractedText; }).map(function(a) { return a.filename; }),
+      attachment_filenames: allAttFilenames,
     };
 
     var aiResult = await parseEmail(fullContent, bookingContext);
@@ -210,13 +212,16 @@ export default async function(req, res) {
       L('Zoho: ' + JSON.stringify(zohoResult).substring(0, 300));
     }
 
-    // 6. Update blob
-    email.attachments = updatedAtts;
-    email.gmail_message_id = gmailMsgId;
-    var safeId = (email.message_id || email.id || '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
-    await put('emails/booking/' + bookingId + '/' + safeId + '.json',
-      JSON.stringify(email), { access: 'public', contentType: 'application/json', addRandomSuffix: false });
-    L('Blob updated');
+    // 6. Update all email blobs
+    for (var ui = 0; ui < updatedEmails.length; ui++) {
+      var ue = updatedEmails[ui];
+      var safeId = (ue.message_id || ue.id || '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
+      if (safeId) {
+        await put('emails/booking/' + bookingId + '/' + safeId + '.json',
+          JSON.stringify(ue), { access: 'public', contentType: 'application/json', addRandomSuffix: false });
+      }
+    }
+    L('Updated ' + updatedEmails.length + ' email blob(s)');
 
     return res.status(200).json({ success: true, log: log, ai_result: aiResult, zoho_updates: fieldResult.updates });
   } catch (err) {

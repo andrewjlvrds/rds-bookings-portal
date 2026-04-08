@@ -135,12 +135,22 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
   return (
     <div>
       {/* Back button */}
-      <button onClick={onBack} style={{
-        background: 'none', border: 'none', color: 'var(--text-muted)',
-        fontSize: 13, padding: '0 0 12px', cursor: 'pointer',
-      }}>
-        ← Back to {tour ? tour.name : 'itinerary'}
-      </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
+        <button onClick={onBack} style={{
+          background: 'none', border: 'none', color: 'var(--text-muted)',
+          fontSize: 13, padding: '0 0 12px', cursor: 'pointer',
+        }}>
+          ← Back to {tour ? tour.name : 'itinerary'}
+        </button>
+        <button
+          onClick={() => { if (onRefresh) onRefresh(); fetchEmails() }}
+          style={{
+            background: 'none', border: '0.5px solid var(--border-default)',
+            borderRadius: 4, fontSize: 11, padding: '3px 10px', cursor: 'pointer',
+            color: 'var(--text-muted)',
+          }}
+        >↻ Refresh</button>
+      </div>
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
