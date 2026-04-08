@@ -136,6 +136,60 @@ export default async function(req, res) {
         var body = email.body || '';
         var attachments = email.attachments || [];
 
+        // If stored attachments lack attachmentId (old format), re-fetch from Gmail
+        var hasAttWithoutId = attachments.some(function(a) { return a.filename && !a.attachmentId; });
+        if (gmailMsgId && (hasAttWithoutId || attachments.length === 0)) {
+          try {
+            var fullMsg = await gmailApi(token, 'messages/' + gmailMsgId + '?format=full');
+            if (fullMsg && fullMsg.payload) {
+              // Re-extract attachments with IDs
+              var freshAttachments = [];
+              function walkParts(parts) {
+                if (!parts) return;
+                for (var pi = 0; pi < parts.length; pi++) {
+                  var part = parts[pi];
+                  if (part.filename && part.filename.length > 0) {
+                    freshAttachments.push({
+                      filename: part.filename,
+                      mimeType: part.mimeType || '',
+                      size: part.body ? part.body.size || 0 : 0,
+                      attachmentId: part.body ? part.body.attachmentId || null : null,
+                    });
+                  }
+                  if (part.parts) walkParts(part.parts);
+                }
+              }
+              walkParts(fullMsg.payload.parts || []);
+              if (freshAttachments.length > 0) {
+                attachments = freshAttachments;
+                console.log('Re-fetched', freshAttachments.length, 'attachments with IDs from Gmail');
+              }
+
+              // Also re-extract body if it was empty
+              if (!body || body === '(no content)') {
+                var textPlain = '', textHtml = '';
+                function walkBody(part) {
+                  if (!part) return;
+                  if (part.mimeType === 'text/plain' && part.body && part.body.data && !textPlain) {
+                    var padded = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
+                    textPlain = Buffer.from(padded, 'base64').toString('utf-8');
+                  }
+                  if (part.mimeType === 'text/html' && part.body && part.body.data && !textHtml) {
+                    var padded2 = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
+                    textHtml = Buffer.from(padded2, 'base64').toString('utf-8');
+                  }
+                  if (part.parts) part.parts.forEach(walkBody);
+                }
+                walkBody(fullMsg.payload);
+                if (textPlain) body = textPlain;
+                else if (textHtml) body = textHtml.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+              }
+            }
+          } catch (fetchErr) {
+            console.error('Failed to re-fetch message from Gmail:', gmailMsgId, fetchErr.message);
+          }
+        }
+
         // Re-download and extract attachment text
         var attachmentTexts = [];
         var updatedAttachments = [];
