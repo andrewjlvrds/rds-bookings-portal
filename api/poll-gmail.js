@@ -308,17 +308,44 @@ export default async function(req, res) {
           var subjectLower = (subject || '').toLowerCase();
           var fromLower = (from || '').toLowerCase();
           var lodgeNames = Object.keys(nameMap);
+
+          // Extract dates from subject and body for matching
+          var emailText = (subject || '') + ' ' + (body || '').substring(0, 2000);
+          // Match various date formats: "May 29, 2026", "29/05/2026", "2026-05-29", "29 May 2026"
+          var dateMatches = emailText.match(/\b(20\d{2}[-\/]\d{1,2}[-\/]\d{1,2}|\d{1,2}[-\/]\d{1,2}[-\/]20\d{2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+20\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{1,2},?\s+20\d{2})\b/gi) || [];
+          var emailYear = '';
+          if (dateMatches.length > 0) {
+            var yearMatch = dateMatches[0].match(/20\d{2}/);
+            if (yearMatch) emailYear = yearMatch[0];
+          }
+
           for (var ln = 0; ln < lodgeNames.length; ln++) {
             var name = lodgeNames[ln];
             if (name.length > 3 && (subjectLower.indexOf(name) > -1 || fromLower.indexOf(name) > -1)) {
-              // Pick the most recent active booking for this lodge
               var candidates = nameMap[name].filter(function(b) {
                 return b.Status === 'Enquiry Sent' || b.Status === 'Ready to Send' ||
-                       b.Status === 'Availability Confirmed' || b.Status === 'Proforma Received';
+                       b.Status === 'Availability Confirmed' || b.Status === 'Proforma Received' ||
+                       b.Status === 'Available' || b.Status === 'Partially Available';
               });
-              if (candidates.length > 0) {
+              if (candidates.length === 0) continue;
+
+              if (candidates.length === 1) {
                 matchedBooking = candidates[0];
                 matchMethod = 'lodge_name';
+              } else {
+                // Multiple bookings for same lodge — match by year/date from email
+                var best = candidates[0];
+                if (emailYear) {
+                  for (var ci = 0; ci < candidates.length; ci++) {
+                    var ciDate = candidates[ci].Check_in_Date || '';
+                    if (ciDate.indexOf(emailYear) > -1) {
+                      best = candidates[ci];
+                      break;
+                    }
+                  }
+                }
+                matchedBooking = best;
+                matchMethod = 'lodge_name_date';
               }
             }
           }
