@@ -529,8 +529,15 @@ function EmailRow({ email }) {
     <div style={{ borderBottom: '0.5px solid var(--border-light)' }}>
       <div
         onClick={() => setExpanded(!expanded)}
-        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 12 }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+          cursor: 'pointer', fontSize: 12,
+          background: expanded ? 'var(--bg-secondary)' : 'transparent',
+        }}
       >
+        <span style={{ fontSize: 9, color: 'var(--text-muted)', width: 12, flexShrink: 0 }}>
+          {expanded ? '▾' : '▸'}
+        </span>
         <span style={{ fontWeight: 500, fontSize: 11, width: 52, flexShrink: 0, color: isOutbound ? 'var(--blue-text)' : 'var(--green-text)' }}>
           {isOutbound ? 'Sent' : 'Received'}
         </span>
@@ -538,7 +545,7 @@ function EmailRow({ email }) {
           {isOutbound ? 'to lodge' : from.split('<')[0].trim() || from}
         </span>
         <span style={{ color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {expanded ? subject : preview}
+          {expanded ? subject : (preview || subject)}
         </span>
         {attachments.length > 0 && (
           <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
@@ -550,10 +557,15 @@ function EmailRow({ email }) {
         </span>
       </div>
       {expanded && (
-        <div style={{ padding: '0 14px 12px 76px' }}>
-          {subject && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{subject}</div>}
-          <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto' }}>
-            {body}
+        <div style={{ padding: '8px 14px 14px 88px' }}>
+          {subject && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Subject: {subject}</div>}
+          <div style={{
+            fontSize: 12, lineHeight: 1.7, color: 'var(--text-primary)',
+            whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto',
+            background: 'var(--bg-primary)', padding: '12px 14px',
+            borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-light)',
+          }}>
+            {body || '(no content)'}
           </div>
           {attachments.length > 0 && (
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
@@ -561,7 +573,7 @@ function EmailRow({ email }) {
             </div>
           )}
           {email.ai_summary && (
-            <div style={{ marginTop: 6, padding: '4px 8px', background: 'var(--blue-bg)', borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--blue-text)' }}>
+            <div style={{ marginTop: 6, padding: '6px 10px', background: 'var(--blue-bg)', borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--blue-text)' }}>
               AI: {email.ai_summary}
             </div>
           )}
