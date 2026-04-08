@@ -69,10 +69,16 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
         borderBottom: '0.5px solid var(--border-default)',
         background: 'var(--bg-primary)', flexShrink: 0,
       }}>
-        <span style={{
-          fontSize: 15, fontWeight: 500, padding: '12px 12px 12px 0',
-          color: 'var(--text-primary)', letterSpacing: -0.3,
-        }}>
+        <span
+          onClick={() => { onSelectTour(null); onSelectView('lodge-dashboard') }}
+          style={{
+            fontSize: 15, fontWeight: 500, padding: '12px 12px 12px 0',
+            color: 'var(--text-primary)', letterSpacing: -0.3,
+            cursor: 'pointer',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = 0.7}
+          onMouseLeave={e => e.currentTarget.style.opacity = 1}
+        >
           RDS Portal
         </span>
         <span style={{ width: 0.5, height: 20, background: 'var(--border-default)', margin: '0 8px' }} />

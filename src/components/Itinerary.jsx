@@ -538,6 +538,85 @@ ${merged.map((bk, i) => {
       {/* Tour config — room requirements for enquiries */}
       <TourConfig tour={tour} />
 
+      {/* Tour summary: payments + correspondence */}
+      {hasZohoBookings && (() => {
+        const now = new Date().toISOString().split('T')[0]
+        const sevenDays = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+        const bks = sorted.filter(b => {
+          const dd = b.Day_Description || b['Day Description'] || ''
+          return !(dd.startsWith('Z ') || dd.startsWith('z '))
+        })
+        // Payment stats
+        let payOverdue = 0, payOverdueAmt = 0, payDueSoon = 0, payUpcoming = 0, payPaid = 0
+        bks.forEach(bk => {
+          const s = getStatus(bk)
+          if (s === 'Balance Paid') return
+          const slots = [
+            [bk.Deposit_Due_Date, bk.Deposit_Amount, bk.Deposit_Paid_Date],
+            [bk.Second_Payment_Due_Date, bk.Second_Payment_Amount, bk.nd_Payment_Paid_Date],
+            [bk.Third_Payment_Due_Date, bk.Third_Payment_Amount, bk.rd_Payment_Paid_Date],
+            [bk.Fourth_Payment_Due_Date, bk.Fourth_Payment_Amount, bk.th_Payment_Paid_Date],
+          ]
+          slots.forEach(([due, amount, paid]) => {
+            if (!due && !amount) return
+            if (paid) { payPaid++; return }
+            const amt = parseFloat(amount) || 0
+            if (due && due < now) { payOverdue++; payOverdueAmt += amt }
+            else if (due && due <= sevenDays) { payDueSoon++ }
+            else if (due || amount) { payUpcoming++ }
+          })
+        })
+        // Correspondence stats
+        const totalBookings = bks.length
+        const confirmed = bks.filter(b => isConfirmed(b)).length
+        const enquired = bks.filter(b => {
+          const s = getStatus(b)
+          return s === 'Enquiry Sent' || s === 'Available' || s === 'Availability Confirmed' || s === 'Proforma Received'
+        }).length
+        const needsReply = bks.filter(b => {
+          const s = getStatus(b)
+          return (s === 'Availability Confirmed' || (s === 'Enquiry Sent' && b.Last_Response_Date))
+        }).length
+        const notStarted = bks.filter(b => getStatus(b) === 'Not Started' || getStatus(b) === 'Ready to Send').length
+
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div style={{
+              padding: '12px 16px', borderRadius: 'var(--radius-md)',
+              border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 15 }}>💰</span> Payments
+              </div>
+              {payOverdue > 0 ? (
+                <div style={{ fontSize: 12, color: '#C62828', fontWeight: 500 }}>
+                  {payOverdue} overdue · R {payOverdueAmt.toLocaleString()}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--green-text)', fontWeight: 500 }}>No overdue payments</div>
+              )}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                {payDueSoon > 0 ? payDueSoon + ' due this week · ' : ''}{payUpcoming} upcoming · {payPaid} paid
+              </div>
+            </div>
+            <div style={{
+              padding: '12px 16px', borderRadius: 'var(--radius-md)',
+              border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 15 }}>📧</span> Bookings
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>
+                {confirmed} confirmed · {enquired} in progress
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                {needsReply > 0 ? needsReply + ' need' + (needsReply === 1 ? 's' : '') + ' response · ' : ''}{notStarted > 0 ? notStarted + ' not started' : totalBookings + ' total'}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Draft itinerary preview (when no Zoho bookings but draft exists) */}
       {!hasZohoBookings && hasDraft && (
         <DraftPreview
