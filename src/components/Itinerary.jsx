@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
-import { generateSubject, generateEnquiryEmail } from '../utils/emailTemplates'
+import { generateSubject, generateEnquiryEmail, generateConfirmationEmail } from '../utils/emailTemplates'
 
 export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh }) {
   const [marking, setMarking] = useState(false)
@@ -12,6 +12,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [sendingId, setSendingId] = useState(null) // booking id currently sending
   const [sentIds, setSentIds] = useState({}) // { id: 'sent' | 'error: ...' }
   const [previewId, setPreviewId] = useState(null) // booking id showing preview
+  const [confirmId, setConfirmId] = useState(null) // booking id showing confirm preview
   const [sender, setSender] = useState('Helen')
   const [polling, setPolling] = useState(false)
   const [pollResult, setPollResult] = useState(null)
@@ -78,6 +79,71 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
         if (result.email_sent) {
           setSentIds(prev => ({ ...prev, [bkId]: 'sent' }))
           setPreviewId(null)
+        } else {
+          setSentIds(prev => ({ ...prev, [bkId]: 'error: ' + (result.email_error || 'Failed') }))
+        }
+      } else {
+        const err = await res.json()
+        setSentIds(prev => ({ ...prev, [bkId]: 'error: ' + (err.error || 'Failed') }))
+      }
+    } catch (err) {
+      setSentIds(prev => ({ ...prev, [bkId]: 'error: ' + err.message }))
+    } finally {
+      setSendingId(null)
+    }
+  }
+
+  // Confirm booking — send reply to lodge and update status to Confirmed
+  const handleConfirmBooking = async (bookingGroup) => {
+    const firstBk = bookingGroup[0]
+    const bkId = firstBk.id || firstBk['Record Id']
+    const rawLodge = firstBk.Lodge_Name || firstBk['Lodge Booking Name'] || firstBk.Name || ''
+    const lodge = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
+    const lodgeRecord = lookupLodge(lodge)
+    const email = lodgeRecord ? (lodgeRecord.email || lodgeRecord.email2 || '') : (firstBk.Email || firstBk.Lodge_Email || '')
+    const contactName = firstBk.Contact_Name || ''
+
+    if (!email) {
+      alert('No email address found for ' + lodge)
+      return
+    }
+
+    setSendingId(bkId)
+    try {
+      const subject = 'Re: ' + generateSubject(firstBk, tour.name, lodge)
+      const body = generateConfirmationEmail(bookingGroup, lodge, { sender, contactName })
+
+      // Send as reply
+      const res = await fetch('/api/send-enquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: email,
+          subject,
+          body,
+          booking_ids: bookingGroup.map(b => b.id || b['Record Id']).filter(Boolean),
+          tour_name: tour.name,
+          lodge_name: lodge,
+          is_reply: true,
+        }),
+      })
+
+      if (res.ok) {
+        const result = await res.json()
+        if (result.email_sent) {
+          // Update status to Confirmed
+          const bookingIds = bookingGroup.map(b => b.id || b['Record Id']).filter(Boolean)
+          await fetch('/api/update-bookings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              booking_ids: bookingIds,
+              updates: { Status: 'Confirmed' },
+            }),
+          })
+          setSentIds(prev => ({ ...prev, [bkId]: 'confirmed' }))
+          setConfirmId(null)
+          if (onRefresh) onRefresh()
         } else {
           setSentIds(prev => ({ ...prev, [bkId]: 'error: ' + (result.email_error || 'Failed') }))
         }
@@ -688,9 +754,10 @@ ${merged.map((bk, i) => {
                         return (
                           <>
                             {(alreadySent || isSent) && <span style={{ fontSize: 10, color: 'var(--green-text)' }}>✓</span>}
+                            {sentIds[bkId] === 'confirmed' && <span style={{ fontSize: 10, color: 'var(--green-text)' }}>✓ Confirmed</span>}
                             {isError && <span style={{ fontSize: 10, color: 'var(--red-text)' }} title={sentIds[bkId]}>✗</span>}
                             <button
-                              onClick={() => setPreviewId(previewId === bkId ? null : bkId)}
+                              onClick={() => { setPreviewId(previewId === bkId ? null : bkId); setConfirmId(null) }}
                               disabled={isSending}
                               style={{
                                 fontSize: 10, padding: '3px 6px',
@@ -699,6 +766,18 @@ ${merged.map((bk, i) => {
                                 cursor: 'pointer', color: 'var(--blue-text)', whiteSpace: 'nowrap',
                               }}
                             >{isSending ? '...' : group.length > 1 ? 'Email (' + group.length + 'n)' : 'Email'}</button>
+                            {(s === 'Available' || s === 'Availability Confirmed' || s === 'Proforma Received') && (
+                              <button
+                                onClick={() => { setConfirmId(confirmId === bkId ? null : bkId); setPreviewId(null) }}
+                                disabled={isSending}
+                                style={{
+                                  fontSize: 10, padding: '3px 6px',
+                                  border: '0.5px solid var(--green-mid, #34a853)', borderRadius: 4,
+                                  background: confirmId === bkId ? 'var(--green-bg)' : 'var(--bg-primary)',
+                                  cursor: 'pointer', color: 'var(--green-text)', whiteSpace: 'nowrap',
+                                }}
+                              >Confirm</button>
+                            )}
                           </>
                         )
                       })()}
@@ -756,6 +835,68 @@ ${merged.map((bk, i) => {
                                 className="btn btn-primary"
                                 style={{ fontSize: 11, padding: '3px 10px' }}
                               >{sendingId ? 'Sending...' : 'Send'}</button>
+                            </div>
+                          </div>
+                          <pre style={{
+                            fontSize: 11, lineHeight: 1.6, color: 'var(--text-primary)',
+                            whiteSpace: 'pre-wrap', fontFamily: 'var(--font-sans)',
+                            margin: 0, maxHeight: 200, overflow: 'auto',
+                          }}>{body}</pre>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })()}
+                {/* Inline confirmation preview */}
+                {(() => {
+                  const bkId = bk.id || bk['Record Id']
+                  if (confirmId !== bkId) return null
+                  const rawLodge = bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || ''
+                  const lodge = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
+                  const lodgeRecord = lookupLodge(lodge)
+                  const email = lodgeRecord ? (lodgeRecord.email || lodgeRecord.email2 || '') : (bk.Email || bk.Lodge_Email || '')
+                  const group = lodgeGroupMap[bkId] || [bk]
+                  const contactName = bk.Contact_Name || (lodgeRecord ? lodgeRecord.contact || '' : '')
+                  const subject = 'Re: ' + generateSubject(bk, tour.name, lodge)
+                  const body = generateConfirmationEmail(group, lodge, { sender, contactName })
+
+                  return (
+                    <tr>
+                      <td colSpan="6" style={{ padding: 0 }}>
+                        <div style={{
+                          margin: '0 16px 8px', padding: '12px 16px',
+                          background: '#f0fdf4', borderRadius: 'var(--radius-md)',
+                          border: '0.5px solid #86efac',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div style={{ fontSize: 12 }}>
+                              <span style={{ fontWeight: 600, color: 'var(--green-text)' }}>Confirm booking </span>
+                              <span style={{ color: 'var(--text-muted)' }}>To: </span>
+                              <span style={{ fontWeight: 500 }}>{email || 'No email on file'}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <div style={{ display: 'flex', gap: 0 }}>
+                                {['Helen', 'Andrew'].map(s => (
+                                  <button key={s} onClick={() => setSender(s)} style={{
+                                    fontSize: 10, padding: '2px 8px', border: 'none', cursor: 'pointer',
+                                    background: sender === s ? 'var(--green-bg)' : 'transparent',
+                                    color: sender === s ? 'var(--green-text)' : 'var(--text-muted)',
+                                    borderRadius: s === 'Helen' ? '3px 0 0 3px' : '0 3px 3px 0', fontWeight: 500,
+                                  }}>{s}</button>
+                                ))}
+                              </div>
+                              <button
+                                onClick={() => setConfirmId(null)}
+                                style={{ fontSize: 11, padding: '2px 6px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                              >×</button>
+                              <button
+                                onClick={() => handleConfirmBooking(group)}
+                                disabled={!email || sendingId}
+                                style={{
+                                  fontSize: 11, padding: '3px 10px', borderRadius: 4, border: 'none',
+                                  background: '#16a34a', color: 'white', cursor: 'pointer', fontWeight: 500,
+                                }}
+                              >{sendingId ? 'Sending...' : 'Send & Confirm'}</button>
                             </div>
                           </div>
                           <pre style={{

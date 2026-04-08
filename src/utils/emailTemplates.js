@@ -111,3 +111,33 @@ export function newLodgeEmail(bookings, tourName, lodgeName, tourConfig = {}) {
 export function returningLodgeEmail(bookings, tourName, lodgeName, contactName, tourConfig = {}) {
   return generateEnquiryEmail(bookings, tourName, lodgeName, { contactName, tourConfig })
 }
+
+// Generate a booking confirmation reply
+// Sent when lodge has confirmed availability or sent a proforma — we confirm the booking
+export function generateConfirmationEmail(bookings, lodgeName, opts = {}) {
+  const { sender = 'Andrew', contactName = '' } = opts
+  const first = bookings[0]
+  const last = bookings[bookings.length - 1]
+  const checkIn = emailDate(first.Check_in_Date)
+  const checkOut = emailDate(last.Check_out_Date)
+  const totalNights = bookings.reduce((sum, b) => sum + (parseInt(b.Nights) || 1), 0)
+
+  const refs = bookings.map(b => b.RDS_Reference || '').filter(Boolean)
+  const refStr = refs.length > 0 ? ' (' + refs.join(', ') + ')' : ''
+
+  const greeting = contactName ? 'Hi ' + contactName.split(' ')[0] + ',' : 'Hi team,'
+
+  const body = greeting + `
+
+Thanks for coming back to us. Please go ahead and confirm the booking for ${checkIn} to ${checkOut} (${totalNights} night${totalNights > 1 ? 's' : ''})${refStr}.
+
+We'll arrange payment as per your terms.
+
+Cheers,
+
+${sender}
+Ride Down South
+bookings@ridedownsouth.com`
+
+  return body
+}

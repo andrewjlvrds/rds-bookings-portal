@@ -4,5 +4,13 @@
       "path": "/api/poll-gmail",
       "schedule": "*/10 * * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/poll-gmail.js": {
+      "maxDuration": 60
+    },
+    "api/gmail-attachment.js": {
+      "maxDuration": 30
+    }
+  }
 }
