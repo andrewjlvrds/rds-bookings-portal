@@ -1217,7 +1217,36 @@ ${merged.map((bk, i) => {
                       </td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-                          <span className={'badge ' + fbBadge.cls}>{fbBadge.label}</span>
+                          {editing && editing.id === fbId && editing.field === 'status' ? (
+                            <select
+                              value={editing.value}
+                              onChange={e => {
+                                const newVal = e.target.value
+                                setEditing({ ...editing, value: newVal })
+                                setSavingEdit(true)
+                                fetch('/api/update-bookings', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ booking_ids: [fbId], updates: { Status: newVal } }),
+                                }).then(r => { if (r.ok) { setEditing(null); if (onRefresh) onRefresh() } })
+                                .finally(() => setSavingEdit(false))
+                              }}
+                              onBlur={() => setEditing(null)}
+                              autoFocus
+                              style={{ fontSize: 11, padding: '2px 4px', borderRadius: 4, border: '0.5px solid var(--blue-mid)' }}
+                            >
+                              {['Not Started','Ready to Send','Enquiry Sent','Available','Availability Confirmed','Proforma Received','Confirmed','Deposit Paid','Balance Paid','Not Available','Waitlisted','Cancelled'].map(s =>
+                                <option key={s} value={s}>{s}</option>
+                              )}
+                            </select>
+                          ) : (
+                            <span
+                              className={'badge ' + fbBadge.cls}
+                              onClick={() => setEditing({ id: fbId, field: 'status', value: fbStatus })}
+                              style={{ cursor: 'pointer' }}
+                              title="Click to change status"
+                            >{fbBadge.label}</span>
+                          )}
                           <button
                             onClick={() => {
                               const notes = (fb.Booking_Notes || fb['Booking Notes'] || '').replace(/\s*FALLBACK\s*/gi, '').trim()
