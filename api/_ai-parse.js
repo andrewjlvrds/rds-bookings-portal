@@ -16,8 +16,9 @@ var SYSTEM_PROMPT = [
   '',
   'EXTRACT THESE FIELDS (only if explicitly stated):',
   '',
-  '1. email_type: "availability_confirmation" | "availability_denial" | "proforma_invoice" | "cancellation_response" | "payment_confirmation" | "general_correspondence" | "rate_card"',
-  '2. availability: "confirmed" | "denied" | "waitlisted" | "alternatives_offered" | null',
+  '1. email_type: "availability_confirmation" | "availability_denial" | "proforma_invoice" | "cancellation_response" | "payment_confirmation" | "general_correspondence" | "rate_card" | "partial_availability"',
+  '2. availability: "confirmed" | "denied" | "waitlisted" | "alternatives_offered" | "partial" | null',
+  '   Use "partial" when the lodge can offer SOME but not all requested rooms (e.g. they have 11 but we asked for 13).',
   '3. booking_reference: Lodge\'s booking/reservation reference number',
   '4. total_amount: Total accommodation cost (numeric only, no symbols)',
   '5. currency: "ZAR" | "USD" | "EUR" | "BWP" | "NAD" | "SZL" | "ZMW" | "MZN" | null',
@@ -28,9 +29,12 @@ var SYSTEM_PROMPT = [
   '10. cancellation_policy: Summary of cancellation terms',
   '11. cancel_free_before: Last date for free cancellation (YYYY-MM-DD)',
   '12. contact_name: Name of person who sent the email',
-  '13. reservation_comments: Important notes, special conditions from lodge',
+  '13. reservation_comments: Important notes, special conditions, partial availability details.',
+  '    For partial availability, include EXACTLY what rooms are offered and what is pending.',
+  '    Format: "Confirmed: 8 standard, 1 honeymoon, 2 family (11 total). Pending: 2 more rooms (waiting for group cancellation)."',
   '14. meals: "BB" | "HB" | "FB" | "DBB" | "AI" | "SC" | "RO" | null',
   '15. suggested_status: "Availability Confirmed" | "Not Available" | "Proforma Received" | "Waitlisted" | "Cancelled" | "Deposit Paid" | "Balance Paid" | null',
+  '16. rooms_offered: Short summary of rooms actually offered by the lodge, e.g. "8 std, 1 honeymoon, 2 family" or "13 rooms confirmed". Only extract if the lodge specifies room types/counts.',
   '',
   'PAYMENT RECEIPT FIELDS (extract when email confirms a payment was received):',
   '16. payment_received_amount: Amount received/paid (numeric)',
@@ -70,7 +74,7 @@ var FIELD_MAP = {
   availability: {
     zoho: 'Lodge_Availability',
     transform: function(v) {
-      var map = { confirmed: 'Available', denied: 'Not Available', waitlisted: 'Waitlisted', alternatives_offered: 'Alternatives Offered' };
+      var map = { confirmed: 'Available', denied: 'Not Available', waitlisted: 'Waitlisted', alternatives_offered: 'Alternatives Offered', partial: 'Partial' };
       return map[v] || v;
     }
   },
@@ -87,6 +91,7 @@ var FIELD_MAP = {
   reservation_comments: { zoho: 'Reservation_Comments' },
   meals: { zoho: 'Meals' },
   suggested_status: { zoho: 'Status' },
+  rooms_offered: { zoho: 'Reservation_Comments', transform: function(v) { return 'Rooms offered: ' + v; } },
   // Receipt fields — mapped dynamically based on payment_slot
   balance_due: { zoho: 'Balance_Due' },
   receipt_reference: { zoho: 'Payment_Note', transform: function(v) { return 'Receipt: ' + v; } },
@@ -231,9 +236,9 @@ export function extractionToZohoFields(extraction) {
     if (level >= minLevel) {
       var value = field.value;
       if (mapping.transform) value = mapping.transform(value);
-      // For Payment_Note, append rather than overwrite
-      if (mapping.zoho === 'Payment_Note' && updates.Payment_Note) {
-        updates.Payment_Note += '\n' + value;
+      // For fields that can come from multiple sources, append rather than overwrite
+      if ((mapping.zoho === 'Payment_Note' || mapping.zoho === 'Reservation_Comments') && updates[mapping.zoho]) {
+        updates[mapping.zoho] += '\n' + value;
       } else {
         updates[mapping.zoho] = value;
       }
