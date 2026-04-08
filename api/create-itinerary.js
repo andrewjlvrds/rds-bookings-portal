@@ -70,6 +70,8 @@ export default async function(req, res) {
         Tour: tourId,
       };
 
+      if (night.booking_notes) record.Booking_Notes = night.booking_notes;
+
       // RDS_Reference may not be active in Zoho API yet — try but don't fail
       try { record.RDS_Reference = rdsRef; } catch(e) {}
 

@@ -955,20 +955,27 @@ ${merged.map((bk, i) => {
                             }}
                           >↻ Try backup</button>
                         )}
-                        {(isFallback || (status !== 'Confirmed' && status !== 'Deposit Paid' && status !== 'Balance Paid' && status !== 'Proforma Received')) && (
+                        {(status === 'Waitlisted' || status === 'Enquiry Sent') && (
                         <button
                           onClick={() => {
-                            const currentNotes = bk.Booking_Notes || bk['Booking Notes'] || ''
-                            const isFb = currentNotes.toUpperCase().indexOf('FALLBACK') > -1
-                            const newNotes = isFb
-                              ? currentNotes.replace(/\s*FALLBACK\s*/gi, '').trim()
-                              : (currentNotes ? currentNotes + ' FALLBACK' : 'FALLBACK')
-                            fetch('/api/update-bookings', {
+                            const fbLodge = prompt('Fallback lodge name:')
+                            if (!fbLodge) return
+                            // Create a new Lodge Booking for the same date, tagged as FALLBACK
+                            fetch('/api/create-itinerary', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
-                                booking_ids: [bk.id || bk['Record Id']],
-                                updates: { Booking_Notes: newNotes },
+                                tour_id: tour.id,
+                                tour_name: tour.name || '',
+                                departure_date: tour.departure_date || '',
+                                nights: [{
+                                  lodge: fbLodge,
+                                  date: checkIn,
+                                  meals: bk.Meals || 'BB',
+                                  day: nightNum,
+                                  route: route,
+                                  booking_notes: 'FALLBACK',
+                                }],
                               }),
                             }).then(res => {
                               if (!res.ok) throw new Error('Failed')
@@ -978,11 +985,10 @@ ${merged.map((bk, i) => {
                           style={{
                             fontSize: 9, padding: '2px 6px',
                             border: '0.5px solid var(--border-default)', borderRadius: 3,
-                            background: isFallback ? 'rgba(245,158,11,0.15)' : 'var(--bg-primary)',
-                            cursor: 'pointer',
-                            color: isFallback ? '#b45309' : 'var(--text-muted)',
+                            background: 'var(--bg-primary)', cursor: 'pointer',
+                            color: 'var(--text-muted)',
                           }}
-                        >{isFallback ? '✕ Unfallback' : '⇄ Fallback'}</button>
+                        >+ Fallback</button>
                         )}
                       </div>
                     )}
