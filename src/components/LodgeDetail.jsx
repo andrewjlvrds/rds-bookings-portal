@@ -783,6 +783,7 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
 
 function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, lastSubject, onSent }) {
   const [open, setOpen] = useState(false)
+  const [sent, setSent] = useState(false)
   const defaultSubject = lastSubject && lastSubject.startsWith('Re:')
     ? lastSubject
     : 'Re: ' + (lastSubject || 'Booking enquiry - ' + tourName + (rdsRef ? ' [' + rdsRef + ']' : ''))
@@ -802,11 +803,16 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, las
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: toAddr, subject, body: body.trim(),
-          booking_ids: [bookingId], lodge_name: lodgeName, is_reply: true,
+          booking_ids: [bookingId], lodge_name: lodgeName, tour_name: tourName, is_reply: true,
         }),
       })
       const result = await res.json()
-      if (result.email_sent) { setBody(defaultSignature); setOpen(false); if (onSent) onSent() }
+      if (result.email_sent) {
+        setBody(defaultSignature)
+        setSent(true)
+        setTimeout(() => { setSent(false); setOpen(false) }, 2000)
+        if (onSent) onSent()
+      }
       else alert('Send failed: ' + (result.email_error || 'Unknown error'))
     } catch (err) { alert('Error: ' + err.message) }
     finally { setSending(false) }
@@ -814,10 +820,11 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, las
 
   if (!open) {
     return (
-      <div style={{ padding: '10px 14px' }}>
+      <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
         <button className="btn btn-sm" onClick={() => setOpen(true)} style={{ fontSize: 12 }}>
           Reply to {lodgeName}
         </button>
+        {sent && <span style={{ fontSize: 11, color: 'var(--green-text)' }}>✓ Sent</span>}
       </div>
     )
   }
