@@ -25,36 +25,37 @@ function decodeBase64Url(str) {
 function extractBody(payload) {
   if (!payload) return '';
 
-  // Simple single-part message
+  var textPlain = '';
+  var textHtml = '';
+
+  function walkParts(part) {
+    if (!part) return;
+    // Check this part directly
+    if (part.mimeType === 'text/plain' && part.body && part.body.data && !textPlain) {
+      textPlain = decodeBase64Url(part.body.data);
+    }
+    if (part.mimeType === 'text/html' && part.body && part.body.data && !textHtml) {
+      textHtml = decodeBase64Url(part.body.data);
+    }
+    // Recurse into sub-parts
+    if (part.parts) {
+      for (var i = 0; i < part.parts.length; i++) {
+        walkParts(part.parts[i]);
+      }
+    }
+  }
+
+  // Start: check top-level body
   if (payload.mimeType === 'text/plain' && payload.body && payload.body.data) {
     return decodeBase64Url(payload.body.data);
   }
 
-  // Multipart — search parts for text/plain
-  if (payload.parts) {
-    for (var i = 0; i < payload.parts.length; i++) {
-      var part = payload.parts[i];
-      if (part.mimeType === 'text/plain' && part.body && part.body.data) {
-        return decodeBase64Url(part.body.data);
-      }
-      // Nested multipart (e.g. multipart/alternative inside multipart/mixed)
-      if (part.parts) {
-        for (var j = 0; j < part.parts.length; j++) {
-          if (part.parts[j].mimeType === 'text/plain' && part.parts[j].body && part.parts[j].body.data) {
-            return decodeBase64Url(part.parts[j].body.data);
-          }
-        }
-      }
-    }
-    // Fallback to text/html if no plain text
-    for (var k = 0; k < payload.parts.length; k++) {
-      if (payload.parts[k].mimeType === 'text/html' && payload.parts[k].body && payload.parts[k].body.data) {
-        var html = decodeBase64Url(payload.parts[k].body.data);
-        // Strip HTML tags for a rough plain text version
-        return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      }
-    }
-  }
+  // Walk all parts recursively
+  walkParts(payload);
+
+  // Prefer plain text, fall back to stripped HTML
+  if (textPlain) return textPlain;
+  if (textHtml) return textHtml.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
 
   return '';
 }
