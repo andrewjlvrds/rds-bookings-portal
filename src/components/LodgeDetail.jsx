@@ -357,6 +357,22 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             >
               {polling ? 'Checking...' : 'Check for replies'}
             </button>
+            <button
+              className="btn btn-sm"
+              onClick={async () => {
+                setPolling(true)
+                try {
+                  const res = await fetch('/api/poll-gmail?refetch=true')
+                  const result = await res.json()
+                  if (result.stored > 0) { fetchEmails(); if (onRefresh) onRefresh() }
+                  else fetchEmails()
+                } catch (err) { console.error('Re-fetch error:', err) }
+                finally { setPolling(false) }
+              }}
+              disabled={polling}
+              style={{ fontSize: 11, padding: '3px 10px', color: 'var(--text-muted)' }}
+              title="Re-fetch emails from Gmail (fixes missing content)"
+            >Re-fetch</button>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
               {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
             </span>
