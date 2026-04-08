@@ -1,8 +1,26 @@
 // Email templates for lodge enquiries
 
-// Generate subject line — just the RDS reference
-export function generateSubject(booking, tourName) {
+// Generate subject line — RDS reference with current lodge name
+export function generateSubject(booking, tourName, currentLodgeName) {
   const rdsRef = booking.RDS_Reference || ''
+  
+  if (rdsRef && currentLodgeName) {
+    // Check if the lodge name in the ref matches the current lodge
+    // RDS ref format: RDS-TourCode-MonYY-LodgeName-YY/MM/DD
+    const parts = rdsRef.split('-')
+    if (parts.length >= 4) {
+      // Rebuild with current lodge name
+      const lodgeClean = currentLodgeName.replace(/[^a-zA-Z0-9]/g, '')
+      // Find the date part at the end (YY/MM/DD)
+      const dateMatch = rdsRef.match(/(\d{2}\/\d{2}\/\d{2})$/)
+      if (dateMatch) {
+        const datePart = dateMatch[1]
+        const prefix = parts.slice(0, 3).join('-') // RDS-TourCode-MonYY
+        return prefix + '-' + lodgeClean + '-' + datePart
+      }
+    }
+  }
+  
   if (rdsRef) return rdsRef
   return 'Booking enquiry - ' + tourName
 }
@@ -42,10 +60,22 @@ export function generateEnquiryEmail(bookings, tourName, lodgeName, opts = {}) {
     excursions.push({ name: exc, date: excDate || fallbackDate })
   })
 
-  const refs = bookings.map(b => b.RDS_Reference).filter(Boolean)
+  // Regenerate refs with current lodge name if it's changed
+  const lodgeClean = (lodgeName || '').replace(/[^a-zA-Z0-9]/g, '')
+  const refs = bookings.map(b => {
+    const ref = b.RDS_Reference || ''
+    if (!ref || !lodgeClean) return ref
+    const dateMatch = ref.match(/(\d{2}\/\d{2}\/\d{2})$/)
+    if (dateMatch) {
+      const parts = ref.split('-')
+      if (parts.length >= 4) {
+        return parts.slice(0, 3).join('-') + '-' + lodgeClean + '-' + dateMatch[1]
+      }
+    }
+    return ref
+  }).filter(Boolean)
   const refStr = refs.join(', ')
   const refRequest = refStr ? '\nPlease quote our booking ref ' + refStr + ' in your reply.' : ''
-  const refLine = refStr ? '\nRef: ' + refStr : ''
 
   let body = `Hi team,
 

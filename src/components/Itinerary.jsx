@@ -54,7 +54,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
 
     setSendingId(bkId)
     try {
-      const subject = generateSubject(firstBk, tour.name)
+      const subject = generateSubject(firstBk, tour.name, lodge)
       const body = generateEnquiryEmail(
         bookingGroup, tour.name, lodge,
         { sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
@@ -694,7 +694,7 @@ ${merged.map((bk, i) => {
                   const lodgeRecord = lookupLodge(lodge)
                   const email = lodgeRecord ? (lodgeRecord.email || lodgeRecord.email2 || '') : (bk.Email || bk.Lodge_Email || '')
                   const group = lodgeGroupMap[bkId] || [bk]
-                  const subject = generateSubject(bk, tour.name)
+                  const subject = generateSubject(bk, tour.name, lodge)
                   const body = generateEnquiryEmail(
                     group, tour.name, lodge,
                     { sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }

@@ -81,7 +81,7 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
       if (excluded[i]) continue
       const group = lodgeGroups[i]
 
-      const subject = generateSubject(group.bookings[0], tour.name)
+      const subject = generateSubject(group.bookings[0], tour.name, group.lodge)
       const body = generateEnquiryEmail(
         group.bookings, tour.name, group.lodge,
         { contactName: group.contactName, isReturning: group.isReturning, sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
@@ -195,7 +195,7 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
       )}
 
       {lodgeGroups.map((group, i) => {
-        const subject = generateSubject(group.bookings[0], tour.name)
+        const subject = generateSubject(group.bookings[0], tour.name, group.lodge)
         const body = generateEnquiryEmail(
           group.bookings, tour.name, group.lodge,
           { contactName: group.contactName, isReturning: group.isReturning, sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
