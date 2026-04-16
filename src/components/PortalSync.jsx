@@ -4,6 +4,7 @@ export default function PortalSync({ tour }) {
   const [data, setData] = useState(null)
   const [overrides, setOverrides] = useState({}) // { [day]: { value, saving } }
   const [narratives, setNarratives] = useState({}) // { [day]: { editing, value, saving, generating } }
+  const [narrativeModal, setNarrativeModal] = useState(null) // { day, supabase_id, value, title, day_description, tour_prefix, saving, generating }
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
@@ -50,37 +51,35 @@ export default function PortalSync({ tour }) {
     }
   }
 
-  const handleNarrativeSave = async (day, supabaseId, value) => {
-    setNarratives(prev => ({ ...prev, [day]: { ...prev[day], saving: true } }))
+  const handleNarrativeSave = async () => {
+    if (!narrativeModal) return
+    setNarrativeModal(prev => ({ ...prev, saving: true }))
     try {
       await fetch('/api/portal-sync?tour=' + encodeURIComponent(tour.name) + '&t=' + Date.now(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tour: tour.name, override: { day, supabase_id: supabaseId, narrative: value } }),
+        body: JSON.stringify({ tour: tour.name, override: { day: narrativeModal.day, supabase_id: narrativeModal.supabase_id, narrative: narrativeModal.value } }),
       })
-      setNarratives(prev => ({ ...prev, [day]: { editing: false, saving: false } }))
+      setNarrativeModal(null)
       await load()
     } catch(e) {
-      setNarratives(prev => ({ ...prev, [day]: { ...prev[day], saving: false } }))
+      setNarrativeModal(prev => ({ ...prev, saving: false }))
     }
   }
 
-  const handleNarrativeGenerate = async (day, supabaseId, dayDescription, tourPrefix) => {
-    setNarratives(prev => ({ ...prev, [day]: { ...prev[day], generating: true } }))
+  const handleNarrativeGenerate = async () => {
+    if (!narrativeModal) return
+    setNarrativeModal(prev => ({ ...prev, generating: true }))
     try {
       const r = await fetch('/api/generate-narrative', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ day_description: dayDescription, tour_prefix: tourPrefix }),
+        body: JSON.stringify({ day_description: narrativeModal.day_description, tour_prefix: narrativeModal.tour_prefix }),
       })
       const d = await r.json()
-      if (d.found) {
-        setNarratives(prev => ({ ...prev, [day]: { editing: true, value: d.narrative, generating: false } }))
-      } else {
-        setNarratives(prev => ({ ...prev, [day]: { editing: true, value: '', generating: false } }))
-      }
+      setNarrativeModal(prev => ({ ...prev, generating: false, value: d.found ? d.narrative : prev.value }))
     } catch(e) {
-      setNarratives(prev => ({ ...prev, [day]: { generating: false } }))
+      setNarrativeModal(prev => ({ ...prev, generating: false }))
     }
   }
 
@@ -281,33 +280,17 @@ export default function PortalSync({ tour }) {
                     {/* Narrative cell */}
                     <td style={{ verticalAlign: 'top' }}>
                       {(() => {
-                        const ns = narratives[row.day] || {}
                         const current = row.supabase_narrative || ''
-                        if (ns.editing) return (
-                          <div>
-                            <textarea
-                              value={ns.value !== undefined ? ns.value : current}
-                              onChange={e => setNarratives(prev => ({ ...prev, [row.day]: { ...prev[row.day], value: e.target.value } }))}
-                              rows={5}
-                              style={{ width: '100%', fontSize: 12, padding: 6, borderRadius: 4, border: '0.5px solid var(--blue-mid)', background: 'var(--bg-primary)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', lineHeight: 1.5 }}
-                            />
-                            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                              <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} disabled={ns.saving} onClick={() => handleNarrativeSave(row.day, row.supabase_id, ns.value !== undefined ? ns.value : current)}>{ns.saving ? '...' : 'Save'}</button>
-                              <button className="btn btn-sm" style={{ fontSize: 10 }} onClick={() => setNarratives(prev => ({ ...prev, [row.day]: { editing: false } }))}>Cancel</button>
-                            </div>
-                          </div>
-                        )
                         return (
-                          <div>
-                            {current ? (
-                              <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>{current.slice(0, 60)}{current.length > 60 ? '…' : ''}</div>
-                            ) : (
-                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>No narrative</span>
-                            )}
-                            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                              {row.day_description && <button className="btn btn-sm" style={{ fontSize: 10 }} disabled={ns.generating} onClick={() => handleNarrativeGenerate(row.day, row.supabase_id, row.day_description, row.tour_prefix)}>{ns.generating ? '...' : '✨'}</button>}
-                              <button className="btn btn-sm" style={{ fontSize: 10 }} onClick={() => setNarratives(prev => ({ ...prev, [row.day]: { editing: true, value: current } }))}>Edit</button>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                            <div style={{ flex: 1, fontSize: 11, color: current ? 'var(--text-secondary)' : 'var(--text-muted)', lineHeight: 1.4 }}>
+                              {current ? current.slice(0, 80) + (current.length > 80 ? '…' : '') : 'No narrative'}
                             </div>
+                            <button
+                              className="btn btn-sm"
+                              style={{ fontSize: 10, flexShrink: 0 }}
+                              onClick={() => setNarrativeModal({ day: row.day, supabase_id: row.supabase_id, value: current, title: row.title, day_description: row.day_description, tour_prefix: row.tour_prefix })}
+                            >Edit</button>
                           </div>
                         )
                       })()}
@@ -327,5 +310,40 @@ export default function PortalSync({ tour }) {
         </div>
       )}
     </div>
+
+      {/* Narrative edit modal */}
+      {narrativeModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setNarrativeModal(null) }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 8, border: '0.5px solid var(--border-default)', padding: 24, width: 600, maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Day {narrativeModal.day} — {narrativeModal.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Route narrative for rider portal</div>
+              </div>
+              <button onClick={() => setNarrativeModal(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1 }}>✕</button>
+            </div>
+            <textarea
+              value={narrativeModal.value || ''}
+              onChange={e => setNarrativeModal(prev => ({ ...prev, value: e.target.value }))}
+              rows={8}
+              placeholder="Enter route narrative for riders..."
+              style={{ width: '100%', fontSize: 13, padding: 10, borderRadius: 6, border: '0.5px solid var(--border-default)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', lineHeight: 1.6, fontFamily: 'var(--font-sans)', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                className="btn"
+                disabled={narrativeModal.generating || !narrativeModal.day_description}
+                onClick={handleNarrativeGenerate}
+                style={{ fontSize: 12 }}
+              >{narrativeModal.generating ? 'Generating...' : '✨ Generate from source'}</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn" onClick={() => setNarrativeModal(null)} style={{ fontSize: 12 }}>Cancel</button>
+                <button className="btn btn-primary" disabled={narrativeModal.saving} onClick={handleNarrativeSave} style={{ fontSize: 12 }}>{narrativeModal.saving ? 'Saving...' : 'Save to portal'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
   )
 }
