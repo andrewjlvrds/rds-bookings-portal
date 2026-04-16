@@ -116,6 +116,10 @@ export default async function handler(req, res) {
         }
       });
 
+      // Debug: log zohoByDay
+      console.log('zohoByDay keys:', Object.keys(zohoByDay).sort(function(a,b){return a-b;}));
+      Object.keys(zohoByDay).forEach(function(d) { console.log('Day', d, ':', zohoByDay[d].lodge, '| type:', zohoByDay[d].booking_type); });
+
       // 2. Fetch Supabase itinerary for this tour
       var supaRows = await supabaseGet(
         'itinerary?tour_name=eq.' + encodeURIComponent(tourName) +
