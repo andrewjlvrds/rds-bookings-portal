@@ -35,10 +35,12 @@ export default async function(req, res) {
 
     // Filter and sort — same logic as portal-sync
     var relevant = allBookings.filter(function(b) {
-      var type = b.Booking_Type;
+      var type = b.Booking_Type || '';
       var desc = b.Day_Description || '';
-      return type && type !== 'Guide' && type !== 'Pre-tour' &&
-             !desc.startsWith('Z ') && !desc.startsWith('z ');
+      // Allow blank Booking_Type (treat as Guest), exclude Guide/Pre-tour/Z-day
+      return type !== 'Guide' && type !== 'Pre-tour' &&
+             !desc.startsWith('Z ') && !desc.startsWith('z ') &&
+             desc.match(/Day\s+\d+:/i); // must have a day number
     });
 
     relevant.sort(function(a, b) {
@@ -56,7 +58,7 @@ export default async function(req, res) {
       var match = desc.match(/Day\s+(\d+):/i);
       var dayNum = match ? parseInt(match[1], 10) : null;
       if (!dayNum || dayNum < 1) return;
-      var type = b.Booking_Type || 'Guest';
+      var type = b.Booking_Type || 'Guest'; // blank = treat as Guest
       var existing = byDay[dayNum];
       var existingType = existing ? (existing.booking_type || 'Guest') : null;
       if (!existing || (existingType !== 'Guest' && type === 'Guest')) {
