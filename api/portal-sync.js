@@ -54,12 +54,7 @@ export default async function handler(req, res) {
         '&fields=' + fields + '&per_page=200'
       );
       var allZoho = (zohoResult && zohoResult.data) || [];
-      // Debug Day 9 specifically
-      allZoho.forEach(function(b) {
-        if ((b.Day_Description || '').indexOf('09') > -1) {
-          console.log('DAY9 DEBUG:', JSON.stringify({desc: b.Day_Description, type: b.Booking_Type, lodge: b.Lodge_Name, checkin: b.Check_in_Date}));
-        }
-      });
+
 
 
 
@@ -106,7 +101,7 @@ export default async function handler(req, res) {
         if (!existing || (existingType !== 'Guest' && bookingType === 'Guest')) {
           zohoByDay[dayNum] = {
             day: dayNum,
-            lodge: (b.Lodge_Name || '').trim(),
+            lodge: (b.Lodge_Name || (b.Name || '').split(' - ')[0] || '').trim(),
             check_in: b.Check_in_Date || '',
             zoho_id: b.id,
             meals: b.Meals || '',
