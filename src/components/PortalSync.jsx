@@ -187,11 +187,12 @@ export default function PortalSync({ tour }) {
         <div className="table-wrap">
           <table style={{ tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: 50 }} />
-              <col style={{ width: '25%' }} />
+              <col style={{ width: 40 }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '18%' }} />
               <col style={{ width: '30%' }} />
-              <col style={{ width: '30%' }} />
-              <col style={{ width: 80 }} />
+              <col style={{ width: 120 }} />
             </colgroup>
             <thead>
               <tr>
@@ -253,7 +254,7 @@ export default function PortalSync({ tour }) {
                         <span style={{ fontSize: 12, color: 'var(--green-text)' }}>✓</span>
                       )}
                       {/* Narrative cell */}
-                    <td style={{ maxWidth: 200, verticalAlign: 'top' }}>
+                    <td style={{ verticalAlign: 'top' }}>
                       {(() => {
                         const ns = narratives[row.day] || {}
                         const current = row.supabase_narrative || ''
