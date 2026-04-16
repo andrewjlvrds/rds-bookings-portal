@@ -255,7 +255,8 @@ export default function PortalSync({ tour }) {
                       {!mismatch && (
                         <span style={{ fontSize: 12, color: 'var(--green-text)' }}>✓</span>
                       )}
-                      {/* Narrative cell */}
+                    </td>
+                    {/* Narrative cell */}
                     <td style={{ verticalAlign: 'top' }}>
                       {(() => {
                         const ns = narratives[row.day] || {}
