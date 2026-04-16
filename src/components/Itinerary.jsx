@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
 import { generateSubject, generateEnquiryEmail, generateConfirmationEmail } from '../utils/emailTemplates'
+import PortalSync from './PortalSync'
 
 export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh }) {
+  const [activeTab, setActiveTab] = useState('bookings') // 'bookings' | 'portal-sync'
   const [marking, setMarking] = useState(false)
   const [editing, setEditing] = useState(null) // { id, field, value }
   const [savingEdit, setSavingEdit] = useState(false)
@@ -581,6 +583,31 @@ ${merged.map((bk, i) => {
           <button onClick={() => setPollResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14 }}>×</button>
         </div>
       )}
+
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '0.5px solid var(--border-default)' }}>
+        {[
+          { id: 'bookings', label: 'Lodge Bookings' },
+          { id: 'portal-sync', label: 'Portal Sync' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              fontSize: 13, padding: '8px 16px', border: 'none', cursor: 'pointer',
+              background: 'none', fontFamily: 'var(--font-sans)',
+              color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-muted)',
+              fontWeight: activeTab === tab.id ? 600 : 400,
+              borderBottom: activeTab === tab.id ? '2px solid var(--text-primary)' : '2px solid transparent',
+              marginBottom: -1,
+            }}
+          >{tab.label}</button>
+        ))}
+      </div>
+
+      {activeTab === 'portal-sync' && <PortalSync tour={tour} />}
+
+      {activeTab === 'bookings' && <>
 
       {/* Tour config — room requirements for enquiries */}
       <TourConfig tour={tour} />
@@ -1352,6 +1379,8 @@ ${merged.map((bk, i) => {
       </div>
       )}
     </div>
+      </>
+      }
   )
 }
 

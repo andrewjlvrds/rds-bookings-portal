@@ -190,6 +190,37 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         </div>
       </div>
 
+      {/* Booking Type toggle */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16,
+        padding: '8px 14px', background: 'var(--bg-secondary)',
+        borderRadius: 'var(--radius-md)', fontSize: 12,
+      }}>
+        <span style={{ color: 'var(--text-muted)', marginRight: 4 }}>Booking type:</span>
+        {['Guest', 'Guide', 'Excursion'].map(type => {
+          const current = booking.Booking_Type || 'Guest'
+          const active = current === type
+          return (
+            <button
+              key={type}
+              onClick={() => { if (!active) handleSave('Booking_Type', type) }}
+              style={{
+                fontSize: 12, padding: '3px 12px', borderRadius: 12, cursor: active ? 'default' : 'pointer',
+                border: '0.5px solid ' + (active ? 'var(--blue-mid)' : 'var(--border-default)'),
+                background: active ? 'var(--blue-bg)' : 'transparent',
+                color: active ? 'var(--blue-text)' : 'var(--text-muted)',
+                fontWeight: active ? 600 : 400,
+              }}
+            >{type}</button>
+          )
+        })}
+        {(booking.Booking_Type && booking.Booking_Type !== 'Guest') && (
+          <span style={{ fontSize: 11, color: 'var(--amber-text)', marginLeft: 4 }}>
+            ⚠ Excluded from rider portal sync
+          </span>
+        )}
+      </div>
+
       {/* Row 1: Tour details + Booking details */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Tour details panel */}
