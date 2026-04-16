@@ -59,7 +59,8 @@ export default async function handler(req, res) {
       var relevantBookings = allZoho.filter(function(b) {
         var type = b.Booking_Type || 'Guest';
         var desc = b.Day_Description || '';
-        return type !== 'Guide' && type !== 'Pre-tour' && type !== 'Ignore' &&
+        // Blank Booking_Type = not yet classified, skip entirely
+        return type && type !== 'Guide' && type !== 'Pre-tour' &&
                !desc.startsWith('Z ') && !desc.startsWith('z ');
       });
       var statusPriority = function(b) {
@@ -69,15 +70,7 @@ export default async function handler(req, res) {
         if (s === 'Waitlisted' || s === 'Not Available' || s === 'Cancelled') return 0;
         return 1;
       };
-      // Treat blank Booking_Type as Excursion (i.e. low priority) when status is Waitlisted/Cancelled/Not Available
-      relevantBookings = relevantBookings.filter(function(b) {
-        var type = b.Booking_Type || '';
-        var s = b.Status || b.Booking_Status || '';
-        var badStatus = s === 'Waitlisted' || s === 'Not Available' || s === 'Cancelled';
-        // Exclude: blank type + bad status (e.g. Shearwater waitlisted with no type)
-        if (!type && badStatus) return false;
-        return true;
-      });
+
       relevantBookings.sort(function(a, b) {
         var ta = a.Booking_Type || 'Guest';
         var tb = b.Booking_Type || 'Guest';
@@ -214,7 +207,8 @@ export default async function handler(req, res) {
       var relevantBookings = allZoho.filter(function(b) {
         var type = b.Booking_Type || 'Guest';
         var desc = b.Day_Description || '';
-        return type !== 'Guide' && type !== 'Pre-tour' && type !== 'Ignore' &&
+        // Blank Booking_Type = not yet classified, skip entirely
+        return type && type !== 'Guide' && type !== 'Pre-tour' &&
                !desc.startsWith('Z ') && !desc.startsWith('z ');
       });
       relevantBookings.sort(function(a, b) {
