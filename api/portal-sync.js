@@ -53,6 +53,21 @@ export default async function handler(req, res) {
       );
       var allZoho = (zohoResult && zohoResult.data) || [];
 
+      // Fetch tour start date from Tours module
+      var tourStart = null;
+      try {
+        var tourSearch = await zohoApi('GET',
+          'Tours/search?criteria=' + encodeURIComponent('(Name:equals:' + tourName + ')') +
+          '&fields=Name,Departure_Date&per_page=1'
+        );
+        var tourData = (tourSearch && tourSearch.data && tourSearch.data[0]);
+        if (tourData && tourData.Departure_Date) {
+          tourStart = new Date(tourData.Departure_Date + 'T00:00:00Z');
+        }
+      } catch(e) {
+        console.log('Could not fetch tour start date:', e.message);
+      }
+
       // Filter: Guest type only (default), no Z-day prefixes, no blank day descriptions
       // Include Guest + Excursion (not Guide/Pre-tour/Z-day) then sort Excursion first
       // so Guest records always overwrite Excursion for the same day number
@@ -83,9 +98,18 @@ export default async function handler(req, res) {
 
       var zohoByDay = {};
       guestBookings.forEach(function(b) {
-        var desc = b.Day_Description || '';
-        var match = desc.match(/Day\s+(\d+):/i);
-        var dayNum = match ? parseInt(match[1], 10) : null;
+        // Use Check_in_Date as source of truth for day number
+        var dayNum = null;
+        if (b.Check_in_Date && tourStart) {
+          var checkIn = new Date(b.Check_in_Date + 'T00:00:00Z');
+          dayNum = Math.round((checkIn - tourStart) / (1000 * 60 * 60 * 24)) + 1;
+        }
+        // Fallback: parse from Day_Description if no tour start date
+        if (dayNum === null) {
+          var desc = b.Day_Description || '';
+          var match = desc.match(/Day\s+(\d+):/i);
+          dayNum = match ? parseInt(match[1], 10) : null;
+        }
         if (dayNum === null || dayNum < 1) return;
         // If multiple guest bookings on same day, keep the one with highest status priority
         // (shouldn't happen once Booking_Type is correctly set, but just in case)
@@ -203,9 +227,18 @@ export default async function handler(req, res) {
 
       var zohoByDay = {};
       guestBookings.forEach(function(b) {
-        var desc = b.Day_Description || '';
-        var match = desc.match(/Day\s+(\d+):/i);
-        var dayNum = match ? parseInt(match[1], 10) : null;
+        // Use Check_in_Date as source of truth for day number
+        var dayNum = null;
+        if (b.Check_in_Date && tourStart) {
+          var checkIn = new Date(b.Check_in_Date + 'T00:00:00Z');
+          dayNum = Math.round((checkIn - tourStart) / (1000 * 60 * 60 * 24)) + 1;
+        }
+        // Fallback: parse from Day_Description if no tour start date
+        if (dayNum === null) {
+          var desc = b.Day_Description || '';
+          var match = desc.match(/Day\s+(\d+):/i);
+          dayNum = match ? parseInt(match[1], 10) : null;
+        }
         if (dayNum === null || dayNum < 1) return;
         if (!zohoByDay[dayNum]) {
           zohoByDay[dayNum] = { day: dayNum, lodge: (b.Lodge_Name || '').trim(), narrative: (b.Route_Narrative || '').trim() };
