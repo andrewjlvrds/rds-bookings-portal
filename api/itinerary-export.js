@@ -20,6 +20,8 @@ export default async function(req, res) {
       '&fields=' + fields + '&per_page=200'
     );
     var allBookings = (result && result.data) || [];
+    console.log('itinerary-export: tour=' + tourName + ' raw records=' + allBookings.length);
+    if (allBookings.length > 0) console.log('sample:', JSON.stringify(allBookings[0]).slice(0, 200));
 
     // Filter and sort — same logic as portal-sync
     var relevant = allBookings.filter(function(b) {
@@ -68,6 +70,7 @@ export default async function(req, res) {
     var days = Object.keys(byDay).map(Number).sort(function(a, b) { return a - b; })
       .map(function(d) { return byDay[d]; });
 
+    console.log('itinerary-export: days returned=' + days.length);
     return res.status(200).json({ tour: tourName, days: days });
 
   } catch(err) {
