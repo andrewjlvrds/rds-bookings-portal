@@ -52,7 +52,10 @@ export default async function handler(req, res) {
         '&fields=' + fields + '&per_page=200'
       );
       var allZoho = (zohoResult && zohoResult.data) || [];
-
+      // Debug: log Booking_Type for each record
+      allZoho.forEach(function(b) {
+        console.log('Zoho record:', b.Day_Description, '| Booking_Type:', JSON.stringify(b.Booking_Type));
+      });
 
 
       // Filter: Guest type only (default), no Z-day prefixes, no blank day descriptions
