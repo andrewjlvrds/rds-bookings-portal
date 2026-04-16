@@ -62,12 +62,21 @@ export default async function handler(req, res) {
         return type !== 'Guide' && type !== 'Pre-tour' &&
                !desc.startsWith('Z ') && !desc.startsWith('z ');
       });
+      var statusPriority = function(b) {
+        var s = b.Status || b.Booking_Status || '';
+        if (s === 'Balance Paid' || s === 'Confirmed') return 3;
+        if (s === 'Deposit Paid') return 2;
+        if (s === 'Waitlisted' || s === 'Not Available' || s === 'Cancelled') return 0;
+        return 1;
+      };
       relevantBookings.sort(function(a, b) {
         var ta = a.Booking_Type || 'Guest';
         var tb = b.Booking_Type || 'Guest';
+        // Excursion sorts first (lowest priority — will be overwritten by Guest)
         if (ta === 'Excursion' && tb !== 'Excursion') return -1;
         if (ta !== 'Excursion' && tb === 'Excursion') return 1;
-        return 0;
+        // Among Guest bookings, lower status priority sorts first (so higher priority overwrites)
+        return statusPriority(a) - statusPriority(b);
       });
       var guestBookings = relevantBookings;
 
