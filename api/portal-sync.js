@@ -117,13 +117,13 @@ export default async function handler(req, res) {
       // 2. Fetch Supabase itinerary for this tour
       var supaRows = await supabaseGet(
         'itinerary?tour_name=eq.' + encodeURIComponent(tourName) +
-        '&order=day.asc&select=id,day,lodge,title,type'
+        '&order=day.asc&select=id,day,lodge,title,type,description'
       );
 
       var supaByDay = {};
       (supaRows || []).forEach(function(r) {
         if (r.type && r.type.toLowerCase().startsWith('welcome')) return;
-        supaByDay[r.day] = { id: r.id, day: r.day, lodge: (r.lodge || '').trim(), title: r.title };
+        supaByDay[r.day] = { id: r.id, day: r.day, lodge: (r.lodge || '').trim(), title: r.title, description: r.description || '' };
       });
 
       // Remove any days where only an Excursion record was found (no Guest overwrite)
@@ -159,6 +159,10 @@ export default async function handler(req, res) {
           supabase_id: supa ? supa.id : null,
           zoho_id: zoho ? zoho.zoho_id : null,
           check_in: zoho ? zoho.check_in : null,
+          zoho_narrative: zoho ? zoho.narrative : '',
+          supabase_narrative: supa ? (supa.description || '') : '',
+          tour_prefix: tourName.split(' ')[0],
+          day_description: zoho ? zoho.day_description : '',
         });
       });
 
@@ -186,8 +190,11 @@ export default async function handler(req, res) {
       var ov = body.override;
       if (!ov.supabase_id || !ov.lodge) return res.status(400).json({ error: 'supabase_id and lodge required' });
       try {
-        await supabasePatch('itinerary?id=eq.' + ov.supabase_id, { lodge: ov.lodge, updated_at: new Date().toISOString() });
-        return res.status(200).json({ done: true, day: ov.day, lodge: ov.lodge });
+        var patch = { updated_at: new Date().toISOString() };
+        if (ov.lodge !== undefined) patch.lodge = ov.lodge;
+        if (ov.narrative !== undefined) patch.description = ov.narrative;
+        await supabasePatch('itinerary?id=eq.' + ov.supabase_id, patch);
+        return res.status(200).json({ done: true, day: ov.day });
       } catch(err) {
         return res.status(500).json({ error: err.message });
       }

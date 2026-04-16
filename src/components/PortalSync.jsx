@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react'
 export default function PortalSync({ tour }) {
   const [data, setData] = useState(null)
   const [overrides, setOverrides] = useState({}) // { [day]: { value, saving } }
+  const [narratives, setNarratives] = useState({}) // { [day]: { editing, value, saving, generating } }
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
@@ -46,6 +47,40 @@ export default function PortalSync({ tour }) {
       }
     } catch(e) {
       setOverrides(prev => ({ ...prev, [day]: { value, saving: false, error: e.message } }))
+    }
+  }
+
+  const handleNarrativeSave = async (day, supabaseId, value) => {
+    setNarratives(prev => ({ ...prev, [day]: { ...prev[day], saving: true } }))
+    try {
+      await fetch('/api/portal-sync?tour=' + encodeURIComponent(tour.name) + '&t=' + Date.now(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour: tour.name, override: { day, supabase_id: supabaseId, narrative: value } }),
+      })
+      setNarratives(prev => ({ ...prev, [day]: { editing: false, saving: false } }))
+      await load()
+    } catch(e) {
+      setNarratives(prev => ({ ...prev, [day]: { ...prev[day], saving: false } }))
+    }
+  }
+
+  const handleNarrativeGenerate = async (day, supabaseId, dayDescription, tourPrefix) => {
+    setNarratives(prev => ({ ...prev, [day]: { ...prev[day], generating: true } }))
+    try {
+      const r = await fetch('/api/generate-narrative', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ day_description: dayDescription, tour_prefix: tourPrefix }),
+      })
+      const d = await r.json()
+      if (d.found) {
+        setNarratives(prev => ({ ...prev, [day]: { editing: true, value: d.narrative, generating: false } }))
+      } else {
+        setNarratives(prev => ({ ...prev, [day]: { editing: true, value: '', generating: false } }))
+      }
+    } catch(e) {
+      setNarratives(prev => ({ ...prev, [day]: { generating: false } }))
     }
   }
 
@@ -164,6 +199,7 @@ export default function PortalSync({ tour }) {
                 <th>Route</th>
                 <th>Zoho (source)</th>
                 <th>Portal (current)</th>
+                <th>Narrative</th>
                 <th></th>
               </tr>
             </thead>
@@ -216,7 +252,41 @@ export default function PortalSync({ tour }) {
                       {!mismatch && (
                         <span style={{ fontSize: 12, color: 'var(--green-text)' }}>✓</span>
                       )}
-                      {row.supabase_id && (() => {
+                      {/* Narrative cell */}
+                    <td style={{ maxWidth: 200, verticalAlign: 'top' }}>
+                      {(() => {
+                        const ns = narratives[row.day] || {}
+                        const current = row.supabase_narrative || ''
+                        if (ns.editing) return (
+                          <div>
+                            <textarea
+                              value={ns.value !== undefined ? ns.value : current}
+                              onChange={e => setNarratives(prev => ({ ...prev, [row.day]: { ...prev[row.day], value: e.target.value } }))}
+                              rows={3}
+                              style={{ width: '100%', fontSize: 11, padding: 4, borderRadius: 4, border: '0.5px solid var(--blue-mid)', background: 'var(--bg-primary)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none' }}
+                            />
+                            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                              <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} disabled={ns.saving} onClick={() => handleNarrativeSave(row.day, row.supabase_id, ns.value !== undefined ? ns.value : current)}>{ns.saving ? '...' : 'Save'}</button>
+                              <button className="btn btn-sm" style={{ fontSize: 10 }} onClick={() => setNarratives(prev => ({ ...prev, [row.day]: { editing: false } }))}>Cancel</button>
+                            </div>
+                          </div>
+                        )
+                        return (
+                          <div>
+                            {current ? (
+                              <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>{current.slice(0, 60)}{current.length > 60 ? '…' : ''}</div>
+                            ) : (
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>No narrative</span>
+                            )}
+                            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                              {row.day_description && <button className="btn btn-sm" style={{ fontSize: 10 }} disabled={ns.generating} onClick={() => handleNarrativeGenerate(row.day, row.supabase_id, row.day_description, row.tour_prefix)}>{ns.generating ? '...' : '✨'}</button>}
+                              <button className="btn btn-sm" style={{ fontSize: 10 }} onClick={() => setNarratives(prev => ({ ...prev, [row.day]: { editing: true, value: current } }))}>Edit</button>
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </td>
+                    {row.supabase_id && (() => {
                         const ov = overrides[row.day] || {}
                         return (
                           <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
