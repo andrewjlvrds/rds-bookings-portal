@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       // 1. Fetch Zoho lodge bookings for this tour — Guest type only, no Z-day prefixes
-      var fields = 'Name,Lodge_Name,Check_in_Date,Day_Description,Booking_Type,Meals,id';
+      var fields = 'Name,Lodge_Name,Check_in_Date,Day_Description,Booking_Type,Meals,Route_Narrative,id';
       var criteria = '(Tour.name:equals:' + tourName + ')';
       var zohoResult = await zohoApi('GET',
         'Lodge_Bookings/search?criteria=' + encodeURIComponent(criteria) +
@@ -140,7 +140,7 @@ export default async function handler(req, res) {
 
     try {
       // Re-fetch comparison
-      var fields = 'Name,Lodge_Name,Check_in_Date,Day_Description,Booking_Type,Meals,id';
+      var fields = 'Name,Lodge_Name,Check_in_Date,Day_Description,Booking_Type,Meals,Route_Narrative,id';
       var criteria = '(Tour.name:equals:' + tourName + ')';
       var zohoResult = await zohoApi('GET',
         'Lodge_Bookings/search?criteria=' + encodeURIComponent(criteria) +
@@ -161,7 +161,7 @@ export default async function handler(req, res) {
         var dayNum = match ? parseInt(match[1], 10) : null;
         if (dayNum === null) return;
         if (!zohoByDay[dayNum]) {
-          zohoByDay[dayNum] = { day: dayNum, lodge: (b.Lodge_Name || '').trim() };
+          zohoByDay[dayNum] = { day: dayNum, lodge: (b.Lodge_Name || '').trim(), narrative: (b.Route_Narrative || '').trim() };
         }
       });
 
@@ -184,10 +184,9 @@ export default async function handler(req, res) {
           results.push({ day: row.day, status: 'already_correct', lodge: zohoData.lodge });
           continue;
         }
-        await supabasePatch(
-          'itinerary?id=eq.' + row.id,
-          { lodge: zohoData.lodge, updated_at: new Date().toISOString() }
-        );
+        var patchBody = { lodge: zohoData.lodge, updated_at: new Date().toISOString() };
+        if (zohoData.narrative) patchBody.description = zohoData.narrative;
+        await supabasePatch('itinerary?id=eq.' + row.id, patchBody);
         results.push({ day: row.day, status: 'updated', old: row.lodge, new: zohoData.lodge });
       }
 

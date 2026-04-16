@@ -19,6 +19,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [sender, setSender] = useState('Helen')
   const [polling, setPolling] = useState(false)
   const [pollResult, setPollResult] = useState(null)
+  const [narrativeState, setNarrativeState] = useState({}) // { [bookingId]: { loading, text, confidence, saved, error, editing } }
 
   const handleSaveDate = async () => {
     if (!newDate || newDate === tour.departure_date) {
@@ -801,6 +802,7 @@ ${merged.map((bk, i) => {
               <th>Route</th>
               <th>Lodge</th>
               <th>Status</th>
+              <th>Narrative</th>
               <th></th>
             </tr>
           </thead>
@@ -1027,6 +1029,108 @@ ${merged.map((bk, i) => {
                         )}
                       </div>
                     )}
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()} style={{ minWidth: 140, maxWidth: 220 }}>
+                    {(() => {
+                      const ns = narrativeState[bkId] || {}
+                      const bookingType = bk.Booking_Type || 'Guest'
+                      const tourPrefix = (tour.name || '').split(' ')[0]
+                      if (bookingType !== 'Guest') return (
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>{bookingType}</span>
+                      )
+                      const currentNarrative = bk.Route_Narrative || ''
+                      if (ns.editing) return (
+                        <div>
+                          <textarea
+                            value={ns.text !== undefined ? ns.text : currentNarrative}
+                            onChange={e => setNarrativeState(prev => ({ ...prev, [bkId]: { ...prev[bkId], text: e.target.value } }))}
+                            rows={3}
+                            style={{ width: '100%', fontSize: 11, padding: 4, borderRadius: 4, border: '0.5px solid var(--blue-mid)', outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)', resize: 'vertical' }}
+                          />
+                          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                            <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} onClick={async () => {
+                              const text = ns.text !== undefined ? ns.text : currentNarrative
+                              setNarrativeState(prev => ({ ...prev, [bkId]: { ...prev[bkId], saving: true } }))
+                              try {
+                                await fetch('/api/generate-narrative', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ booking_id: bkId, day_description: dayDesc, tour_prefix: tourPrefix, save: true, override_text: text }),
+                                })
+                                setNarrativeState(prev => ({ ...prev, [bkId]: { saved: true, editing: false } }))
+                                if (onRefresh) onRefresh()
+                              } catch(e) {
+                                setNarrativeState(prev => ({ ...prev, [bkId]: { ...prev[bkId], saving: false, error: e.message } }))
+                              }
+                            }}>Save</button>
+                            <button className="btn btn-sm" style={{ fontSize: 10 }} onClick={() => setNarrativeState(prev => ({ ...prev, [bkId]: { ...prev[bkId], editing: false } }))}>Cancel</button>
+                          </div>
+                        </div>
+                      )
+                      if (currentNarrative) return (
+                        <div>
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 4 }}>{currentNarrative.slice(0, 80)}{currentNarrative.length > 80 ? '…' : ''}</div>
+                          <button className="btn btn-sm" style={{ fontSize: 10 }} onClick={() => setNarrativeState(prev => ({ ...prev, [bkId]: { editing: true, text: currentNarrative } }))}>Edit</button>
+                        </div>
+                      )
+                      return (
+                        <div>
+                          {ns.preview ? (
+                            <div>
+                              <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 4, fontStyle: ns.confidence === 'fuzzy' ? 'italic' : 'normal' }}>
+                                {ns.preview.slice(0, 80)}…
+                                {ns.confidence && ns.confidence !== 'exact' && <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 4 }}>({ns.confidence})</span>}
+                              </div>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} onClick={async () => {
+                                  setNarrativeState(prev => ({ ...prev, [bkId]: { ...prev[bkId], saving: true } }))
+                                  try {
+                                    await fetch('/api/generate-narrative', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ booking_id: bkId, day_description: dayDesc, tour_prefix: tourPrefix, save: true }),
+                                    })
+                                    setNarrativeState(prev => ({ ...prev, [bkId]: { saved: true } }))
+                                    if (onRefresh) onRefresh()
+                                  } catch(e) {
+                                    setNarrativeState(prev => ({ ...prev, [bkId]: { ...prev[bkId], error: e.message } }))
+                                  }
+                                }}>Save to Zoho</button>
+                                <button className="btn btn-sm" style={{ fontSize: 10 }} onClick={() => setNarrativeState(prev => ({ ...prev, [bkId]: { ...prev[bkId], editing: true, text: ns.preview } }))}>Edit</button>
+                                <button className="btn btn-sm" style={{ fontSize: 10 }} onClick={() => setNarrativeState(prev => ({ ...prev, [bkId]: {} }))}>✕</button>
+                              </div>
+                            </div>
+                          ) : ns.notFound ? (
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>No match — <button className="btn btn-sm" style={{ fontSize: 10 }} onClick={() => setNarrativeState(prev => ({ ...prev, [bkId]: { editing: true, text: '' } }))}>Write</button></span>
+                          ) : (
+                            <button
+                              className="btn btn-sm"
+                              disabled={ns.loading}
+                              style={{ fontSize: 10 }}
+                              onClick={async () => {
+                                setNarrativeState(prev => ({ ...prev, [bkId]: { loading: true } }))
+                                try {
+                                  const r = await fetch('/api/generate-narrative', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ day_description: dayDesc, tour_prefix: tourPrefix }),
+                                  })
+                                  const d = await r.json()
+                                  if (d.found) {
+                                    setNarrativeState(prev => ({ ...prev, [bkId]: { preview: d.narrative, confidence: d.confidence } }))
+                                  } else {
+                                    setNarrativeState(prev => ({ ...prev, [bkId]: { notFound: true } }))
+                                  }
+                                } catch(e) {
+                                  setNarrativeState(prev => ({ ...prev, [bkId]: { error: e.message } }))
+                                }
+                              }}
+                            >{ns.loading ? '…' : '✨ Generate'}</button>
+                          )}
+                          {ns.error && <div style={{ fontSize: 10, color: 'var(--red-text)' }}>{ns.error}</div>}
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>

@@ -61,7 +61,7 @@ export default async function(req, res) {
       'rd_Payment_Paid_Amount','th_Payment_Paid_Amount',
       'Payment_Note','Balance_Due_calculated',
       'Email','Contact_Name','Currency',
-      'Day_Description','Booking_Type','id'
+      'Day_Description','Booking_Type','Route_Narrative','id'
     ].join(',');
 
     var allBookings = [];
