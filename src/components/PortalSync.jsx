@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 
 export default function PortalSync({ tour }) {
   const [data, setData] = useState(null)
+  const [overrides, setOverrides] = useState({}) // { [day]: { value, saving } }
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
@@ -26,6 +27,27 @@ export default function PortalSync({ tour }) {
   useEffect(() => {
     if (tour && tour.name) load()
   }, [tour.name])
+
+  const handleOverride = async (day, supabaseId, value) => {
+    if (!value.trim()) return
+    setOverrides(prev => ({ ...prev, [day]: { value, saving: true } }))
+    try {
+      const res = await fetch('/api/portal-sync?tour=' + encodeURIComponent(tour.name) + '&t=' + Date.now(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour: tour.name, override: { day, supabase_id: supabaseId, lodge: value } }),
+      })
+      const d = await res.json()
+      if (!d.error) {
+        setOverrides(prev => ({ ...prev, [day]: { value: '', saving: false } }))
+        await load()
+      } else {
+        setOverrides(prev => ({ ...prev, [day]: { value, saving: false, error: d.error } }))
+      }
+    } catch(e) {
+      setOverrides(prev => ({ ...prev, [day]: { value, saving: false, error: e.message } }))
+    }
+  }
 
   const handleSync = async (daysToSync) => {
     setSyncing(true)
@@ -194,6 +216,27 @@ export default function PortalSync({ tour }) {
                       {!mismatch && (
                         <span style={{ fontSize: 12, color: 'var(--green-text)' }}>✓</span>
                       )}
+                      {row.supabase_id && (() => {
+                        const ov = overrides[row.day] || {}
+                        return (
+                          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                            <input
+                              type="text"
+                              placeholder="Override..."
+                              value={ov.value || ''}
+                              onChange={e => setOverrides(prev => ({ ...prev, [row.day]: { ...prev[row.day], value: e.target.value } }))}
+                              onKeyDown={e => e.key === 'Enter' && handleOverride(row.day, row.supabase_id, ov.value || '')}
+                              style={{ fontSize: 11, padding: '2px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, background: 'var(--bg-primary)', color: 'var(--text-primary)', width: 120, outline: 'none' }}
+                            />
+                            <button
+                              className="btn btn-sm"
+                              onClick={() => handleOverride(row.day, row.supabase_id, ov.value || '')}
+                              disabled={ov.saving || !ov.value}
+                              style={{ fontSize: 10, whiteSpace: 'nowrap' }}
+                            >{ov.saving ? '...' : '↑'}</button>
+                          </div>
+                        )
+                      })()}
                     </td>
                   </tr>
                 )

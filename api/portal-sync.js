@@ -180,6 +180,19 @@ export default async function handler(req, res) {
   // ── POST: write Zoho lodge data to Supabase ─────────────────────────────
   if (req.method === 'POST') {
     var body = req.body || {};
+
+    // Manual override — write a specific lodge name directly to Supabase
+    if (body.override) {
+      var ov = body.override;
+      if (!ov.supabase_id || !ov.lodge) return res.status(400).json({ error: 'supabase_id and lodge required' });
+      try {
+        await supabasePatch('itinerary?id=eq.' + ov.supabase_id, { lodge: ov.lodge, updated_at: new Date().toISOString() });
+        return res.status(200).json({ done: true, day: ov.day, lodge: ov.lodge });
+      } catch(err) {
+        return res.status(500).json({ error: err.message });
+      }
+    }
+
     // Optionally sync only specific days, or all mismatches
     var daysToSync = body.days || null; // array of day numbers, or null = all
 
