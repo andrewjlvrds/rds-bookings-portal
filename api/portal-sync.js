@@ -81,28 +81,11 @@ export default async function handler(req, res) {
       });
       var guestBookings = relevantBookings;
 
-      // Determine tour start date as the earliest check-in among Guest bookings
-      // Use Check_in_Date (reliable) not Day_Description name (sometimes wrong)
-      var guestCheckIns = guestBookings
-        .filter(function(b) { return b.Check_in_Date && (b.Booking_Type || 'Guest') === 'Guest'; })
-        .map(function(b) { return b.Check_in_Date; })
-        .sort();
-      var tourStartDate = guestCheckIns.length > 0 ? new Date(guestCheckIns[0] + 'T00:00:00Z') : null;
-
       var zohoByDay = {};
       guestBookings.forEach(function(b) {
-        // Derive day number from Check_in_Date relative to tour start
-        var dayNum = null;
-        if (b.Check_in_Date && tourStartDate) {
-          var checkIn = new Date(b.Check_in_Date + 'T00:00:00Z');
-          dayNum = Math.round((checkIn - tourStartDate) / (1000 * 60 * 60 * 24)) + 1;
-        }
-        // Fallback to Day_Description parsing if date unavailable
-        if (dayNum === null) {
-          var desc = b.Day_Description || '';
-          var match = desc.match(/Day\s+(\d+):/i);
-          dayNum = match ? parseInt(match[1], 10) : null;
-        }
+        var desc = b.Day_Description || '';
+        var match = desc.match(/Day\s+(\d+):/i);
+        var dayNum = match ? parseInt(match[1], 10) : null;
         if (dayNum === null || dayNum < 1) return;
         // If multiple guest bookings on same day, keep the one with highest status priority
         // (shouldn't happen once Booking_Type is correctly set, but just in case)
@@ -218,24 +201,11 @@ export default async function handler(req, res) {
       });
       var guestBookings = relevantBookings;
 
-      var guestCheckIns2 = guestBookings
-        .filter(function(b) { return b.Check_in_Date && (b.Booking_Type || 'Guest') === 'Guest'; })
-        .map(function(b) { return b.Check_in_Date; })
-        .sort();
-      var tourStartDate2 = guestCheckIns2.length > 0 ? new Date(guestCheckIns2[0] + 'T00:00:00Z') : null;
-
       var zohoByDay = {};
       guestBookings.forEach(function(b) {
-        var dayNum = null;
-        if (b.Check_in_Date && tourStartDate2) {
-          var checkIn = new Date(b.Check_in_Date + 'T00:00:00Z');
-          dayNum = Math.round((checkIn - tourStartDate2) / (1000 * 60 * 60 * 24)) + 1;
-        }
-        if (dayNum === null) {
-          var desc = b.Day_Description || '';
-          var match = desc.match(/Day\s+(\d+):/i);
-          dayNum = match ? parseInt(match[1], 10) : null;
-        }
+        var desc = b.Day_Description || '';
+        var match = desc.match(/Day\s+(\d+):/i);
+        var dayNum = match ? parseInt(match[1], 10) : null;
         if (dayNum === null || dayNum < 1) return;
         if (!zohoByDay[dayNum]) {
           zohoByDay[dayNum] = { day: dayNum, lodge: (b.Lodge_Name || '').trim(), narrative: (b.Route_Narrative || '').trim() };
