@@ -264,10 +264,6 @@ export default function PortalSync({ tour }) {
                         )
                       })()}
                     </td>
-                    {/* Meals cell */}
-                    <td style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
-                      {row.supabase_meals || <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                    </td>
                     {/* Narrative cell */}
                     <td style={{ verticalAlign: 'top' }}>
                       {(() => {
@@ -298,6 +294,10 @@ export default function PortalSync({ tour }) {
                           </div>
                         )
                       })()}
+                    </td>
+                    {/* Meals cell */}
+                    <td style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                      {row.supabase_meals || <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {mismatch && !noZoho && row.supabase_id && (
