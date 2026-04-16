@@ -59,7 +59,7 @@ export default async function handler(req, res) {
       var relevantBookings = allZoho.filter(function(b) {
         var type = b.Booking_Type || 'Guest';
         var desc = b.Day_Description || '';
-        return type !== 'Guide' && type !== 'Pre-tour' &&
+        return type !== 'Guide' && type !== 'Pre-tour' && type !== 'Ignore' &&
                !desc.startsWith('Z ') && !desc.startsWith('z ');
       });
       var statusPriority = function(b) {
@@ -69,6 +69,15 @@ export default async function handler(req, res) {
         if (s === 'Waitlisted' || s === 'Not Available' || s === 'Cancelled') return 0;
         return 1;
       };
+      // Treat blank Booking_Type as Excursion (i.e. low priority) when status is Waitlisted/Cancelled/Not Available
+      relevantBookings = relevantBookings.filter(function(b) {
+        var type = b.Booking_Type || '';
+        var s = b.Status || b.Booking_Status || '';
+        var badStatus = s === 'Waitlisted' || s === 'Not Available' || s === 'Cancelled';
+        // Exclude: blank type + bad status (e.g. Shearwater waitlisted with no type)
+        if (!type && badStatus) return false;
+        return true;
+      });
       relevantBookings.sort(function(a, b) {
         var ta = a.Booking_Type || 'Guest';
         var tb = b.Booking_Type || 'Guest';
@@ -80,13 +89,29 @@ export default async function handler(req, res) {
       });
       var guestBookings = relevantBookings;
 
-      // Extract day number from Day_Description e.g. "Day 01: Arrive Cape Town" -> 1
+      // Determine tour start date as the earliest check-in among Guest bookings
+      // Use Check_in_Date (reliable) not Day_Description name (sometimes wrong)
+      var guestCheckIns = guestBookings
+        .filter(function(b) { return b.Check_in_Date && (b.Booking_Type || 'Guest') === 'Guest'; })
+        .map(function(b) { return b.Check_in_Date; })
+        .sort();
+      var tourStartDate = guestCheckIns.length > 0 ? new Date(guestCheckIns[0] + 'T00:00:00Z') : null;
+
       var zohoByDay = {};
       guestBookings.forEach(function(b) {
-        var desc = b.Day_Description || '';
-        var match = desc.match(/Day\s+(\d+):/i);
-        var dayNum = match ? parseInt(match[1], 10) : null;
-        if (dayNum === null) return;
+        // Derive day number from Check_in_Date relative to tour start
+        var dayNum = null;
+        if (b.Check_in_Date && tourStartDate) {
+          var checkIn = new Date(b.Check_in_Date + 'T00:00:00Z');
+          dayNum = Math.round((checkIn - tourStartDate) / (1000 * 60 * 60 * 24)) + 1;
+        }
+        // Fallback to Day_Description parsing if date unavailable
+        if (dayNum === null) {
+          var desc = b.Day_Description || '';
+          var match = desc.match(/Day\s+(\d+):/i);
+          dayNum = match ? parseInt(match[1], 10) : null;
+        }
+        if (dayNum === null || dayNum < 1) return;
         // If multiple guest bookings on same day, keep the one with highest status priority
         // (shouldn't happen once Booking_Type is correctly set, but just in case)
         var bookingType = b.Booking_Type || 'Guest';
@@ -189,7 +214,7 @@ export default async function handler(req, res) {
       var relevantBookings = allZoho.filter(function(b) {
         var type = b.Booking_Type || 'Guest';
         var desc = b.Day_Description || '';
-        return type !== 'Guide' && type !== 'Pre-tour' &&
+        return type !== 'Guide' && type !== 'Pre-tour' && type !== 'Ignore' &&
                !desc.startsWith('Z ') && !desc.startsWith('z ');
       });
       relevantBookings.sort(function(a, b) {
@@ -201,12 +226,25 @@ export default async function handler(req, res) {
       });
       var guestBookings = relevantBookings;
 
+      var guestCheckIns2 = guestBookings
+        .filter(function(b) { return b.Check_in_Date && (b.Booking_Type || 'Guest') === 'Guest'; })
+        .map(function(b) { return b.Check_in_Date; })
+        .sort();
+      var tourStartDate2 = guestCheckIns2.length > 0 ? new Date(guestCheckIns2[0] + 'T00:00:00Z') : null;
+
       var zohoByDay = {};
       guestBookings.forEach(function(b) {
-        var desc = b.Day_Description || '';
-        var match = desc.match(/Day\s+(\d+):/i);
-        var dayNum = match ? parseInt(match[1], 10) : null;
-        if (dayNum === null) return;
+        var dayNum = null;
+        if (b.Check_in_Date && tourStartDate2) {
+          var checkIn = new Date(b.Check_in_Date + 'T00:00:00Z');
+          dayNum = Math.round((checkIn - tourStartDate2) / (1000 * 60 * 60 * 24)) + 1;
+        }
+        if (dayNum === null) {
+          var desc = b.Day_Description || '';
+          var match = desc.match(/Day\s+(\d+):/i);
+          dayNum = match ? parseInt(match[1], 10) : null;
+        }
+        if (dayNum === null || dayNum < 1) return;
         if (!zohoByDay[dayNum]) {
           zohoByDay[dayNum] = { day: dayNum, lodge: (b.Lodge_Name || '').trim(), narrative: (b.Route_Narrative || '').trim() };
         }
