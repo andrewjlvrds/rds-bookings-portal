@@ -201,6 +201,7 @@ export default function PortalSync({ tour }) {
                 <th>Zoho (source)</th>
                 <th>Portal (current)</th>
                 <th>Narrative</th>
+                <th>Meals</th>
                 <th></th>
               </tr>
             </thead>
@@ -262,6 +263,10 @@ export default function PortalSync({ tour }) {
                           </div>
                         )
                       })()}
+                    </td>
+                    {/* Meals cell */}
+                    <td style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                      {row.supabase_meals || <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     {/* Narrative cell */}
                     <td style={{ verticalAlign: 'top' }}>

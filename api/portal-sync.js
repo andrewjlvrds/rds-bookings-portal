@@ -117,13 +117,13 @@ export default async function handler(req, res) {
       // 2. Fetch Supabase itinerary for this tour
       var supaRows = await supabaseGet(
         'itinerary?tour_name=eq.' + encodeURIComponent(tourName) +
-        '&order=day.asc&select=id,day,lodge,title,type,description'
+        '&order=day.asc&select=id,day,lodge,meals,title,type,description'
       );
 
       var supaByDay = {};
       (supaRows || []).forEach(function(r) {
         if (r.type && r.type.toLowerCase().startsWith('welcome')) return;
-        supaByDay[r.day] = { id: r.id, day: r.day, lodge: (r.lodge || '').trim(), title: r.title, description: r.description || '' };
+        supaByDay[r.day] = { id: r.id, day: r.day, lodge: (r.lodge || '').trim(), meals: r.meals || '', title: r.title, description: r.description || '' };
       });
 
       // Remove any days where only an Excursion record was found (no Guest overwrite)
@@ -161,6 +161,8 @@ export default async function handler(req, res) {
           check_in: zoho ? zoho.check_in : null,
           zoho_narrative: zoho ? zoho.narrative : '',
           supabase_narrative: supa ? (supa.description || '') : '',
+          zoho_meals: zoho ? (zoho.meals || '') : '',
+          supabase_meals: supa ? (supa.meals || '') : '',
           tour_prefix: tourName.split(' ')[0],
           day_description: zoho ? zoho.day_description : '',
         });
