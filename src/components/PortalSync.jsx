@@ -309,6 +309,7 @@ export default function PortalSync({ tour }) {
           No itinerary data found in rider portal for this tour.
         </div>
       )}
+    <>
     </div>
 
       {/* Narrative edit modal */}
@@ -345,5 +346,6 @@ export default function PortalSync({ tour }) {
           </div>
         </div>
       )}
+    </>
   )
 }
