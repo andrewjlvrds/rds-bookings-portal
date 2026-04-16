@@ -234,8 +234,11 @@ export default async function handler(req, res) {
         var match = desc.match(/Day\s+(\d+):/i);
         var dayNum = match ? parseInt(match[1], 10) : null;
         if (dayNum === null || dayNum < 1) return;
-        if (!zohoByDay[dayNum]) {
-          zohoByDay[dayNum] = { day: dayNum, lodge: (b.Lodge_Name || (b.Name || '').split(' - ')[0] || '').trim(), narrative: (b.Route_Narrative || '').trim() };
+        var bookingType = b.Booking_Type;
+        // Guest always wins over Excursion for same day
+        var existing = zohoByDay[dayNum];
+        if (!existing || (existing.booking_type === 'Excursion' && bookingType === 'Guest')) {
+          zohoByDay[dayNum] = { day: dayNum, lodge: (b.Lodge_Name || (b.Name || '').split(' - ')[0] || '').trim(), narrative: (b.Route_Narrative || '').trim(), booking_type: bookingType };
         }
       });
 
