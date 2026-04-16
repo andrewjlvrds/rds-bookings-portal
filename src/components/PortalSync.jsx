@@ -263,21 +263,6 @@ export default function PortalSync({ tour }) {
                         )
                       })()}
                     </td>
-                    <td>
-                      {mismatch && !noZoho && row.supabase_id && (
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => handleSync([row.day])}
-                          disabled={syncing}
-                          style={{ fontSize: 11, padding: '2px 8px', whiteSpace: 'nowrap' }}
-                        >
-                          Sync
-                        </button>
-                      )}
-                      {!mismatch && (
-                        <span style={{ fontSize: 12, color: 'var(--green-text)' }}>✓</span>
-                      )}
-                    </td>
                     {/* Narrative cell */}
                     <td style={{ verticalAlign: 'top' }}>
                       {(() => {
@@ -296,7 +281,21 @@ export default function PortalSync({ tour }) {
                         )
                       })()}
                     </td>
-
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {mismatch && !noZoho && row.supabase_id && (
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => handleSync([row.day])}
+                          disabled={syncing}
+                          style={{ fontSize: 11, padding: '2px 8px' }}
+                        >
+                          Sync
+                        </button>
+                      )}
+                      {!mismatch && (
+                        <span style={{ fontSize: 12, color: 'var(--green-text)' }}>✓</span>
+                      )}
+                    </td>
                   </tr>
                 )
               })}
