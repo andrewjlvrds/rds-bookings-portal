@@ -188,11 +188,10 @@ export default function PortalSync({ tour }) {
           <table style={{ tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: 40 }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '26%' }} />
-              <col style={{ width: 160 }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '38%' }} />
               <col style={{ width: 60 }} />
             </colgroup>
             <thead>
@@ -202,7 +201,6 @@ export default function PortalSync({ tour }) {
                 <th>Zoho (source)</th>
                 <th>Portal (current)</th>
                 <th>Narrative</th>
-                <th>Lodge override</th>
                 <th></th>
               </tr>
             </thead>
@@ -233,13 +231,37 @@ export default function PortalSync({ tour }) {
                         </span>
                       )}
                     </td>
-                    <td style={{
-                      color: mismatch && !noZoho ? 'var(--amber-text)' : 'var(--text-primary)',
-                      fontWeight: mismatch && !noZoho ? 500 : 400,
-                    }}>
-                      {row.supabase_lodge || (
-                        <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Empty</span>
-                      )}
+                    <td style={{ verticalAlign: 'top' }}>
+                      {(() => {
+                        const ov = overrides[row.day] || {}
+                        if (ov.editing) return (
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            <input
+                              autoFocus
+                              type="text"
+                              value={ov.value || ''}
+                              onChange={e => setOverrides(prev => ({ ...prev, [row.day]: { ...prev[row.day], value: e.target.value } }))}
+                              onKeyDown={e => { if (e.key === 'Enter') handleOverride(row.day, row.supabase_id, ov.value || ''); if (e.key === 'Escape') setOverrides(prev => ({ ...prev, [row.day]: {} })) }}
+                              style={{ fontSize: 12, padding: '3px 6px', border: '0.5px solid var(--blue-mid)', borderRadius: 4, background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', outline: 'none' }}
+                            />
+                            <button className="btn btn-sm btn-primary" style={{ fontSize: 11, whiteSpace: 'nowrap' }} disabled={ov.saving || !ov.value} onClick={() => handleOverride(row.day, row.supabase_id, ov.value || '')}>{ov.saving ? '...' : '↑'}</button>
+                            <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => setOverrides(prev => ({ ...prev, [row.day]: {} }))}>✕</button>
+                          </div>
+                        )
+                        return (
+                          <div
+                            onClick={() => row.supabase_id && setOverrides(prev => ({ ...prev, [row.day]: { editing: true, value: row.supabase_lodge || '' } }))}
+                            title={row.supabase_id ? 'Click to edit' : ''}
+                            style={{
+                              color: mismatch && !noZoho ? 'var(--amber-text)' : 'var(--text-primary)',
+                              fontWeight: mismatch && !noZoho ? 500 : 400,
+                              cursor: row.supabase_id ? 'pointer' : 'default',
+                            }}
+                          >
+                            {row.supabase_lodge || <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Empty</span>}
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td>
                       {mismatch && !noZoho && row.supabase_id && (
@@ -266,8 +288,8 @@ export default function PortalSync({ tour }) {
                             <textarea
                               value={ns.value !== undefined ? ns.value : current}
                               onChange={e => setNarratives(prev => ({ ...prev, [row.day]: { ...prev[row.day], value: e.target.value } }))}
-                              rows={3}
-                              style={{ width: '100%', fontSize: 11, padding: 4, borderRadius: 4, border: '0.5px solid var(--blue-mid)', background: 'var(--bg-primary)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none' }}
+                              rows={5}
+                              style={{ width: '100%', fontSize: 12, padding: 6, borderRadius: 4, border: '0.5px solid var(--blue-mid)', background: 'var(--bg-primary)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', lineHeight: 1.5 }}
                             />
                             <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                               <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} disabled={ns.saving} onClick={() => handleNarrativeSave(row.day, row.supabase_id, ns.value !== undefined ? ns.value : current)}>{ns.saving ? '...' : 'Save'}</button>
@@ -290,29 +312,7 @@ export default function PortalSync({ tour }) {
                         )
                       })()}
                     </td>
-                    <td onClick={e => e.stopPropagation()} style={{ verticalAlign: 'top' }}>
-                      {row.supabase_id && (() => {
-                        const ov = overrides[row.day] || {}
-                        return (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <input
-                              type="text"
-                              placeholder="Lodge override..."
-                              value={ov.value || ''}
-                              onChange={e => setOverrides(prev => ({ ...prev, [row.day]: { ...prev[row.day], value: e.target.value } }))}
-                              onKeyDown={e => e.key === 'Enter' && handleOverride(row.day, row.supabase_id, ov.value || '')}
-                              style={{ fontSize: 11, padding: '2px 6px', border: '0.5px solid var(--border-default)', borderRadius: 4, background: 'var(--bg-primary)', color: 'var(--text-primary)', width: 110, outline: 'none' }}
-                            />
-                            <button
-                              className="btn btn-sm"
-                              onClick={() => handleOverride(row.day, row.supabase_id, ov.value || '')}
-                              disabled={ov.saving || !ov.value}
-                              style={{ fontSize: 10 }}
-                            >{ov.saving ? '...' : '↑'}</button>
-                          </div>
-                        )
-                      })()}
-                    </td>
+
                   </tr>
                 )
               })}
