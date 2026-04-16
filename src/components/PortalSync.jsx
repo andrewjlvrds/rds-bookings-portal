@@ -12,7 +12,7 @@ export default function PortalSync({ tour }) {
     setError(null)
     setSyncResult(null)
     try {
-      const res = await fetch('/api/portal-sync?tour=' + encodeURIComponent(tour.name) + (tour.departure_date ? '&start=' + tour.departure_date : ''))
+      const res = await fetch('/api/portal-sync?tour=' + encodeURIComponent(tour.name) + (tour.departure_date ? '&start=' + tour.departure_date : '') + '&t=' + Date.now())
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Failed to load')
       setData(d)
