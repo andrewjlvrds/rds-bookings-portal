@@ -52,9 +52,13 @@ export default async function handler(req, res) {
         '&fields=' + fields + '&per_page=200'
       );
       var allZoho = (zohoResult && zohoResult.data) || [];
-      // Debug: log Booking_Type for each record
+      // Debug: log day number extraction for each record
       allZoho.forEach(function(b) {
-        console.log('Zoho record:', b.Day_Description, '| Booking_Type:', JSON.stringify(b.Booking_Type));
+        var desc = b.Day_Description || '';
+        var match = desc.match(/Day\s+(\d+):/i);
+        var dayNum = match ? parseInt(match[1], 10) : null;
+        var type = b.Booking_Type;
+        console.log('Record:', JSON.stringify(desc), '| type:', type, '| dayNum:', dayNum, '| passes filter:', !!(type && type !== 'Guide' && type !== 'Pre-tour' && !desc.startsWith('Z ')));
       });
 
 
