@@ -53,20 +53,9 @@ export default async function handler(req, res) {
       );
       var allZoho = (zohoResult && zohoResult.data) || [];
 
-      // Fetch tour start date from Tours module
-      var tourStart = null;
-      try {
-        var tourSearch = await zohoApi('GET',
-          'Tours/search?criteria=' + encodeURIComponent('(Name:equals:' + tourName + ')') +
-          '&fields=Name,Departure_Date&per_page=1'
-        );
-        var tourData = (tourSearch && tourSearch.data && tourSearch.data[0]);
-        if (tourData && tourData.Departure_Date) {
-          tourStart = new Date(tourData.Departure_Date + 'T00:00:00Z');
-        }
-      } catch(e) {
-        console.log('Could not fetch tour start date:', e.message);
-      }
+      // Tour start date passed from frontend (tour.departure_date)
+      var startParam = req.query && req.query.start;
+      var tourStart = startParam ? new Date(startParam + 'T00:00:00Z') : null;
 
       // Filter: Guest type only (default), no Z-day prefixes, no blank day descriptions
       // Include Guest + Excursion (not Guide/Pre-tour/Z-day) then sort Excursion first

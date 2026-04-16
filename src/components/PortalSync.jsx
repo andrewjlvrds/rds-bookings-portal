@@ -12,7 +12,7 @@ export default function PortalSync({ tour }) {
     setError(null)
     setSyncResult(null)
     try {
-      const res = await fetch('/api/portal-sync?tour=' + encodeURIComponent(tour.name))
+      const res = await fetch('/api/portal-sync?tour=' + encodeURIComponent(tour.name) + (tour.departure_date ? '&start=' + tour.departure_date : ''))
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Failed to load')
       setData(d)
@@ -32,7 +32,7 @@ export default function PortalSync({ tour }) {
     setSyncResult(null)
     setError(null)
     try {
-      const res = await fetch('/api/portal-sync?tour=' + encodeURIComponent(tour.name), {
+      const res = await fetch('/api/portal-sync?tour=' + encodeURIComponent(tour.name) + (tour.departure_date ? '&start=' + tour.departure_date : ''), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tour: tour.name, days: daysToSync || null }),
