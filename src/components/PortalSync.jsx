@@ -108,6 +108,7 @@ export default function PortalSync({ tour }) {
   const mismatchDays = mismatches.map(r => r.day)
 
   return (
+    <>
     <div style={{ marginTop: 24 }}>
       {/* Header */}
       <div style={{
@@ -309,7 +310,6 @@ export default function PortalSync({ tour }) {
           No itinerary data found in rider portal for this tour.
         </div>
       )}
-    <>
     </div>
 
       {/* Narrative edit modal */}
