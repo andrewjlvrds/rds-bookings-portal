@@ -13,15 +13,25 @@ export default async function(req, res) {
   if (!tourName) return res.status(400).json({ error: 'tour required' });
 
   try {
-    var fields = 'Name,Lodge_Name,Check_in_Date,Day_Description,Booking_Type,Meals,Route_Narrative,id';
-    var criteria = '(Tour.name:equals:' + tourName + ')';
-    var result = await zohoApi('GET',
-      'Lodge_Bookings/search?criteria=' + encodeURIComponent(criteria) +
-      '&fields=' + fields + '&per_page=200'
-    );
-    var allBookings = (result && result.data) || [];
-    console.log('itinerary-export: tour=' + tourName + ' raw records=' + allBookings.length);
-    if (allBookings.length > 0) console.log('sample:', JSON.stringify(allBookings[0]).slice(0, 200));
+    var fields = 'Name,Lodge_Name,Check_in_Date,Day_Description,Booking_Type,Meals,Route_Narrative,Tour,id';
+    var allBookings = [];
+    var page = 1;
+    var hasMore = true;
+    while (hasMore && page <= 5) {
+      var result = await zohoApi('GET',
+        'Lodge_Bookings?fields=' + fields + '&per_page=200&page=' + page
+      );
+      var data = (result && result.data) || [];
+      allBookings = allBookings.concat(data);
+      hasMore = result && result.info && result.info.more_records;
+      page++;
+    }
+    // Filter to this tour by name
+    allBookings = allBookings.filter(function(b) {
+      var name = b.Tour ? (typeof b.Tour === 'object' ? b.Tour.name : b.Tour) : '';
+      return name === tourName;
+    });
+    console.log('itinerary-export: tour=' + tourName + ' filtered records=' + allBookings.length);
 
     // Filter and sort — same logic as portal-sync
     var relevant = allBookings.filter(function(b) {
