@@ -57,9 +57,8 @@ export default async function handler(req, res) {
       // Include Guest + Excursion (not Guide/Pre-tour/Z-day) then sort Excursion first
       // so Guest records always overwrite Excursion for the same day number
       var relevantBookings = allZoho.filter(function(b) {
-        var type = b.Booking_Type || 'Guest';
+        var type = b.Booking_Type; // no fallback — blank means unclassified, skip
         var desc = b.Day_Description || '';
-        // Blank Booking_Type = not yet classified, skip entirely
         return type && type !== 'Guide' && type !== 'Pre-tour' &&
                !desc.startsWith('Z ') && !desc.startsWith('z ');
       });
@@ -205,9 +204,8 @@ export default async function handler(req, res) {
       var allZoho = (zohoResult && zohoResult.data) || [];
 
       var relevantBookings = allZoho.filter(function(b) {
-        var type = b.Booking_Type || 'Guest';
+        var type = b.Booking_Type; // no fallback — blank means unclassified, skip
         var desc = b.Day_Description || '';
-        // Blank Booking_Type = not yet classified, skip entirely
         return type && type !== 'Guide' && type !== 'Pre-tour' &&
                !desc.startsWith('Z ') && !desc.startsWith('z ');
       });
