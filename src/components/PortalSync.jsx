@@ -267,10 +267,23 @@ export default function PortalSync({ tour }) {
                     <td style={{ verticalAlign: 'top' }}>
                       {(() => {
                         const current = row.supabase_narrative || ''
+                        const expanded = narratives[row.day] && narratives[row.day].expanded
+                        const truncated = current.slice(0, 80)
+                        const needsTruncation = current.length > 80
                         return (
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                            <div style={{ flex: 1, fontSize: 11, color: current ? 'var(--text-secondary)' : 'var(--text-muted)', lineHeight: 1.4 }}>
-                              {current ? current.slice(0, 80) + (current.length > 80 ? '…' : '') : 'No narrative'}
+                            <div style={{ flex: 1, fontSize: 11, color: current ? 'var(--text-secondary)' : 'var(--text-muted)', lineHeight: 1.5 }}>
+                              {current ? (
+                                <>
+                                  {expanded ? current : truncated + (needsTruncation && !expanded ? '…' : '')}
+                                  {needsTruncation && (
+                                    <span
+                                      onClick={() => setNarratives(prev => ({ ...prev, [row.day]: { ...prev[row.day], expanded: !expanded } }))}
+                                      style={{ marginLeft: 4, color: 'var(--blue-mid)', cursor: 'pointer', fontSize: 10, whiteSpace: 'nowrap' }}
+                                    >{expanded ? 'show less' : 'show more'}</span>
+                                  )}
+                                </>
+                              ) : 'No narrative'}
                             </div>
                             <button
                               className="btn btn-sm"
