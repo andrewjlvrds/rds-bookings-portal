@@ -215,7 +215,7 @@ export default async function handler(req, res) {
         var dayNum = match ? parseInt(match[1], 10) : null;
         if (dayNum === null || dayNum < 1) return;
         if (!zohoByDay[dayNum]) {
-          zohoByDay[dayNum] = { day: dayNum, lodge: (b.Lodge_Name || '').trim(), narrative: (b.Route_Narrative || '').trim() };
+          zohoByDay[dayNum] = { day: dayNum, lodge: (b.Lodge_Name || (b.Name || '').split(' - ')[0] || '').trim(), narrative: (b.Route_Narrative || '').trim() };
         }
       });
 
