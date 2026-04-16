@@ -123,14 +123,9 @@ export default function PortalSync({ tour }) {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {data && data.mismatches > 0 && (
-            <button
-              className="btn btn-primary"
-              onClick={() => handleSync(mismatchDays)}
-              disabled={syncing || loading}
-              style={{ fontSize: 12, padding: '4px 14px' }}
-            >
-              {syncing ? 'Syncing...' : 'Sync ' + data.mismatches + ' mismatch' + (data.mismatches !== 1 ? 'es' : '')}
-            </button>
+            <span style={{ fontSize: 12, color: 'var(--amber-text)', fontWeight: 500 }}>
+              {data.mismatches} mismatch{data.mismatches !== 1 ? 'es' : ''} — edit in Content Manager
+            </span>
           )}
           {data && data.mismatches === 0 && (
             <span style={{
@@ -233,36 +228,12 @@ export default function PortalSync({ tour }) {
                       )}
                     </td>
                     <td style={{ verticalAlign: 'top' }}>
-                      {(() => {
-                        const ov = overrides[row.day] || {}
-                        if (ov.editing) return (
-                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                            <input
-                              autoFocus
-                              type="text"
-                              value={ov.value || ''}
-                              onChange={e => setOverrides(prev => ({ ...prev, [row.day]: { ...prev[row.day], value: e.target.value } }))}
-                              onKeyDown={e => { if (e.key === 'Enter') handleOverride(row.day, row.supabase_id, ov.value || ''); if (e.key === 'Escape') setOverrides(prev => ({ ...prev, [row.day]: {} })) }}
-                              style={{ fontSize: 12, padding: '3px 6px', border: '0.5px solid var(--blue-mid)', borderRadius: 4, background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', outline: 'none' }}
-                            />
-                            <button className="btn btn-sm btn-primary" style={{ fontSize: 11, whiteSpace: 'nowrap' }} disabled={ov.saving || !ov.value} onClick={() => handleOverride(row.day, row.supabase_id, ov.value || '')}>{ov.saving ? '...' : '↑'}</button>
-                            <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => setOverrides(prev => ({ ...prev, [row.day]: {} }))}>✕</button>
-                          </div>
-                        )
-                        return (
-                          <div
-                            onClick={() => row.supabase_id && setOverrides(prev => ({ ...prev, [row.day]: { editing: true, value: row.supabase_lodge || '' } }))}
-                            title={row.supabase_id ? 'Click to edit' : ''}
-                            style={{
-                              color: mismatch && !noZoho ? 'var(--amber-text)' : 'var(--text-primary)',
-                              fontWeight: mismatch && !noZoho ? 500 : 400,
-                              cursor: row.supabase_id ? 'pointer' : 'default',
-                            }}
-                          >
-                            {row.supabase_lodge || <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Empty</span>}
-                          </div>
-                        )
-                      })()}
+                      <div style={{
+                        color: mismatch && !noZoho ? 'var(--amber-text)' : 'var(--text-primary)',
+                        fontWeight: mismatch && !noZoho ? 500 : 400,
+                      }}>
+                        {row.supabase_lodge || <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Empty</span>}
+                      </div>
                     </td>
                     {/* Narrative cell */}
                     <td style={{ verticalAlign: 'top' }}>
@@ -272,25 +243,18 @@ export default function PortalSync({ tour }) {
                         const truncated = current.slice(0, 80)
                         const needsTruncation = current.length > 80
                         return (
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                            <div style={{ flex: 1, fontSize: 11, color: current ? 'var(--text-secondary)' : 'var(--text-muted)', lineHeight: 1.5 }}>
-                              {current ? (
-                                <>
-                                  {expanded ? current : truncated + (needsTruncation && !expanded ? '…' : '')}
-                                  {needsTruncation && (
-                                    <span
-                                      onClick={() => setNarratives(prev => ({ ...prev, [row.day]: { ...prev[row.day], expanded: !expanded } }))}
-                                      style={{ marginLeft: 4, color: 'var(--blue-mid)', cursor: 'pointer', fontSize: 10, whiteSpace: 'nowrap' }}
-                                    >{expanded ? 'show less' : 'show more'}</span>
-                                  )}
-                                </>
-                              ) : 'No narrative'}
-                            </div>
-                            <button
-                              className="btn btn-sm"
-                              style={{ fontSize: 10, flexShrink: 0 }}
-                              onClick={() => setNarrativeModal({ day: row.day, supabase_id: row.supabase_id, value: current, title: row.title, day_description: row.day_description, tour_prefix: row.tour_prefix })}
-                            >Edit</button>
+                          <div style={{ fontSize: 11, color: current ? 'var(--text-secondary)' : 'var(--text-muted)', lineHeight: 1.5 }}>
+                            {current ? (
+                              <>
+                                {expanded ? current : truncated + (needsTruncation && !expanded ? '…' : '')}
+                                {needsTruncation && (
+                                  <span
+                                    onClick={() => setNarratives(prev => ({ ...prev, [row.day]: { ...prev[row.day], expanded: !expanded } }))}
+                                    style={{ marginLeft: 4, color: 'var(--blue-mid)', cursor: 'pointer', fontSize: 10, whiteSpace: 'nowrap' }}
+                                  >{expanded ? 'show less' : 'show more'}</span>
+                                )}
+                              </>
+                            ) : 'No narrative'}
                           </div>
                         )
                       })()}
@@ -300,15 +264,8 @@ export default function PortalSync({ tour }) {
                       {row.supabase_meals || <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {mismatch && !noZoho && row.supabase_id && (
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => handleSync([row.day])}
-                          disabled={syncing}
-                          style={{ fontSize: 11, padding: '2px 8px' }}
-                        >
-                          Sync
-                        </button>
+                      {mismatch && !noZoho && (
+                        <span style={{ fontSize: 11, color: 'var(--amber-text)', fontWeight: 500 }}>Mismatch</span>
                       )}
                       {!mismatch && (
                         <span style={{ fontSize: 12, color: 'var(--green-text)' }}>✓</span>
