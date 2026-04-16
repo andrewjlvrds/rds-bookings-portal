@@ -69,7 +69,11 @@ export default async function handler(req, res) {
         if (dayNum === null) return;
         // If multiple guest bookings on same day, keep the one with highest status priority
         // (shouldn't happen once Booking_Type is correctly set, but just in case)
-        if (!zohoByDay[dayNum]) {
+        var bookingType = b.Booking_Type || 'Guest';
+        // Only set if not already set, OR if existing entry is Excursion/Guide and this one is Guest
+        var existing = zohoByDay[dayNum];
+        var existingType = existing ? (existing.booking_type || 'Guest') : null;
+        if (!existing || (existingType !== 'Guest' && bookingType === 'Guest')) {
           zohoByDay[dayNum] = {
             day: dayNum,
             lodge: (b.Lodge_Name || '').trim(),
@@ -78,6 +82,7 @@ export default async function handler(req, res) {
             meals: b.Meals || '',
             day_description: b.Day_Description || '',
             narrative: (b.Route_Narrative || '').trim(),
+            booking_type: bookingType,
           };
         }
       });
