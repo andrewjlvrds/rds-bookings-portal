@@ -54,11 +54,22 @@ export default async function handler(req, res) {
       var allZoho = (zohoResult && zohoResult.data) || [];
 
       // Filter: Guest type only (default), no Z-day prefixes, no blank day descriptions
-      var guestBookings = allZoho.filter(function(b) {
+      // Include Guest + Excursion (not Guide/Pre-tour/Z-day) then sort Excursion first
+      // so Guest records always overwrite Excursion for the same day number
+      var relevantBookings = allZoho.filter(function(b) {
         var type = b.Booking_Type || 'Guest';
         var desc = b.Day_Description || '';
-        return type === 'Guest' && !desc.startsWith('Z ') && !desc.startsWith('z ');
+        return type !== 'Guide' && type !== 'Pre-tour' &&
+               !desc.startsWith('Z ') && !desc.startsWith('z ');
       });
+      relevantBookings.sort(function(a, b) {
+        var ta = a.Booking_Type || 'Guest';
+        var tb = b.Booking_Type || 'Guest';
+        if (ta === 'Excursion' && tb !== 'Excursion') return -1;
+        if (ta !== 'Excursion' && tb === 'Excursion') return 1;
+        return 0;
+      });
+      var guestBookings = relevantBookings;
 
       // Extract day number from Day_Description e.g. "Day 01: Arrive Cape Town" -> 1
       var zohoByDay = {};
@@ -70,7 +81,7 @@ export default async function handler(req, res) {
         // If multiple guest bookings on same day, keep the one with highest status priority
         // (shouldn't happen once Booking_Type is correctly set, but just in case)
         var bookingType = b.Booking_Type || 'Guest';
-        // Only set if not already set, OR if existing entry is Excursion/Guide and this one is Guest
+        // Guest always overwrites Excursion for the same day; pure Excursion days show no lodge
         var existing = zohoByDay[dayNum];
         var existingType = existing ? (existing.booking_type || 'Guest') : null;
         if (!existing || (existingType !== 'Guest' && bookingType === 'Guest')) {
@@ -97,6 +108,13 @@ export default async function handler(req, res) {
       (supaRows || []).forEach(function(r) {
         if (r.type && r.type.toLowerCase().startsWith('welcome')) return;
         supaByDay[r.day] = { id: r.id, day: r.day, lodge: (r.lodge || '').trim(), title: r.title };
+      });
+
+      // Remove any days where only an Excursion record was found (no Guest overwrite)
+      Object.keys(zohoByDay).forEach(function(day) {
+        if (zohoByDay[day].booking_type === 'Excursion') {
+          delete zohoByDay[day];
+        }
       });
 
       // 3. Build comparison
@@ -159,11 +177,20 @@ export default async function handler(req, res) {
       );
       var allZoho = (zohoResult && zohoResult.data) || [];
 
-      var guestBookings = allZoho.filter(function(b) {
+      var relevantBookings = allZoho.filter(function(b) {
         var type = b.Booking_Type || 'Guest';
         var desc = b.Day_Description || '';
-        return type === 'Guest' && !desc.startsWith('Z ') && !desc.startsWith('z ');
+        return type !== 'Guide' && type !== 'Pre-tour' &&
+               !desc.startsWith('Z ') && !desc.startsWith('z ');
       });
+      relevantBookings.sort(function(a, b) {
+        var ta = a.Booking_Type || 'Guest';
+        var tb = b.Booking_Type || 'Guest';
+        if (ta === 'Excursion' && tb !== 'Excursion') return -1;
+        if (ta !== 'Excursion' && tb === 'Excursion') return 1;
+        return 0;
+      });
+      var guestBookings = relevantBookings;
 
       var zohoByDay = {};
       guestBookings.forEach(function(b) {
