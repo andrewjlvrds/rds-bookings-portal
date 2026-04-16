@@ -76,6 +76,8 @@ export default async function handler(req, res) {
             check_in: b.Check_in_Date || '',
             zoho_id: b.id,
             meals: b.Meals || '',
+            day_description: b.Day_Description || '',
+            narrative: (b.Route_Narrative || '').trim(),
           };
         }
       });
@@ -105,9 +107,13 @@ export default async function handler(req, res) {
         var zLodge = zoho ? zoho.lodge : null;
         var sLodge = supa ? supa.lodge : null;
         var match = zLodge && sLodge && zLodge === sLodge;
+        // Extract route segment from Zoho Day_Description e.g. "Day 01: Arrive Cape Town" -> "Arrive Cape Town"
+        var zohoDesc = zoho ? (zoho.day_description || '') : '';
+        var routeMatch = zohoDesc.match(/Day\s*\d+[:\-]?\s*(.+)/i);
+        var routeLabel = routeMatch ? routeMatch[1].trim() : (supa ? supa.title : ('Day ' + day));
         rows.push({
           day: day,
-          title: supa ? supa.title : (zoho ? ('Day ' + day) : ''),
+          title: routeLabel,
           zoho_lodge: zLodge,
           supabase_lodge: sLodge,
           match: match,
