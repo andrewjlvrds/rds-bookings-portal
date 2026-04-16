@@ -36,6 +36,8 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   var tourName = (req.query && req.query.tour) || (req.body && req.body.tour);
@@ -52,14 +54,7 @@ export default async function handler(req, res) {
         '&fields=' + fields + '&per_page=200'
       );
       var allZoho = (zohoResult && zohoResult.data) || [];
-      // Debug: log day number extraction for each record
-      allZoho.forEach(function(b) {
-        var desc = b.Day_Description || '';
-        var match = desc.match(/Day\s+(\d+):/i);
-        var dayNum = match ? parseInt(match[1], 10) : null;
-        var type = b.Booking_Type;
-        console.log('Record:', JSON.stringify(desc), '| type:', type, '| dayNum:', dayNum, '| passes filter:', !!(type && type !== 'Guide' && type !== 'Pre-tour' && !desc.startsWith('Z ')));
-      });
+
 
 
       // Filter: Guest type only (default), no Z-day prefixes, no blank day descriptions
@@ -116,9 +111,7 @@ export default async function handler(req, res) {
         }
       });
 
-      // Debug: log zohoByDay
-      console.log('zohoByDay keys:', Object.keys(zohoByDay).sort(function(a,b){return a-b;}));
-      Object.keys(zohoByDay).forEach(function(d) { console.log('Day', d, ':', zohoByDay[d].lodge, '| type:', zohoByDay[d].booking_type); });
+
 
       // 2. Fetch Supabase itinerary for this tour
       var supaRows = await supabaseGet(
