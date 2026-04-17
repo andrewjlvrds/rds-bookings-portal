@@ -14,6 +14,7 @@ export default async function(req, res) {
     var body = req.body || {};
     var name = body.name;
     var departureDate = body.departure_date;
+    var endDate = body.end_date || null;
     var tourType = body.tour_type || '';
 
     if (!name) {
@@ -28,6 +29,10 @@ export default async function(req, res) {
       Departure_Date: departureDate,
       Status: 'Provisional',
     };
+
+    if (endDate) {
+      record.End_Date = endDate;
+    }
 
     if (tourType) {
       record.Tour_Type = tourType;

@@ -333,6 +333,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
           body: JSON.stringify({
             name: tourName,
             departure_date: departureDate,
+            end_date: tour.end_date || null,
             tour_type: tour.tour_type || '',
           }),
         })
@@ -384,7 +385,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
       const result = await response.json()
       setPushed(true)
       localStorage.removeItem(draftKey)
-      if (onSave) onSave(result)
+      // Return the Zoho tour id so the parent can switch activeTour to the new record
+      if (onSave) onSave({ ...result, tour_id: tourId, was_local: isLocalTour })
     } catch (err) {
       alert('Error pushing to Zoho: ' + err.message)
     } finally {

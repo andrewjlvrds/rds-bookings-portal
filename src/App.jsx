@@ -59,7 +59,7 @@ export default function App() {
   const [activeBooking, setActiveBooking] = useState(null)
 
   // Refresh data from API without losing current view
-  const refreshData = (keepTourId) => {
+  const refreshData = (keepTourId, retriesLeft = 3) => {
     fetch(API + '/api/bp-data')
       .then(r => {
         if (!r.ok) throw new Error('API returned ' + r.status)
@@ -83,7 +83,13 @@ export default function App() {
 
         if (keepTourId) {
           const freshTour = tourList.find(t => t.id === keepTourId)
-          if (freshTour) setActiveTour(freshTour)
+          if (freshTour) {
+            setActiveTour(freshTour)
+          } else if (retriesLeft > 0) {
+            // Newly-created Zoho records can take a moment to become queryable.
+            // Retry once or twice before giving up.
+            setTimeout(() => refreshData(keepTourId, retriesLeft - 1), 1500)
+          }
         }
       })
       .catch(err => console.error('Refresh error:', err))
@@ -291,9 +297,12 @@ export default function App() {
           tour={activeTour}
           lodges={lodges}
           onBack={() => setActiveView('itinerary')}
-          onSave={() => {
+          onSave={(result) => {
+            // If this was a local tour that just got pushed to Zoho, the id has changed.
+            // Refresh against the new Zoho id so activeTour reflects the real record.
+            const freshId = (result && result.tour_id) || activeTour.id
             setActiveView('itinerary')
-            refreshData(activeTour.id)
+            refreshData(freshId)
           }}
         />
       )
