@@ -140,13 +140,14 @@ export default function App() {
   }
   const saveLocalTours = (list) => localStorage.setItem(LOCAL_TOURS_KEY, JSON.stringify(list))
 
-  const handleCreateTour = async ({ name, departure_date, tour_type }) => {
+  const handleCreateTour = async ({ name, departure_date, end_date, tour_type }) => {
     // Save locally — no Zoho write yet
     const localTour = {
       id: 'local_' + Date.now(),
       name: name,
       departure_date: departure_date,
       start_date: departure_date,
+      end_date: end_date || null,
       tour_type: tour_type,
       tour_status: 'Draft',
       local: true,

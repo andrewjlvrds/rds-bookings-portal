@@ -1,19 +1,54 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+
+// Tour types. nights = end date offset from departure.
+// null = no auto-fill (Custom)
+const TOUR_TYPES = [
+  { value: 'FoSA 21', nights: 20 },
+  { value: 'FoSA 20', nights: 19 },
+  { value: 'FoSA 15', nights: 14 },
+  { value: 'Edge 14', nights: 13 },
+  { value: 'Edge 12', nights: 11 },
+  { value: 'Custom',  nights: null },
+]
+
+// Add `nights` days to a YYYY-MM-DD string and return YYYY-MM-DD
+function addDays(dateStr, nights) {
+  if (!dateStr || nights == null) return ''
+  const d = new Date(dateStr + 'T00:00:00')
+  if (isNaN(d.getTime())) return ''
+  d.setDate(d.getDate() + nights)
+  return d.toISOString().slice(0, 10)
+}
 
 export default function NewTour({ onCreate, onCancel }) {
   const [name, setName] = useState('')
   const [departureDate, setDepartureDate] = useState('')
-  const [tourType, setTourType] = useState('FoSA 20')
+  const [endDate, setEndDate] = useState('')
+  const [endDateEdited, setEndDateEdited] = useState(false)
+  const [tourType, setTourType] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const canSubmit = name.trim() && departureDate && !saving
+  // Auto-fill end date from departure + tour type, unless user has manually edited it
+  useEffect(() => {
+    if (endDateEdited) return
+    const t = TOUR_TYPES.find(x => x.value === tourType)
+    if (!t || t.nights == null || !departureDate) return
+    const auto = addDays(departureDate, t.nights)
+    if (auto) setEndDate(auto)
+  }, [departureDate, tourType, endDateEdited])
+
+  const canSubmit = name.trim() && departureDate && tourType && !saving
 
   const handleSubmit = async () => {
     if (!canSubmit) return
     setSaving(true)
     try {
-      await onCreate({ name: name.trim(), departure_date: departureDate, tour_type: tourType })
-      // onCreate navigates to itinerary view on success — no further action needed
+      await onCreate({
+        name: name.trim(),
+        departure_date: departureDate,
+        end_date: endDate || null,
+        tour_type: tourType,
+      })
     } catch (err) {
       alert('Error creating tour: ' + (err.message || err))
       setSaving(false)
@@ -55,28 +90,45 @@ export default function NewTour({ onCreate, onCancel }) {
         </div>
 
         <div>
-          <label style={labelStyle}>Departure date</label>
-          <input
-            type="date"
-            value={departureDate}
-            onChange={e => setDepartureDate(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        <div>
           <label style={labelStyle}>Tour type</label>
           <select
             value={tourType}
             onChange={e => setTourType(e.target.value)}
             style={inputStyle}
           >
-            <option value="FoSA 20">FoSA 20</option>
-            <option value="FoSA 15">FoSA 15</option>
-            <option value="Edge 14">Edge 14</option>
-            <option value="Edge 12">Edge 12</option>
-            <option value="Custom">Custom</option>
+            <option value="" disabled>Select tour type…</option>
+            {TOUR_TYPES.map(t => (
+              <option key={t.value} value={t.value}>{t.value}</option>
+            ))}
           </select>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Departure date</label>
+            <input
+              type="date"
+              value={departureDate}
+              onChange={e => setDepartureDate(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>
+              End date
+              {!endDateEdited && endDate && tourType && tourType !== 'Custom' && (
+                <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>
+                  (auto)
+                </span>
+              )}
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => { setEndDate(e.target.value); setEndDateEdited(true) }}
+              style={inputStyle}
+            />
+          </div>
         </div>
       </div>
 

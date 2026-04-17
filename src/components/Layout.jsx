@@ -344,6 +344,7 @@ function TourGroup({ label, tours, activeTour, onTourClick, onAdd, drafts }) {
             style={{ width: '100%', fontSize: 12, padding: '5px 8px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
           <select value={newType} onChange={e => setNewType(e.target.value)}
             style={{ width: '100%', fontSize: 12, padding: '5px 8px', border: '0.5px solid var(--border-default)', borderRadius: 4, outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+            <option value="FoSA 21">FoSA 21</option>
             <option value="FoSA 20">FoSA 20</option>
             <option value="FoSA 15">FoSA 15</option>
             <option value="Edge 14">Edge 14</option>
