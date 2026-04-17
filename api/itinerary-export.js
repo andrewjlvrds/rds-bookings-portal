@@ -31,7 +31,6 @@ export default async function(req, res) {
       var name = b.Tour ? (typeof b.Tour === 'object' ? b.Tour.name : b.Tour) : '';
       return name === tourName;
     });
-    console.log('itinerary-export: tour=' + tourName + ' filtered records=' + allBookings.length);
 
     // Filter and sort — same logic as portal-sync
     var relevant = allBookings.filter(function(b) {
@@ -82,7 +81,6 @@ export default async function(req, res) {
     var days = Object.keys(byDay).map(Number).sort(function(a, b) { return a - b; })
       .map(function(d) { return byDay[d]; });
 
-    console.log('itinerary-export: days returned=' + days.length);
     return res.status(200).json({ tour: tourName, days: days });
 
   } catch(err) {
