@@ -1,23 +1,26 @@
 import React, { useState, useEffect } from 'react'
 
-// Tour types. nights = end date offset from departure.
+// Tour types. daysOffset = days to add to departure date to get end date.
+// A 21-day tour starts on day 1 and ends on day 21 = departure + 20 days.
 // null = no auto-fill (Custom)
 const TOUR_TYPES = [
-  { value: 'FoSA 21', nights: 20 },
-  { value: 'FoSA 20', nights: 19 },
-  { value: 'FoSA 15', nights: 14 },
-  { value: 'Edge 14', nights: 13 },
-  { value: 'Edge 12', nights: 11 },
-  { value: 'Custom',  nights: null },
+  { value: 'FoSA 21', daysOffset: 20 },
+  { value: 'FoSA 20', daysOffset: 19 },
+  { value: 'FoSA 15', daysOffset: 14 },
+  { value: 'Edge 14', daysOffset: 13 },
+  { value: 'Edge 12', daysOffset: 11 },
+  { value: 'Custom',  daysOffset: null },
 ]
 
-// Add `nights` days to a YYYY-MM-DD string and return YYYY-MM-DD
-function addDays(dateStr, nights) {
-  if (!dateStr || nights == null) return ''
-  const d = new Date(dateStr + 'T00:00:00')
-  if (isNaN(d.getTime())) return ''
-  d.setDate(d.getDate() + nights)
-  return d.toISOString().slice(0, 10)
+// Add `days` to a YYYY-MM-DD string and return YYYY-MM-DD
+// Uses UTC throughout to avoid timezone off-by-one
+function addDays(dateStr, days) {
+  if (!dateStr || days == null) return ''
+  const [y, m, d] = dateStr.split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + days)
+  return dt.toISOString().slice(0, 10)
 }
 
 export default function NewTour({ onCreate, onCancel }) {
@@ -32,8 +35,8 @@ export default function NewTour({ onCreate, onCancel }) {
   useEffect(() => {
     if (endDateEdited) return
     const t = TOUR_TYPES.find(x => x.value === tourType)
-    if (!t || t.nights == null || !departureDate) return
-    const auto = addDays(departureDate, t.nights)
+    if (!t || t.daysOffset == null || !departureDate) return
+    const auto = addDays(departureDate, t.daysOffset)
     if (auto) setEndDate(auto)
   }, [departureDate, tourType, endDateEdited])
 
