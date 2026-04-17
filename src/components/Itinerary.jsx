@@ -21,19 +21,127 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [pollResult, setPollResult] = useState(null)
   const [narrativeState, setNarrativeState] = useState({}) // { [bookingId]: { loading, text, confidence, saved, error, editing } }
 
+  // Utility: date string math in UTC to avoid timezone off-by-one (ZA is UTC+2)
+  const parseYMD = (s) => {
+    if (!s) return null
+    const [y, m, d] = s.split('-').map(Number)
+    if (!y || !m || !d) return null
+    return new Date(Date.UTC(y, m - 1, d))
+  }
+  const formatYMD = (dt) => dt.toISOString().slice(0, 10)
+  const addDaysToYMD = (s, days) => {
+    const d = parseYMD(s)
+    if (!d) return ''
+    d.setUTCDate(d.getUTCDate() + days)
+    return formatYMD(d)
+  }
+
   const handleSaveDate = async () => {
     if (!newDate || newDate === tour.departure_date) {
       setEditingDate(false)
       return
     }
+
+    const oldDep = parseYMD(tour.departure_date)
+    const newDep = parseYMD(newDate)
+    if (!oldDep || !newDep) {
+      alert('Invalid date')
+      return
+    }
+    const shiftDays = Math.round((newDep - oldDep) / 86400000)
+
+    // What we're about to move
+    const zohoBookings = sorted // from main render scope — active, sorted lodge bookings
+    const draftCount = draftNights.length
+    const zohoCount = zohoBookings.length
+
+    // Build a concise confirmation message
+    const shiftLabel = shiftDays > 0 ? '+' + shiftDays + ' day' + (shiftDays !== 1 ? 's' : '')
+      : shiftDays < 0 ? shiftDays + ' day' + (shiftDays !== -1 ? 's' : '')
+      : '0 days'
+    const parts = []
+    if (zohoCount) parts.push(zohoCount + ' lodge booking' + (zohoCount !== 1 ? 's' : '') + ' in Zoho')
+    if (draftCount) parts.push(draftCount + ' draft night' + (draftCount !== 1 ? 's' : ''))
+    const scope = parts.length ? parts.join(' and ') : 'no itinerary yet'
+
+    const msg =
+      'Shift departure date?\n\n' +
+      fmtDateFull(tour.departure_date) + '  →  ' + fmtDateFull(newDate) + '  (' + shiftLabel + ')\n\n' +
+      'This will shift ' + scope + ' by the same amount.'
+
+    if (!confirm(msg)) return
+
     setSavingDate(true)
     try {
-      const res = await fetch('/api/update-tour', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tour_id: tour.id, updates: { Departure_Date: newDate } }),
-      })
-      if (!res.ok) throw new Error('Failed to update departure date')
+      // 1. Update tour's Departure_Date in Zoho (if it's a Zoho tour)
+      const isLocalTour = typeof tour.id === 'string' && tour.id.startsWith('local_')
+      if (!isLocalTour) {
+        const res = await fetch('/api/update-tour', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tour_id: tour.id, updates: { Departure_Date: newDate } }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error('Failed to update departure date: ' + (err.error || res.status))
+        }
+      } else {
+        // Local tour — update localStorage
+        try {
+          const localTours = JSON.parse(localStorage.getItem('rds_local_tours') || '[]')
+          const idx = localTours.findIndex(t => t.id === tour.id)
+          if (idx >= 0) {
+            localTours[idx].departure_date = newDate
+            localTours[idx].start_date = newDate
+            // Shift end date too if present
+            if (localTours[idx].end_date) {
+              localTours[idx].end_date = addDaysToYMD(localTours[idx].end_date, shiftDays)
+            }
+            localStorage.setItem('rds_local_tours', JSON.stringify(localTours))
+          }
+        } catch (e) {}
+      }
+
+      // 2. Shift draft nights in localStorage
+      if (draftCount) {
+        const shifted = draftNights.map(n => ({
+          ...n,
+          date: n.date ? addDaysToYMD(n.date, shiftDays) : n.date,
+          excursion_date: n.excursion_date ? addDaysToYMD(n.excursion_date, shiftDays) : n.excursion_date,
+        }))
+        localStorage.setItem(draftKey, JSON.stringify(shifted))
+      }
+
+      // 3. Shift Zoho lodge bookings
+      if (zohoCount) {
+        const shifts = zohoBookings.map(bk => {
+          const ci = bk.Check_in_Date || bk['Check-in'] || ''
+          const co = bk.Check_out_Date || bk['Check-out'] || ''
+          return {
+            id: bk.id || bk['Record Id'],
+            check_in: ci ? addDaysToYMD(ci, shiftDays) : null,
+            check_out: co ? addDaysToYMD(co, shiftDays) : null,
+          }
+        }).filter(s => s.id && (s.check_in || s.check_out))
+
+        if (shifts.length) {
+          const res = await fetch('/api/shift-booking-dates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shifts }),
+          })
+          const result = await res.json().catch(() => ({}))
+          if (!res.ok || !result.success) {
+            const errCount = (result && result.errors) || 0
+            const updCount = (result && result.updated) || 0
+            throw new Error(
+              'Partial failure: ' + updCount + ' updated, ' + errCount + ' failed. ' +
+              'The tour date was changed but some lodge bookings may be out of sync.'
+            )
+          }
+        }
+      }
+
       setEditingDate(false)
       if (onRefresh) onRefresh()
     } catch (err) {
