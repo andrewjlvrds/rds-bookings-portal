@@ -6,6 +6,12 @@ export default function PlannerDashboard({ tours, onSelectTour, onSelectView }) 
   const { newBuild, drafts } = categorizeTours(tours)
   const allDrafts = [...newBuild, ...drafts]
 
+  const newTourBtnStyle = {
+    fontSize: 13, padding: '6px 12px', fontWeight: 500,
+    border: 'none', borderRadius: 6, cursor: 'pointer',
+    background: 'var(--blue-mid)', color: '#fff',
+  }
+
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
@@ -17,7 +23,12 @@ export default function PlannerDashboard({ tours, onSelectTour, onSelectView }) 
 
       {allDrafts.length > 0 ? (
         <div style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>Draft tours</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 500, margin: 0 }}>Draft tours</h2>
+            <button onClick={() => onSelectView('new-tour')} style={newTourBtnStyle}>
+              + New tour
+            </button>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
             {allDrafts.map(tour => {
               const isDraft = typeof tour.id === 'string' && tour.id.startsWith('local_')
@@ -61,9 +72,12 @@ export default function PlannerDashboard({ tours, onSelectTour, onSelectView }) 
           background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)',
           marginBottom: 24,
         }}>
-          <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 8 }}>
-            No draft tours. Use the + button in the sidebar to create a new tour.
+          <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 14 }}>
+            No draft tours yet.
           </div>
+          <button onClick={() => onSelectView('new-tour')} style={newTourBtnStyle}>
+            + New tour
+          </button>
         </div>
       )}
     </div>

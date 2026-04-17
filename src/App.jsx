@@ -13,6 +13,7 @@ import Transfers from './components/Transfers'
 import Guests from './components/Guests'
 import GuestDashboard from './components/GuestDashboard'
 import PlannerDashboard from './components/PlannerDashboard'
+import NewTour from './components/NewTour'
 import './styles/global.css'
 
 const API = ''
@@ -307,6 +308,15 @@ export default function App() {
           onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}
           onEnquireReady={() => setActiveView('enquiry-preview')}
           onRefresh={() => refreshData(activeTour.id)}
+        />
+      )
+    }
+
+    if (activeView === 'new-tour') {
+      return (
+        <NewTour
+          onCreate={handleCreateTour}
+          onCancel={() => setActiveView('dashboard')}
         />
       )
     }
