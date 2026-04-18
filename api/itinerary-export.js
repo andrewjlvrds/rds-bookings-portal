@@ -33,13 +33,14 @@ export default async function(req, res) {
     });
 
     // Filter and sort — same logic as portal-sync
+    // Supports both "Day N:" (standard) and "Day N - X:" (split/branching routes — e.g. Oddballs add-on)
     var relevant = allBookings.filter(function(b) {
       var type = b.Booking_Type || '';
       var desc = b.Day_Description || '';
       // Allow blank Booking_Type (treat as Guest), exclude Guide/Pre-tour/Z-day
       return type !== 'Guide' && type !== 'Pre-tour' &&
              !desc.startsWith('Z ') && !desc.startsWith('z ') &&
-             desc.match(/Day\s+\d+:/i); // must have a day number
+             desc.match(/Day\s+\d+(\s*-\s*\d+)?\s*:/i); // must have a day number (supports "Day N:" or "Day N - X:")
     });
 
     relevant.sort(function(a, b) {
@@ -51,17 +52,24 @@ export default async function(req, res) {
     });
 
     // Build by day, Guest wins over Excursion
+    // For split-route days (Day 15 - 1, Day 15 - 2), "- 1" is the standard route and wins.
+    // "- 2" represents an optional branching route (e.g. Oddballs add-on) and is excluded from the main itinerary.
     var byDay = {};
     relevant.forEach(function(b) {
       var desc = b.Day_Description || '';
-      var match = desc.match(/Day\s+(\d+):/i);
-      var dayNum = match ? parseInt(match[1], 10) : null;
+      var match = desc.match(/Day\s+(\d+)(?:\s*-\s*(\d+))?\s*:/i);
+      if (!match) return;
+      var dayNum = parseInt(match[1], 10);
+      var splitNum = match[2] ? parseInt(match[2], 10) : null;
       if (!dayNum || dayNum < 1) return;
+      // Skip split-route "- 2" and higher — only the canonical standard route ("- 1" or unnumbered) goes into the main itinerary
+      if (splitNum && splitNum > 1) return;
       var type = b.Booking_Type || 'Guest'; // blank = treat as Guest
       var existing = byDay[dayNum];
       var existingType = existing ? (existing.booking_type || 'Guest') : null;
       if (!existing || (existingType !== 'Guest' && type === 'Guest')) {
-        var routeMatch = desc.match(/Day\s*\d+[:\-]?\s*(.+)/i);
+        // Extract title after "Day N:" or "Day N - X:"
+        var routeMatch = desc.match(/Day\s+\d+(?:\s*-\s*\d+)?\s*[:\-]?\s*(.+)/i);
         byDay[dayNum] = {
           day: dayNum,
           title: routeMatch ? routeMatch[1].trim() : ('Day ' + dayNum),
