@@ -115,9 +115,11 @@ export default async function(req, res) {
       var tourRef = bk.Tour;
       var tourId = '';
       var tourName = bk.Tour_Name || '';
+      var tourInstance = '';  // clean instance name from the Tour lookup (e.g. "FoSA 11 Sep 26")
       if (tourRef) {
         if (typeof tourRef === 'object') {
           tourId = tourRef.id || '';
+          tourInstance = tourRef.name || '';
           tourName = tourName || tourRef.name || '';
         } else { tourId = tourRef; }
       }
@@ -147,6 +149,7 @@ export default async function(req, res) {
         phone: bk.Phone_1 || '',
         tour_id: tourId,
         tour_name: tourName,
+        tour_instance: tourInstance,
         tour_start: bk.Tour_start_date || '',
         tour_end: bk.Tour_end_date || '',
         status: bk.Booking_Status || '',
