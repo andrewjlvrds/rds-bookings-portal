@@ -74,7 +74,7 @@ export default async function(req, res) {
       'Any_physical_or_medical_limitiations','Do_you_need_a_single_room',
       'Seat_height_ok','Own_Bike_Type',
       'Global_Rescue_Option','Travel_Insurance_Details',
-      'Waiver_Signed','Booking_Approved',
+      'Waiver_Signed','Booking_Approved','Damage_Deposit',
       'No_of_Pax_Departure','No_of_Pax_Home_departure'
     ].join(',');
 
@@ -246,6 +246,7 @@ export default async function(req, res) {
         insurance_details: e3.Travel_Insurance_Details || '',
         waiver_signed: e3.Waiver_Signed || false,
         booking_approved: e3.Booking_Approved || false,
+        damage_deposit: e3.Damage_Deposit || false,
         // Transfer requests
         capey_arrival: e2.Request_Capey_Leg_1 || false,
         capey_departure: e2.Request_Capey_Departure || false,
