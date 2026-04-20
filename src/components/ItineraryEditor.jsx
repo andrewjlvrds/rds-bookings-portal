@@ -3,6 +3,14 @@ import { TEMPLATES, generateDates, generateRdsRef, getAllTemplates, saveCustomTe
 import { fmtDate, fmtDateFull } from '../utils/helpers'
 
 export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
+  // Cancelled Zoho bookings are preserved as an audit trail but must never be
+  // loaded back into the editor — otherwise removing a night and re-opening
+  // the editor reverts to the original list.
+  const activeBookings = (tour.bookings || []).filter(bk => {
+    const s = (bk.Status || bk['Status'] || '').toString().trim().toLowerCase()
+    return s !== 'cancelled'
+  })
+
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -22,16 +30,28 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 
   // Load initial state: draft from localStorage, existing bookings, or empty
   const [nights, setNights] = useState(() => {
+    // Build a set of active Zoho booking IDs to validate any saved draft against
+    const activeIds = new Set(
+      activeBookings.map(bk => String(bk.id || bk['Record Id'] || '')).filter(Boolean)
+    )
+
     try {
       const draft = localStorage.getItem(draftKey)
       if (draft) {
         const parsed = JSON.parse(draft)
-        if (parsed && parsed.length > 0) return parsed
+        if (parsed && parsed.length > 0) {
+          // Reject the draft if any row points at a Zoho booking that is no
+          // longer active (cancelled or deleted). That means Zoho has moved on
+          // since this draft was written and the draft should be rebuilt.
+          const hasStaleRef = parsed.some(n => n.zoho_id && !activeIds.has(String(n.zoho_id)))
+          if (!hasStaleRef) return parsed
+          try { localStorage.removeItem(draftKey) } catch (e) {}
+        }
       }
     } catch (e) {}
 
     // If tour has existing bookings, auto-load them
-    const bookings = (tour.bookings || []).slice().sort((a, b) => {
+    const bookings = activeBookings.slice().sort((a, b) => {
       const dA = a.Check_in_Date || a['Check-in'] || ''
       const dB = b.Check_in_Date || b['Check-in'] || ''
       return dA.localeCompare(dB)
@@ -127,14 +147,14 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   }
 
   // If tour already has bookings, load them as the starting point
-  const existingBookings = (tour.bookings || []).length
+  const existingBookings = activeBookings.length
 
   // Departure date from tour
   const departureDate = tour.departure_date || ''
 
   // Load existing bookings from Zoho into the editor
   const handleLoadExisting = () => {
-    const bookings = (tour.bookings || []).slice().sort((a, b) => {
+    const bookings = activeBookings.slice().sort((a, b) => {
       const dA = a.Check_in_Date || a['Check-in'] || ''
       const dB = b.Check_in_Date || b['Check-in'] || ''
       return dA.localeCompare(dB)
@@ -323,7 +343,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   // A draft night whose zoho_id points at a cancelled row also counts as "create"
   // because the original will be marked Cancelled in Zoho.
   const syncPlan = (() => {
-    const zohoBookings = (tour.bookings || [])
+    const zohoBookings = activeBookings
     const zohoById = new Map()
     zohoBookings.forEach(bk => {
       const id = bk.id || bk['Record Id']
