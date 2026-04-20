@@ -548,20 +548,30 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
         } catch (e) {}
       }
 
-      // 1. Cancel orphaned / swapped bookings first (reuses /api/update-bookings)
+      // 1. Cancel orphaned / swapped bookings first (reuses /api/update-bookings).
+      // Also prefix Day_Description with "Z " so cancelled rows drop to the
+      // bottom when Zoho views sort alphabetically by Day Description. This
+      // matches the existing Z-prefix convention (see isActiveBooking).
       let cancelledCount = 0
       if (cancelBookings.length) {
-        const cancelIds = cancelBookings
-          .map(c => c.booking.id || c.booking['Record Id'])
+        const cancelRecords = cancelBookings
+          .map(c => {
+            const bk = c.booking
+            const id = bk.id || bk['Record Id']
+            if (!id) return null
+            const rec = { id: id, Status: 'Cancelled' }
+            const currentDesc = bk.Day_Description || bk['Day Description'] || ''
+            if (currentDesc && !/^z\s/i.test(currentDesc)) {
+              rec.Day_Description = 'Z ' + currentDesc
+            }
+            return rec
+          })
           .filter(Boolean)
-        if (cancelIds.length) {
+        if (cancelRecords.length) {
           const cancelRes = await fetch('/api/update-bookings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              booking_ids: cancelIds,
-              updates: { Status: 'Cancelled' },
-            }),
+            body: JSON.stringify({ records: cancelRecords }),
           })
           if (!cancelRes.ok) {
             const err = await cancelRes.json().catch(() => ({}))

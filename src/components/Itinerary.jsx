@@ -20,6 +20,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [polling, setPolling] = useState(false)
   const [pollResult, setPollResult] = useState(null)
   const [narrativeState, setNarrativeState] = useState({}) // { [bookingId]: { loading, text, confidence, saved, error, editing } }
+  const [showCancelled, setShowCancelled] = useState(false) // toggle cancelled rows in the list
 
   // Utility: date string math in UTC to avoid timezone off-by-one (ZA is UTC+2)
   const parseYMD = (s) => {
@@ -330,7 +331,8 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   }
 
   const allBookings = tour.bookings || []
-  const active = allBookings.filter(isActiveBooking)
+  const cancelledCount = allBookings.filter(bk => !isActiveBooking(bk)).length
+  const active = showCancelled ? allBookings : allBookings.filter(isActiveBooking)
   const sorted = active.slice().sort((a, b) => {
     const dA = a['Check-in'] || a.Check_in_Date || ''
     const dB = b['Check-in'] || b.Check_in_Date || ''
@@ -1445,7 +1447,7 @@ ${merged.map((bk, i) => {
 
       {/* Summary bar */}
       <div style={{
-        display: 'flex', gap: 16, marginTop: 16,
+        display: 'flex', gap: 16, marginTop: 16, alignItems: 'center',
         padding: '12px 16px', background: 'var(--bg-secondary)',
         borderRadius: 'var(--radius-md)', fontSize: 12, color: 'var(--text-muted)',
       }}>
@@ -1453,6 +1455,15 @@ ${merged.map((bk, i) => {
         <span><strong style={{ color: 'var(--text-primary)' }}>{enquired}</strong> enquired</span>
         <span><strong style={{ color: 'var(--text-primary)' }}>{readyToSend}</strong> ready to send</span>
         <span><strong style={{ color: 'var(--text-primary)' }}>{notStarted}</strong> not started</span>
+        {cancelledCount > 0 && (
+          <span
+            onClick={() => setShowCancelled(s => !s)}
+            style={{ marginLeft: 'auto', cursor: 'pointer', userSelect: 'none', color: 'var(--text-muted)', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+            title={showCancelled ? 'Hide cancelled bookings' : 'Show cancelled bookings'}
+          >
+            {showCancelled ? 'Hide' : 'Show'} {cancelledCount} cancelled
+          </span>
+        )}
       </div>
 
       {/* Draft-only nights not yet in Zoho */}
