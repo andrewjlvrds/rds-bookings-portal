@@ -277,7 +277,27 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   let draftNights = []
   try {
     const raw = localStorage.getItem(draftKey)
-    if (raw) draftNights = JSON.parse(raw)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Drop drafts that reference Zoho bookings that are no longer active
+        // (cancelled or deleted). Those drafts are stale — written before a
+        // sync / cancel action — and otherwise resurface as phantom "draft
+        // only" nights in the banner below.
+        const activeIds = new Set(
+          (tour.bookings || [])
+            .filter(isActiveBooking)
+            .map(bk => String(bk.id || bk['Record Id'] || ''))
+            .filter(Boolean)
+        )
+        const hasStaleRef = parsed.some(n => n.zoho_id && !activeIds.has(String(n.zoho_id)))
+        if (hasStaleRef) {
+          try { localStorage.removeItem(draftKey) } catch (e) {}
+        } else {
+          draftNights = parsed
+        }
+      }
+    }
   } catch (e) {}
   const hasDraft = draftNights.length > 0
 
