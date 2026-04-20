@@ -338,7 +338,9 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   // 2. Zoho booking whose id matches a draft night but
   //    the lodge name differs                             → cancel (per swap rule)
   // 3. Draft night with no zoho_id                        → create
-  // 4. Draft night with zoho_id, same lodge as Zoho       → unchanged, skip
+  // 4. Draft night with zoho_id, same lodge, but other
+  //    Zoho-backed fields have changed                    → update in place
+  // 5. Draft night with zoho_id, identical                → unchanged, skip
   //
   // A draft night whose zoho_id points at a cancelled row also counts as "create"
   // because the original will be marked Cancelled in Zoho.
@@ -357,9 +359,17 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
       return (raw || '').split(' - ')[0]
     }
 
+    // Build the Day_Description string the way create-itinerary.js does, so
+    // we can compare draft vs Zoho consistently.
+    const buildDayDesc = (n) => {
+      const prefix = n.pre_tour ? 'Pre tour' : 'Day ' + String(n.day || '').padStart(2, '0')
+      return prefix + (n.route ? ': ' + n.route : '')
+    }
+
     const toCreate = []          // draft nights to create in Zoho
     const toCancel = []          // zoho bookings to mark Cancelled
-    const unchanged = []         // zoho bookings that match draft 1:1
+    const toUpdate = []          // { id, fields: { ... } } — in-place PUT
+    const unchanged = []
     const draftIdsReferenced = new Set()
 
     nights.forEach(n => {
@@ -370,7 +380,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
       draftIdsReferenced.add(String(n.zoho_id))
       const bk = zohoById.get(String(n.zoho_id))
       if (!bk) {
-        // Shouldn't normally happen, but treat as create
+        // zoho_id points at a row that no longer exists → treat as create
         toCreate.push({ night: n, reason: 'new' })
         return
       }
@@ -380,6 +390,66 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
         // Lodge swap — cancel old, create new
         toCancel.push({ booking: bk, reason: 'lodge_changed' })
         toCreate.push({ night: n, reason: 'swap' })
+        return
+      }
+
+      // Same lodge — check for in-place edits to other Zoho-backed fields.
+      const diff = {}
+      const diffSummary = []
+
+      // Day_Description (composed from day + route + pre_tour)
+      const draftDayDesc = buildDayDesc(n)
+      const zohoDayDesc = bk.Day_Description || bk['Day Description'] || ''
+      if (draftDayDesc && draftDayDesc !== zohoDayDesc) {
+        diff.Day_Description = draftDayDesc
+        diffSummary.push('route/day')
+      }
+
+      // Meals
+      const draftMeals = (n.meals || '').trim()
+      const zohoMeals = (bk.Meals || '').trim()
+      if (draftMeals && draftMeals !== zohoMeals) {
+        diff.Meals = draftMeals
+        diffSummary.push('meals')
+      }
+
+      // Check-in / Check-out date (rare single-row shift — batch shift has
+      // its own endpoint). Only sync if the date actually changed.
+      const draftDate = (n.date || '').trim()
+      const zohoDate = (bk.Check_in_Date || bk['Check-in'] || '').trim()
+      if (draftDate && draftDate !== zohoDate) {
+        diff.Check_in_Date = draftDate
+        try {
+          const co = new Date(draftDate)
+          co.setDate(co.getDate() + 1)
+          diff.Check_out_Date = co.toISOString().split('T')[0]
+        } catch (e) {}
+        diffSummary.push('date')
+      }
+
+      // Excursion
+      const draftExc = (n.excursion || '').trim()
+      const zohoExc = (bk.Excursion || '').trim()
+      if (draftExc !== zohoExc) {
+        diff.Excursion = draftExc
+        diffSummary.push('excursion')
+      }
+      const draftExcDate = (n.excursion_date || '').trim()
+      const zohoExcDate = (bk.Excursion_Date || '').trim()
+      if (draftExcDate !== zohoExcDate && (draftExcDate || zohoExcDate)) {
+        diff.Excursion_Date = draftExcDate
+        // Flag under the same 'excursion' label if it's not already there
+        if (!diffSummary.includes('excursion')) diffSummary.push('excursion date')
+      }
+
+      if (Object.keys(diff).length > 0) {
+        toUpdate.push({
+          id: n.zoho_id,
+          fields: diff,
+          summary: diffSummary,
+          night: n,
+          booking: bk,
+        })
       } else {
         unchanged.push({ booking: bk })
       }
@@ -394,12 +464,13 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
       }
     })
 
-    return { toCreate, toCancel, unchanged }
+    return { toCreate, toCancel, toUpdate, unchanged }
   })()
 
   const newNights = syncPlan.toCreate.map(c => c.night)
   const cancelBookings = syncPlan.toCancel
-  const hasChanges = newNights.length > 0 || cancelBookings.length > 0
+  const updateBookings = syncPlan.toUpdate
+  const hasChanges = newNights.length > 0 || cancelBookings.length > 0 || updateBookings.length > 0
 
   const buildConfirmMessage = () => {
     const lines = []
@@ -408,6 +479,16 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
       syncPlan.toCreate.forEach(c => {
         const tag = c.reason === 'swap' ? ' (lodge swap)' : ''
         lines.push('  + ' + (c.night.date || '?') + ' — ' + (c.night.lodge || 'TBD') + tag)
+      })
+    }
+    if (updateBookings.length) {
+      if (lines.length) lines.push('')
+      lines.push(updateBookings.length + ' booking' + (updateBookings.length !== 1 ? 's' : '') + ' to update:')
+      updateBookings.forEach(u => {
+        const bk = u.booking
+        const lodge = (bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || (bk.Name || '').split(' - ')[0] || 'TBD'
+        const date = u.night.date || bk.Check_in_Date || ''
+        lines.push('  ~ ' + date + ' — ' + lodge + ' (' + u.summary.join(', ') + ')')
       })
     }
     if (cancelBookings.length) {
@@ -491,7 +572,24 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
         }
       }
 
-      // 2. Create any new nights
+      // 2. In-place field updates (per-row PUTs via records param)
+      let updatedCount = 0
+      if (updateBookings.length) {
+        const records = updateBookings.map(u => Object.assign({ id: u.id }, u.fields))
+        const updateRes = await fetch('/api/update-bookings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: records }),
+        })
+        if (!updateRes.ok) {
+          const err = await updateRes.json().catch(() => ({}))
+          throw new Error('Failed to update bookings: ' + (err.error || updateRes.statusText))
+        }
+        const updateResult = await updateRes.json()
+        updatedCount = updateResult.updated || 0
+      }
+
+      // 3. Create any new nights
       let createdCount = 0
       let result = null
       if (newNights.length) {
@@ -533,12 +631,13 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 
       const summary = [
         createdCount ? (createdCount + ' created') : '',
+        updatedCount ? (updatedCount + ' updated') : '',
         cancelledCount ? (cancelledCount + ' cancelled') : '',
       ].filter(Boolean).join(', ')
       if (summary) alert('Sync complete: ' + summary + '.')
 
       // Return the Zoho tour id so the parent can switch activeTour to the new record
-      if (onSave) onSave({ ...(result || {}), tour_id: tourId, was_local: isLocalTour, cancelled: cancelledCount })
+      if (onSave) onSave({ ...(result || {}), tour_id: tourId, was_local: isLocalTour, cancelled: cancelledCount, updated: updatedCount })
     } catch (err) {
       alert('Error syncing to Zoho: ' + err.message)
     } finally {
@@ -902,8 +1001,8 @@ ${nights.map(n => {
                   ? 'Synced to Zoho'
                   : !hasChanges
                     ? 'All in Zoho'
-                    : cancelBookings.length > 0
-                      ? 'Sync to Zoho (+' + newNights.length + ' / −' + cancelBookings.length + ')'
+                    : (cancelBookings.length > 0 || updateBookings.length > 0)
+                      ? 'Sync to Zoho (+' + newNights.length + ' / ~' + updateBookings.length + ' / −' + cancelBookings.length + ')'
                       : newNights.length === nights.length
                         ? 'Push to Zoho (' + nights.length + ' nights)'
                         : 'Push ' + newNights.length + ' new night' + (newNights.length !== 1 ? 's' : '') + ' to Zoho'

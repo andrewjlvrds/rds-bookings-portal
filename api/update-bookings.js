@@ -14,19 +14,28 @@ export default async function(req, res) {
     var body = req.body || {};
     var bookingIds = body.booking_ids || [];
     var updates = body.updates || {};
+    var inputRecords = body.records || null; // alternative: array of {id, ...fields}
 
-    if (!bookingIds.length) {
-      return res.status(400).json({ error: 'No booking IDs provided' });
+    // Two supported shapes:
+    //   1. { booking_ids: [...], updates: {...} } — uniform update across all IDs
+    //   2. { records: [{id, Field: value, ...}, ...] } — per-row updates
+    var records;
+    if (Array.isArray(inputRecords) && inputRecords.length) {
+      records = inputRecords.filter(function(r) { return r && r.id; });
+      if (!records.length) {
+        return res.status(400).json({ error: 'No valid records provided' });
+      }
+    } else {
+      if (!bookingIds.length) {
+        return res.status(400).json({ error: 'No booking IDs provided' });
+      }
+      if (!Object.keys(updates).length) {
+        return res.status(400).json({ error: 'No updates provided' });
+      }
+      records = bookingIds.map(function(id) {
+        return Object.assign({ id: id }, updates);
+      });
     }
-
-    if (!Object.keys(updates).length) {
-      return res.status(400).json({ error: 'No updates provided' });
-    }
-
-    // Build update records
-    var records = bookingIds.map(function(id) {
-      return Object.assign({ id: id }, updates);
-    });
 
     // Zoho allows max 100 records per update
     var results = [];
