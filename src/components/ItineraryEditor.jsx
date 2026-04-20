@@ -311,14 +311,109 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   const isLocalTour = (tour.id || '').startsWith('local_') || tour.local
   const [zohoTourName, setZohoTourName] = useState(tour.name || '')
 
-  // Push to Zoho (create lodge bookings) — only pushes new nights
-  const newNights = nights.filter(n => !n.zoho_id)
+  // Sync to Zoho — creates new nights, cancels orphaned/swapped bookings
+  //
+  // Categorisation per Zoho booking and per draft night:
+  // 1. Zoho booking whose id appears in no draft night   → cancel (row was deleted)
+  // 2. Zoho booking whose id matches a draft night but
+  //    the lodge name differs                             → cancel (per swap rule)
+  // 3. Draft night with no zoho_id                        → create
+  // 4. Draft night with zoho_id, same lodge as Zoho       → unchanged, skip
+  //
+  // A draft night whose zoho_id points at a cancelled row also counts as "create"
+  // because the original will be marked Cancelled in Zoho.
+  const syncPlan = (() => {
+    const zohoBookings = (tour.bookings || [])
+    const zohoById = new Map()
+    zohoBookings.forEach(bk => {
+      const id = bk.id || bk['Record Id']
+      if (id) zohoById.set(String(id), bk)
+    })
+
+    const normLodge = (s) => (s || '').trim().toLowerCase()
+    const zohoLodgeName = (bk) => {
+      const raw = bk.Lodge_Name || bk['Lodge Name'] || bk.Name || ''
+      if (raw && typeof raw === 'object') return raw.name || ''
+      return (raw || '').split(' - ')[0]
+    }
+
+    const toCreate = []          // draft nights to create in Zoho
+    const toCancel = []          // zoho bookings to mark Cancelled
+    const unchanged = []         // zoho bookings that match draft 1:1
+    const draftIdsReferenced = new Set()
+
+    nights.forEach(n => {
+      if (!n.zoho_id) {
+        toCreate.push({ night: n, reason: 'new' })
+        return
+      }
+      draftIdsReferenced.add(String(n.zoho_id))
+      const bk = zohoById.get(String(n.zoho_id))
+      if (!bk) {
+        // Shouldn't normally happen, but treat as create
+        toCreate.push({ night: n, reason: 'new' })
+        return
+      }
+      const draftLodge = normLodge(n.lodge)
+      const zohoLodge = normLodge(zohoLodgeName(bk))
+      if (draftLodge && zohoLodge && draftLodge !== zohoLodge) {
+        // Lodge swap — cancel old, create new
+        toCancel.push({ booking: bk, reason: 'lodge_changed' })
+        toCreate.push({ night: n, reason: 'swap' })
+      } else {
+        unchanged.push({ booking: bk })
+      }
+    })
+
+    // Zoho bookings with no matching draft row → cancel
+    zohoBookings.forEach(bk => {
+      const id = String(bk.id || bk['Record Id'] || '')
+      if (!id) return
+      if (!draftIdsReferenced.has(id)) {
+        toCancel.push({ booking: bk, reason: 'removed' })
+      }
+    })
+
+    return { toCreate, toCancel, unchanged }
+  })()
+
+  const newNights = syncPlan.toCreate.map(c => c.night)
+  const cancelBookings = syncPlan.toCancel
+  const hasChanges = newNights.length > 0 || cancelBookings.length > 0
+
+  const buildConfirmMessage = () => {
+    const lines = []
+    if (newNights.length) {
+      lines.push(newNights.length + ' night' + (newNights.length !== 1 ? 's' : '') + ' to create:')
+      syncPlan.toCreate.forEach(c => {
+        const tag = c.reason === 'swap' ? ' (lodge swap)' : ''
+        lines.push('  + ' + (c.night.date || '?') + ' — ' + (c.night.lodge || 'TBD') + tag)
+      })
+    }
+    if (cancelBookings.length) {
+      if (lines.length) lines.push('')
+      lines.push(cancelBookings.length + ' booking' + (cancelBookings.length !== 1 ? 's' : '') + ' to mark Cancelled:')
+      cancelBookings.forEach(c => {
+        const bk = c.booking
+        const lodge = (bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || (bk.Name || '').split(' - ')[0] || 'TBD'
+        const date = bk.Check_in_Date || bk['Check-in'] || ''
+        const tag = c.reason === 'lodge_changed' ? ' (lodge changed)' : ' (night removed)'
+        lines.push('  − ' + date + ' — ' + lodge + tag)
+      })
+    }
+    lines.push('')
+    lines.push(syncPlan.unchanged.length + ' unchanged.')
+    lines.push('')
+    lines.push('Continue?')
+    return lines.join('\n')
+  }
+
   const handlePushToZoho = async () => {
-    if (!newNights.length) {
-      alert('All nights are already in Zoho. Nothing to push.')
+    if (!hasChanges) {
+      alert('Draft matches Zoho. Nothing to sync.')
       return
     }
-    if (!confirm('Push ' + newNights.length + ' new night' + (newNights.length !== 1 ? 's' : '') + ' to Zoho? (' + (nights.length - newNights.length) + ' existing nights will not be affected)')) return
+    if (!confirm(buildConfirmMessage())) return
     setPushing(true)
 
     try {
@@ -352,43 +447,80 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
         } catch (e) {}
       }
 
-      // Only create the new bookings (no zoho_id)
-      const response = await fetch('/api/create-itinerary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tour_id: tourId,
-          tour_name: tourName,
-          departure_date: departureDate,
-          nights: newNights.map(n => ({
-            date: n.date,
-            route: n.route,
-            lodge: n.lodge,
-            backup: n.backup,
-            meals: n.meals,
-            region: n.region,
-            day: n.day,
-            km: n.km || '',
-            route_notes: n.route_notes || '',
-            excursion: n.excursion || '',
-            excursion_date: n.excursion_date || '',
-            pre_tour: n.pre_tour || false,
-          })),
-        }),
-      })
-
-      if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.error || 'Failed to save')
+      // 1. Cancel orphaned / swapped bookings first (reuses /api/update-bookings)
+      let cancelledCount = 0
+      if (cancelBookings.length) {
+        const cancelIds = cancelBookings
+          .map(c => c.booking.id || c.booking['Record Id'])
+          .filter(Boolean)
+        if (cancelIds.length) {
+          const cancelRes = await fetch('/api/update-bookings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              booking_ids: cancelIds,
+              updates: { Status: 'Cancelled' },
+            }),
+          })
+          if (!cancelRes.ok) {
+            const err = await cancelRes.json().catch(() => ({}))
+            throw new Error('Failed to cancel bookings: ' + (err.error || cancelRes.statusText))
+          }
+          const cancelResult = await cancelRes.json()
+          cancelledCount = cancelResult.updated || 0
+        }
       }
 
-      const result = await response.json()
+      // 2. Create any new nights
+      let createdCount = 0
+      let result = null
+      if (newNights.length) {
+        const response = await fetch('/api/create-itinerary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tour_id: tourId,
+            tour_name: tourName,
+            departure_date: departureDate,
+            nights: newNights.map(n => ({
+              date: n.date,
+              route: n.route,
+              lodge: n.lodge,
+              backup: n.backup,
+              meals: n.meals,
+              region: n.region,
+              day: n.day,
+              km: n.km || '',
+              route_notes: n.route_notes || '',
+              excursion: n.excursion || '',
+              excursion_date: n.excursion_date || '',
+              pre_tour: n.pre_tour || false,
+            })),
+          }),
+        })
+
+        if (!response.ok) {
+          const err = await response.json()
+          throw new Error(err.error || 'Failed to create new nights')
+        }
+
+        result = await response.json()
+        createdCount = result.created || 0
+      }
+
       setPushed(true)
       localStorage.removeItem(draftKey)
+
+      const summary = [
+        createdCount ? (createdCount + ' created') : '',
+        cancelledCount ? (cancelledCount + ' cancelled') : '',
+      ].filter(Boolean).join(', ')
+      if (summary) alert('Sync complete: ' + summary + '.')
+
       // Return the Zoho tour id so the parent can switch activeTour to the new record
-      if (onSave) onSave({ ...result, tour_id: tourId, was_local: isLocalTour })
+      if (onSave) onSave({ ...(result || {}), tour_id: tourId, was_local: isLocalTour, cancelled: cancelledCount })
     } catch (err) {
-      alert('Error pushing to Zoho: ' + err.message)
+      alert('Error syncing to Zoho: ' + err.message)
     } finally {
       setPushing(false)
     }
@@ -744,7 +876,18 @@ ${nights.map(n => {
               onClick={handlePushToZoho}
               disabled={pushing || pushed || !departureDate || (isLocalTour && !zohoTourName.trim())}
             >
-              {pushing ? 'Pushing...' : pushed ? 'Pushed to Zoho' : newNights.length === nights.length ? 'Push to Zoho (' + nights.length + ' nights)' : newNights.length > 0 ? 'Push ' + newNights.length + ' new night' + (newNights.length !== 1 ? 's' : '') + ' to Zoho' : 'All in Zoho'}
+              {pushing
+                ? 'Syncing...'
+                : pushed
+                  ? 'Synced to Zoho'
+                  : !hasChanges
+                    ? 'All in Zoho'
+                    : cancelBookings.length > 0
+                      ? 'Sync to Zoho (+' + newNights.length + ' / −' + cancelBookings.length + ')'
+                      : newNights.length === nights.length
+                        ? 'Push to Zoho (' + nights.length + ' nights)'
+                        : 'Push ' + newNights.length + ' new night' + (newNights.length !== 1 ? 's' : '') + ' to Zoho'
+              }
             </button>
           </div>
         )}
