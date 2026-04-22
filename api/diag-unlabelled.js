@@ -1,61 +1,56 @@
-// Diagnostic: count emails in bookings@ inbox/sent that are NOT under any
-// known tour label. Must stay inside Vercel's ~10s function timeout.
+// Diagnostic: find lodge correspondence in inbox/sent that is NOT under any
+// known tour label. Fast approach — uses Gmail's search operator to exclude
+// labelled messages server-side, so we only fetch the unlabelled subset.
 //
-// Strategy:
-//   1. Search Gmail for a configurable time window (default 30d)
-//   2. Fetch metadata in parallel batches of 20
-//   3. Hard-stop before ~8 seconds elapse, return partial results
-//   4. `days` query param to widen/narrow window
-const { gmailToken, gmailApi } = require('./_gmail.js');
+// Query param: ?days=N (default 30, cap 365)
 
-const TOUR_LABEL_MAPPINGS = [
-  { match: 'FoSA Mar 27', tour: 'FoSA Mar 27' },
-  { match: 'INBOX/2026-03 (30 Mar - 18 Apr)', tour: 'FoSA Mar 26' },
-  { match: 'INBOX/2026-04 (24 Apr - 13 May)', tour: 'FoSA Apr 26' },
-  { match: 'INBOX/2026-05 (25 May - 6 June)', tour: 'BoN May 26' },
-  { match: 'INBOX/2026-07 Great Lakes', tour: 'GL Jul 26' },
-  { match: 'INBOX/2026-09 Sept (9-28) Group B', tour: 'FoSA 9 Sep 26' },
-  { match: 'INBOX/2026-09 Sept (11-30) Group A', tour: 'FoSA 11 Sep 26' },
-  { match: 'INBOX/2026-10 October', tour: 'FoSA Oct 26' },
+import { getGmailToken, gmailApi } from './_gmail.js';
+
+const TOUR_LABEL_PREFIXES = [
+  'FoSA Mar 27',
+  'INBOX/2026-03 (30 Mar - 18 Apr)',
+  'INBOX/2026-04 (24 Apr - 13 May)',
+  'INBOX/2026-05 (25 May - 6 June)',
+  'INBOX/2026-07 Great Lakes',
+  'INBOX/2026-09 Sept (9-28) Group B',
+  'INBOX/2026-09 Sept (11-30) Group A',
+  'INBOX/2026-10 October',
 ];
 
-function isTourLabel(labelName) {
-  for (var i = 0; i < TOUR_LABEL_MAPPINGS.length; i++) {
-    if (labelName.indexOf(TOUR_LABEL_MAPPINGS[i].match) === 0) return true;
-  }
-  return false;
-}
-
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   var t0 = Date.now();
-  var deadlineMs = 8000;
+  var deadlineMs = 8500;
   try {
     var days = parseInt((req.query && req.query.days) || '30', 10);
     if (!(days > 0) || days > 365) days = 30;
 
-    var token = await gmailToken();
+    var token = await getGmailToken();
 
     var labelListResp = await gmailApi(token, 'labels');
     var allLabels = labelListResp.labels || [];
-    var tourLabelIds = {};
-    var tourLabelNames = [];
-    var labelNameById = {};
-    for (var li = 0; li < allLabels.length; li++) {
-      labelNameById[allLabels[li].id] = allLabels[li].name;
-      if (isTourLabel(allLabels[li].name)) {
-        tourLabelIds[allLabels[li].id] = allLabels[li].name;
-        tourLabelNames.push(allLabels[li].name);
+
+    var tourLabels = [];
+    for (var i = 0; i < allLabels.length; i++) {
+      var ln = allLabels[i].name;
+      for (var p = 0; p < TOUR_LABEL_PREFIXES.length; p++) {
+        if (ln === TOUR_LABEL_PREFIXES[p] || ln.indexOf(TOUR_LABEL_PREFIXES[p] + '/') === 0) {
+          tourLabels.push({ id: allLabels[i].id, name: ln });
+          break;
+        }
       }
     }
 
-    var query = 'newer_than:' + days + 'd (in:inbox OR in:sent)';
-    var searchUrl = 'messages?q=' + encodeURIComponent(query) + '&maxResults=500';
+    var excludes = tourLabels.map(function(l) {
+      return '-label:"' + l.name.replace(/"/g, '') + '"';
+    }).join(' ');
+    var query = '(in:inbox OR in:sent) newer_than:' + days + 'd ' + excludes;
+
     var allMessages = [];
     var pageToken = null;
     var pages = 0;
-    while (pages < 3) {
-      if (Date.now() - t0 > 3500) break;
-      var url = searchUrl + (pageToken ? '&pageToken=' + pageToken : '');
+    while (pages < 5) {
+      if (Date.now() - t0 > 3000) break;
+      var url = 'messages?q=' + encodeURIComponent(query) + '&maxResults=100' + (pageToken ? '&pageToken=' + pageToken : '');
       var r = await gmailApi(token, url);
       if (r.messages) allMessages = allMessages.concat(r.messages);
       pageToken = r.nextPageToken;
@@ -63,12 +58,10 @@ module.exports = async function handler(req, res) {
       if (!pageToken) break;
     }
 
-    var unlabelled = [];
-    var labelled = 0;
-    var processed = 0;
+    var samples = [];
     var batchSize = 20;
+    var processed = 0;
     var hitTimeout = false;
-
     for (var bi = 0; bi < allMessages.length; bi += batchSize) {
       if (Date.now() - t0 > deadlineMs) { hitTimeout = true; break; }
       var batch = allMessages.slice(bi, bi + batchSize);
@@ -77,19 +70,10 @@ module.exports = async function handler(req, res) {
           .then(function(r) { return { ok: true, id: m.id, msg: r }; })
           .catch(function(e) { return { ok: false, id: m.id, err: e.message }; });
       }));
-
       for (var ri = 0; ri < results.length; ri++) {
         processed++;
-        var rr = results[ri];
-        if (!rr.ok) continue;
-        var msg = rr.msg;
-        var labels = msg.labelIds || [];
-        var hasTourLabel = false;
-        for (var lj = 0; lj < labels.length; lj++) {
-          if (tourLabelIds[labels[lj]]) { hasTourLabel = true; break; }
-        }
-        if (hasTourLabel) { labelled++; continue; }
-
+        if (!results[ri].ok) continue;
+        var msg = results[ri].msg;
         var hdrs = (msg.payload && msg.payload.headers) || [];
         var getHdr = function(n) {
           for (var k = 0; k < hdrs.length; k++) {
@@ -97,42 +81,35 @@ module.exports = async function handler(req, res) {
           }
           return '';
         };
-
-        var labelNames = [];
-        for (var lx = 0; lx < labels.length; lx++) {
-          labelNames.push(labelNameById[labels[lx]] || labels[lx]);
-        }
-
-        unlabelled.push({
-          gmail_id: rr.id,
+        var labels = msg.labelIds || [];
+        samples.push({
+          gmail_id: results[ri].id,
           from: getHdr('From'),
           to: getHdr('To'),
           subject: getHdr('Subject'),
           date: getHdr('Date'),
-          labels: labelNames,
           in_inbox: labels.indexOf('INBOX') > -1,
           is_sent: labels.indexOf('SENT') > -1,
+          other_labels: labels.filter(function(l) {
+            return l !== 'INBOX' && l !== 'SENT' && l !== 'UNREAD' && l !== 'IMPORTANT' && l.indexOf('CATEGORY_') !== 0;
+          }),
         });
       }
     }
 
-    unlabelled.sort(function(a, b) {
-      return new Date(b.date || 0) - new Date(a.date || 0);
-    });
+    samples.sort(function(a, b) { return new Date(b.date || 0) - new Date(a.date || 0); });
 
     res.status(200).json({
       window_days: days,
-      searched_query: query,
+      query_preview: query.length > 500 ? query.substring(0, 500) + '...' : query,
+      tour_labels_in_account: tourLabels.length,
       elapsed_ms: Date.now() - t0,
       hit_timeout: hitTimeout,
-      total_messages_in_range: allMessages.length,
-      messages_processed: processed,
-      with_tour_label: labelled,
-      without_tour_label: unlabelled.length,
-      tour_labels_count: tourLabelNames.length,
-      unlabelled_sample: unlabelled.slice(0, 100),
+      total_unlabelled_in_range: allMessages.length,
+      metadata_processed: processed,
+      samples: samples.slice(0, 100),
     });
   } catch (e) {
-    res.status(500).json({ error: e.message, stack: e.stack, elapsed_ms: Date.now() - t0 });
+    res.status(500).json({ error: e.message, elapsed_ms: Date.now() - t0 });
   }
-};
+}
