@@ -98,20 +98,17 @@ function safeId(gmailId) {
   return gmailId.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
 }
 
-// Heuristic: is this tour name one the system recognises as legitimate?
-// We use this to keep tour-bucket routing sane — we only create a bucket
-// if the tour name looks like a real RDS tour format (FoSA / BoN / GL
-// followed by a month + year). This deliberately allows historical tours
-// like "FoSA Sep 25" — those are real past tours. Temporal guards on the
-// per-booking date matching handle "don't route 2026 email to 2025 tour".
-var TOUR_NAME_PATTERN = /^(FoSA|BoN|GL|Edge|Great Lakes)\s/i;
-function looksLikeTour(name) {
-  return !!(name && TOUR_NAME_PATTERN.test(name));
+// Real tour names we know about. A routed tour bucket must match one of these,
+// otherwise the tour field in Zoho is stale/malformed and routing there would
+// create phantom buckets.
+var KNOWN_TOURS = {
+  'FoSA Mar 26': 1, 'FoSA Apr 26': 1, 'BoN May 26': 1,
+  'GL Jul 26': 1, 'FoSA 9 Sep 26': 1, 'FoSA 11 Sep 26': 1,
+  'FoSA Oct 26': 1, 'FoSA Mar 27': 1,
+};
+function isKnownTour(name) {
+  return !!(name && KNOWN_TOURS[name]);
 }
-
-// Stop-words used when tokenising lodge names for subject matching. Words
-// too generic to disambiguate (lodge, camp, hotel, etc.) are skipped.
-var STOP_WORDS_MAIN = { lodge:1, camp:1, hotel:1, village:1, resort:1, guest:1, inn:1, farm:1, the:1, a:1, at:1, on:1, in:1, of:1, and:1 };
 
 // Subject pattern that looks like Helen's lodge correspondence:
 //   "Re: Lodge Name: Date:" or "Re: Lodge Name - Date"
@@ -249,10 +246,11 @@ export default async function handler(req, res) {
     // e.g. "Canyon Village" → 'canyon village' AND 'canyon'
     // e.g. "Felix Unite Provenance Camp" → 'felix unite' AND 'felix'
     // We skip very generic words (lodge, camp, hotel, etc.)
+    var STOP_WORDS = { lodge:1, camp:1, hotel:1, village:1, resort:1, guest:1, inn:1, farm:1, the:1, a:1, at:1, on:1, in:1, of:1, and:1 };
     var bookingsByLodgeKeyword = {};
     function addKeyword(kw, bkg) {
       if (!kw || kw.length < 4) return;
-      if (STOP_WORDS_MAIN[kw]) return;
+      if (STOP_WORDS[kw]) return;
       if (!bookingsByLodgeKeyword[kw]) bookingsByLodgeKeyword[kw] = [];
       bookingsByLodgeKeyword[kw].push(bkg);
     }
@@ -267,19 +265,6 @@ export default async function handler(req, res) {
       for (var w = 0; w < words.length; w++) addKeyword(words[w], b3);
       // Add first two-word pair (e.g. "felix unite")
       if (words.length >= 2) addKeyword(words[0] + ' ' + words[1], b3);
-    }
-
-    // Index bookings by Check_in_Date — for date-primary matching.
-    // The core insight: on any given date, a tour is in exactly one lodge.
-    // If an email mentions a date and that date is a Check_in_Date, the
-    // booking IS the match — no lodge-name guessing required.
-    var bookingsByCheckIn = {};
-    for (var bi6 = 0; bi6 < allBookings.length; bi6++) {
-      var b4 = allBookings[bi6];
-      if (b4.Check_in_Date) {
-        if (!bookingsByCheckIn[b4.Check_in_Date]) bookingsByCheckIn[b4.Check_in_Date] = [];
-        bookingsByCheckIn[b4.Check_in_Date].push(b4);
-      }
     }
 
     // ─── Step 5: Fetch existing blob inventory so we don't overwrite ───
@@ -364,72 +349,6 @@ export default async function handler(req, res) {
             if (!dry) await writeRecord(decision, { from: from, to: to, subject: subj, date: date, body: body }, existingBlobKeys, counts, writeErrors);
             continue;
           }
-        }
-
-        // Tier 2: Date-primary match. Email contains one or more dates;
-        // look up each against bookingsByCheckIn. Filter out bookings whose
-        // check-in is more than 90 days before the email's sent date —
-        // a lodge proforma sent now cannot be for a tour that already
-        // happened months ago.
-        //
-        // If one booking remains → match it.
-        // If multiple remain → score candidates by lodge name overlap
-        //   with subject and take the best (still safer than keyword-first
-        //   because the date is a hard anchor).
-        var emailDates = extractIsoDates(subj + '\n' + body);
-        var emailSentDate = null;
-        try { emailSentDate = new Date(date); if (isNaN(emailSentDate.getTime())) emailSentDate = null; } catch (e) {}
-
-        var dateCandidates = [];
-        var seenDateCandIds = {};
-        emailDates.forEach(function(d) {
-          var bks = bookingsByCheckIn[d] || [];
-          for (var dbi = 0; dbi < bks.length; dbi++) {
-            var bk = bks[dbi];
-            // Temporal guard: skip bookings whose date is > 90 days before email
-            if (emailSentDate && bk.Check_in_Date) {
-              var bkDate = new Date(bk.Check_in_Date);
-              var msDiff = emailSentDate.getTime() - bkDate.getTime();
-              if (msDiff > 90 * 24 * 3600 * 1000) continue; // booking is too old
-            }
-            if (!seenDateCandIds[bk.id]) {
-              seenDateCandIds[bk.id] = true;
-              dateCandidates.push(bk);
-            }
-          }
-        });
-
-        if (dateCandidates.length > 0) {
-          // Score by subject overlap with lodge name to pick best if many
-          var subjLowerEarly = (subj || '').toLowerCase();
-          function scoreByName(c) {
-            var nm = (c.Lodge_Name && c.Lodge_Name.name) || c.Lodge_Name || c.Name || '';
-            if (typeof nm !== 'string') return 0;
-            var clean = nm.replace(/\s*-\s*Day\s+\d+.*$/i, '').replace(/\s*-\s*\d{4}-\d{2}-\d{2}.*$/, '').trim().toLowerCase();
-            if (!clean) return 0;
-            if (subjLowerEarly.indexOf(clean) > -1) return clean.length * 10;
-            var ws = clean.split(/\s+/);
-            var best = 0;
-            for (var wi1 = 0; wi1 < ws.length; wi1++) {
-              if (ws[wi1].length < 4) continue;
-              if (STOP_WORDS_MAIN[ws[wi1]]) continue;
-              if (subjLowerEarly.indexOf(ws[wi1]) > -1) best += ws[wi1].length;
-            }
-            return best;
-          }
-          dateCandidates.sort(function(a, b) { return scoreByName(b) - scoreByName(a); });
-          var dateWinner = dateCandidates[0];
-          decision.status = 'routed';
-          decision.match_method = dateCandidates.length === 1 ? 'date_unique' : 'date_plus_name';
-          decision.target_booking_id = dateWinner.id;
-          decision.target_tour = (dateWinner.Tour && dateWinner.Tour.name) || '';
-          decision.target_lodge = (dateWinner.Lodge_Name && dateWinner.Lodge_Name.name) || dateWinner.Lodge_Name || dateWinner.Name;
-          decision.target_check_in = dateWinner.Check_in_Date;
-          if (dateCandidates.length > 1) decision.date_candidate_count = dateCandidates.length;
-          counts.matched_date = (counts.matched_date || 0) + 1;
-          routing.push(decision);
-          if (!dry) await writeRecord(decision, { from: from, to: to, subject: subj, date: date, body: body }, existingBlobKeys, counts, writeErrors);
-          continue;
         }
 
         // Tier 2+3: Lodge email match
@@ -546,7 +465,7 @@ export default async function handler(req, res) {
             var words = nm.split(/\s+/);
             var best = 0;
             for (var wn = 0; wn < words.length; wn++) {
-              if (STOP_WORDS_MAIN[words[wn]]) continue;
+              if (STOP_WORDS[words[wn]]) continue;
               if (subjLower.indexOf(words[wn]) > -1) best += words[wn].length;
             }
             return best;
@@ -576,7 +495,7 @@ export default async function handler(req, res) {
             decision.target_tour = sdmTour;
             decision.target_lodge = (subjDateMatch.Lodge_Name && subjDateMatch.Lodge_Name.name) || subjDateMatch.Lodge_Name || subjDateMatch.Name;
             decision.target_check_in = subjDateMatch.Check_in_Date;
-            if (!looksLikeTour(sdmTour)) decision.warning = 'unusual_tour_name_on_booking';
+            if (!isKnownTour(sdmTour)) decision.warning = 'unknown_tour_name_on_booking';
             counts.matched_subject_date = (counts.matched_subject_date || 0) + 1;
             routing.push(decision);
             if (!dry) await writeRecord(decision, { from: from, to: to, subject: subj, date: date, body: body }, existingBlobKeys, counts, writeErrors);
@@ -584,10 +503,11 @@ export default async function handler(req, res) {
           }
 
           // Subject mentions a lodge but date doesn't match any of its bookings.
-          // Route to that lodge's tour bucket if the tour name looks like a real tour.
+          // If the top-scored candidate's tour is valid (exists in TOUR_LABEL_PREFIXES
+          // mapping), route to that tour bucket. Otherwise skip this fallback.
           var topCandidate = candidateBookings[0];
           var topTourName = (topCandidate.Tour && topCandidate.Tour.name) || '';
-          if (topTourName && looksLikeTour(topTourName)) {
+          if (topTourName && isKnownTour(topTourName)) {
             decision.status = 'routed';
             decision.match_method = 'tour_bucket_via_subject';
             decision.target_tour = topTourName;
