@@ -83,6 +83,7 @@ export function getGuestChecklist(guest) {
       label: 'Capey arrival transfer booked',
       category: 'transfers',
       status: actions.has('Capey Arrival Booked') ? 'complete' : 'action_needed',
+      actionValue: 'Capey Arrival Booked',
     })
   }
   if (g.capey_departure) {
@@ -91,6 +92,7 @@ export function getGuestChecklist(guest) {
       label: 'Capey departure transfer booked',
       category: 'transfers',
       status: actions.has('Capey Departure Booked') ? 'complete' : 'action_needed',
+      actionValue: 'Capey Departure Booked',
     })
   }
   if (g.capey_home) {
@@ -99,6 +101,7 @@ export function getGuestChecklist(guest) {
       label: 'Capey home departure booked',
       category: 'transfers',
       status: actions.has('Capey Home Booked') ? 'complete' : 'action_needed',
+      actionValue: 'Capey Home Booked',
     })
   }
 
@@ -111,6 +114,7 @@ export function getGuestChecklist(guest) {
       status: g.pre_tour_booked ? 'complete' :
               actions.has('Pre-tour Accom Confirmed') ? 'complete' : 'action_needed',
       note: g.pre_tour_details || null,
+      actionValue: 'Pre-tour Accom Confirmed',
     })
   }
   if (g.post_tour_reqd === 'Yes' || g.post_tour_details) {
@@ -121,6 +125,7 @@ export function getGuestChecklist(guest) {
       status: g.post_tour_booked ? 'complete' :
               actions.has('Post-tour Accom Confirmed') ? 'complete' : 'action_needed',
       note: g.post_tour_details || null,
+      actionValue: 'Post-tour Accom Confirmed',
     })
   }
 
@@ -132,6 +137,7 @@ export function getGuestChecklist(guest) {
       category: 'excursions',
       status: actions.has('Excursions Confirmed') ? 'complete' : 'action_needed',
       note: g.excursions,
+      actionValue: 'Excursions Confirmed',
     })
   }
 
@@ -151,6 +157,7 @@ export function getGuestChecklist(guest) {
       status: g.allocated_bike ? 'complete' :
               actions.has('Bike Allocated') ? 'complete' : 'action_needed',
       note: g.allocated_bike || null,
+      actionValue: 'Bike Allocated',
     })
   }
 
@@ -189,6 +196,7 @@ export function getGuestChecklist(guest) {
       label: 'Dietary info sent to lodges',
       category: 'admin',
       status: actions.has('Dietary Sent to Lodges') ? 'complete' : 'action_needed',
+      actionValue: 'Dietary Sent to Lodges',
     })
   }
 

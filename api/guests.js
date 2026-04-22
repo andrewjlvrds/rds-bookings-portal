@@ -65,7 +65,7 @@ export default async function(req, res) {
       'No_of_Pax_Leg_1'
     ].join(',');
 
-    // Batch 3 (20 fields): riding profile, admin, remaining transfer pax
+    // Batch 3 (21 fields): riding profile, admin, remaining transfer pax, actions
     var f3 = [
       'id','Tour','Tour_Name',
       'Do_you_have_a_bike_licence','Licence_Type','License',
@@ -75,7 +75,8 @@ export default async function(req, res) {
       'Seat_height_ok','Own_Bike_Type',
       'Global_Rescue_Option','Travel_Insurance_Details',
       'Waiver_Signed','Booking_Approved','Damage_Deposit',
-      'No_of_Pax_Departure','No_of_Pax_Home_departure'
+      'No_of_Pax_Departure','No_of_Pax_Home_departure',
+      'Actions_Completed'
     ].join(',');
 
     var apiError = null;
@@ -254,6 +255,7 @@ export default async function(req, res) {
         pax_arrival: e2.No_of_Pax_Leg_1 || '',
         pax_departure: e3.No_of_Pax_Departure || '',
         pax_home: e3.No_of_Pax_Home_departure || '',
+        actions_completed: e3.Actions_Completed || '',
       };
     });
 

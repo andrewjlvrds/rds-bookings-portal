@@ -322,9 +322,60 @@ function GuestDetail({ guest: g, onBack }) {
 }
 
 function ReadinessPanel({ g }) {
-  const rd = getGuestReadiness(g)
+  // Optimistic local copy of actions_completed. When the user marks an
+  // item done or undoes it, we update this immediately and write to Zoho
+  // in the background. Parent-level refresh isn't needed for the UI to
+  // reflect the change.
+  const [localActions, setLocalActions] = useState(g.actions_completed || '')
+  const [pending, setPending] = useState(null) // actionValue currently being written
+
+  // Build a synthetic guest with our local actions_completed so the
+  // readiness engine reads the current (optimistic) state.
+  const gLive = { ...g, actions_completed: localActions }
+  const rd = getGuestReadiness(gLive)
   const pct = rd.pct
   const barColor = pct >= 80 ? '#2E7D32' : pct >= 50 ? '#F57F17' : pct > 0 ? '#E65100' : '#DDD'
+
+  const parseSet = (val) => {
+    if (!val) return new Set()
+    if (Array.isArray(val)) return new Set(val)
+    return new Set(String(val).split(';').map(s => s.trim()).filter(Boolean))
+  }
+  const serialise = (set) => Array.from(set).join(';')
+
+  const writeActions = async (nextSet, actionValue) => {
+    setPending(actionValue)
+    const prev = localActions
+    const next = serialise(nextSet)
+    setLocalActions(next) // optimistic
+    try {
+      const res = await fetch('/api/update-bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          booking_ids: [g.id],
+          updates: { Actions_Completed: Array.from(nextSet) },
+        }),
+      })
+      if (!res.ok) throw new Error('Update failed (' + res.status + ')')
+    } catch (err) {
+      setLocalActions(prev) // rollback
+      alert('Could not update: ' + err.message)
+    } finally {
+      setPending(null)
+    }
+  }
+
+  const markDone = (actionValue) => {
+    const set = parseSet(localActions)
+    set.add(actionValue)
+    writeActions(set, actionValue)
+  }
+  const undo = (actionValue) => {
+    const set = parseSet(localActions)
+    set.delete(actionValue)
+    writeActions(set, actionValue)
+  }
 
   // Group by category
   const grouped = {}
@@ -435,6 +486,35 @@ function ReadinessPanel({ g }) {
                       </div>
                     )}
                   </div>
+                  {item.actionValue && item.status === 'action_needed' && (
+                    <button
+                      onClick={() => markDone(item.actionValue)}
+                      disabled={pending === item.actionValue}
+                      style={{
+                        fontSize: 11, fontWeight: 500, padding: '3px 10px',
+                        border: '0.5px solid #A5D6A7', borderRadius: 4,
+                        background: '#E8F5E9', color: '#2E7D32',
+                        cursor: 'pointer', flexShrink: 0, alignSelf: 'center',
+                      }}
+                    >
+                      {pending === item.actionValue ? '...' : 'Mark done'}
+                    </button>
+                  )}
+                  {item.actionValue && item.status === 'complete' && parseSet(localActions).has(item.actionValue) && (
+                    <button
+                      onClick={() => undo(item.actionValue)}
+                      disabled={pending === item.actionValue}
+                      title="Undo — mark as not done"
+                      style={{
+                        fontSize: 11, padding: '3px 8px',
+                        border: 'none', background: 'transparent',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer', flexShrink: 0, alignSelf: 'center',
+                      }}
+                    >
+                      {pending === item.actionValue ? '...' : '↶ Undo'}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
