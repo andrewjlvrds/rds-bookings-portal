@@ -17,6 +17,12 @@
     },
     "api/diag-extract.js": {
       "maxDuration": 60
+    },
+    "api/reindex-inbound.js": {
+      "maxDuration": 120
+    },
+    "api/reindex-unlabelled.js": {
+      "maxDuration": 60
     }
   }
 }

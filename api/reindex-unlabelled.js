@@ -1,0 +1,462 @@
+// Backfill: handle inbox/sent messages that are NOT under any tour label.
+// Runs AFTER reindex-inbound (Pass 1) has placed all labelled messages.
+//
+// Flow:
+//   1. Gmail search with -label: exclusions to get only unlabelled messages
+//   2. Fetch Zoho Lodges + Lodge_Bookings; build email→lodge and booking indexes
+//   3. For each unlabelled message, try in order:
+//        (a) RDS reference in subject  → direct booking match
+//        (b) Lodge email + date match  → scoped by lodge
+//        (c) Lodge email, no date      → tour bucket for that lodge's tour
+//        (d) Guest email heuristics    → SKIP (not stored)
+//        (e) Unmatched                 → emails/unmatched/
+//   4. Write only NEW blobs — never overwrite, never delete
+//
+// Modes:
+//   ?dry=true    preview, no writes (default)
+//   ?dry=false   live, writes to blob
+//   ?days=N      window (default 60, cap 365)
+
+import { list, put } from '@vercel/blob';
+import { getGmailToken, gmailApi } from './_gmail.js';
+import { zohoApi } from './_zoho.js';
+import { extractRdsRef, extractIsoDates } from './_email-match.js';
+
+const TOUR_LABEL_PREFIXES = [
+  'FoSA Mar 27',
+  'INBOX/2026-03 (30 Mar - 18 Apr)',
+  'INBOX/2026-04 (24 Apr - 13 May)',
+  'INBOX/2026-05 (25 May - 6 June)',
+  'INBOX/2026-07 Great Lakes',
+  'INBOX/2026-09 Sept (9-28) Group B',
+  'INBOX/2026-09 Sept (11-30) Group A',
+  'INBOX/2026-10 October',
+];
+
+// Consumer email domains — strong signal that this is a guest, not a lodge
+const CONSUMER_DOMAINS = {
+  'gmail.com': 1, 'yahoo.com': 1, 'yahoo.co.uk': 1, 'yahoo.com.au': 1,
+  'hotmail.com': 1, 'hotmail.co.uk': 1, 'outlook.com': 1, 'icloud.com': 1,
+  'me.com': 1, 'live.nl': 1, 'live.com': 1, 'msn.com': 1, 'aol.com': 1,
+};
+
+// Subject phrases that strongly indicate guest correspondence (not lodge)
+const GUEST_SUBJECT_PATTERNS = [
+  /flight\s*details?/i,
+  /flights?\s*and\s*extra\s*accommodation/i,
+  /nationality/i,
+  /lost\s*phone/i,
+  /passport/i,
+  /arrival\s*flight/i,
+];
+
+function parseEmailAddress(hdr) {
+  if (!hdr) return '';
+  var m = hdr.match(/<([^>]+)>/);
+  var addr = m ? m[1] : hdr;
+  return addr.trim().toLowerCase();
+}
+
+function parseDomain(hdr) {
+  var addr = parseEmailAddress(hdr);
+  var at = addr.lastIndexOf('@');
+  return at > -1 ? addr.substring(at + 1) : '';
+}
+
+function extractBody(payload) {
+  // Minimal body extraction — good enough for date/keyword scanning
+  if (!payload) return '';
+  function walk(p) {
+    if (!p) return '';
+    if (p.body && p.body.data) {
+      try { return Buffer.from(p.body.data, 'base64').toString('utf8'); }
+      catch (e) { return ''; }
+    }
+    if (p.parts && p.parts.length) {
+      var out = '';
+      for (var i = 0; i < p.parts.length; i++) out += '\n' + walk(p.parts[i]);
+      return out;
+    }
+    return '';
+  }
+  return walk(payload);
+}
+
+function getHeader(headers, name) {
+  if (!headers) return '';
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].name.toLowerCase() === name.toLowerCase()) return headers[i].value;
+  }
+  return '';
+}
+
+function safeTourKey(name) {
+  return (name || '').replace(/[^a-zA-Z0-9]+/g, '_');
+}
+
+function safeId(gmailId) {
+  return gmailId.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
+}
+
+function isGuestEmail(from, to, subject) {
+  // Match any guest pattern in subject
+  for (var i = 0; i < GUEST_SUBJECT_PATTERNS.length; i++) {
+    if (GUEST_SUBJECT_PATTERNS[i].test(subject || '')) return true;
+  }
+  // Consumer domain on both sides (Helen → consumer, or consumer → Helen)
+  var fromDom = parseDomain(from);
+  var toDom = parseDomain(to);
+  if (CONSUMER_DOMAINS[fromDom] || CONSUMER_DOMAINS[toDom]) {
+    // Extra guard: some guest replies CC lodges. If subject contains "Re:" and
+    // mentions a lodge-looking pattern, treat as lodge. Otherwise guest.
+    return true;
+  }
+  return false;
+}
+
+export default async function handler(req, res) {
+  var t0 = Date.now();
+  var deadlineMs = 50000; // leaves ~10s headroom under Vercel maxDuration 60
+  try {
+    var dry = String((req.query && req.query.dry) || 'true').toLowerCase() !== 'false';
+    var days = parseInt((req.query && req.query.days) || '60', 10);
+    if (!(days > 0) || days > 365) days = 60;
+    var maxMessages = parseInt((req.query && req.query.max) || '500', 10);
+
+    // ─── Step 1: Build tour-label exclusion query ───
+    var token = await getGmailToken();
+    var labelListResp = await gmailApi(token, 'labels');
+    var allLabels = labelListResp.labels || [];
+    var tourLabelNames = [];
+    for (var i = 0; i < allLabels.length; i++) {
+      var ln = allLabels[i].name;
+      for (var p = 0; p < TOUR_LABEL_PREFIXES.length; p++) {
+        if (ln === TOUR_LABEL_PREFIXES[p] || ln.indexOf(TOUR_LABEL_PREFIXES[p] + '/') === 0) {
+          tourLabelNames.push(ln);
+          break;
+        }
+      }
+    }
+    var excludes = tourLabelNames.map(function(n) {
+      return '-label:"' + n.replace(/"/g, '') + '"';
+    }).join(' ');
+    var query = '(in:inbox OR in:sent) newer_than:' + days + 'd ' + excludes;
+
+    // ─── Step 2: Fetch unlabelled message IDs ───
+    var allMsgIds = [];
+    var pageToken = null;
+    var qPages = 0;
+    while (qPages < 8) {
+      if (Date.now() - t0 > 5000) break;
+      var url = 'messages?q=' + encodeURIComponent(query) + '&maxResults=100' + (pageToken ? '&pageToken=' + pageToken : '');
+      var r = await gmailApi(token, url);
+      if (r.messages) allMsgIds = allMsgIds.concat(r.messages);
+      pageToken = r.nextPageToken;
+      qPages++;
+      if (!pageToken) break;
+    }
+    if (allMsgIds.length > maxMessages) allMsgIds = allMsgIds.slice(0, maxMessages);
+
+    // ─── Step 3: Fetch Zoho Lodges (for email→lodge index) ───
+    var lodgeFields = 'Name,Email,Preferred_Email,Email_Reservations_2,Email_Accounts,Secondary_Email,id';
+    var allLodges = [];
+    var lPage = 1;
+    var lMore = true;
+    while (lMore && lPage <= 3) {
+      var lR = await zohoApi('GET', 'Lodges?fields=' + lodgeFields + '&per_page=200&page=' + lPage);
+      var lData = (lR && lR.data) || [];
+      allLodges = allLodges.concat(lData);
+      lMore = lR && lR.info && lR.info.more_records;
+      lPage++;
+    }
+
+    // Build email→lodge map (exact address) and domain→lodge map (fallback)
+    var emailToLodge = {};
+    var domainToLodges = {};
+    for (var li = 0; li < allLodges.length; li++) {
+      var lodge = allLodges[li];
+      var emailFields = [lodge.Email, lodge.Preferred_Email, lodge.Email_Reservations_2, lodge.Email_Accounts, lodge.Secondary_Email];
+      for (var ef = 0; ef < emailFields.length; ef++) {
+        var ev = emailFields[ef];
+        if (!ev || typeof ev !== 'string') continue;
+        var addr = ev.trim().toLowerCase();
+        if (!addr) continue;
+        emailToLodge[addr] = lodge;
+        var at = addr.lastIndexOf('@');
+        if (at > -1) {
+          var dom = addr.substring(at + 1);
+          if (!domainToLodges[dom]) domainToLodges[dom] = [];
+          domainToLodges[dom].push(lodge);
+        }
+      }
+    }
+
+    // ─── Step 4: Fetch Zoho Lodge_Bookings (for booking match) ───
+    var bookingFields = 'Name,Lodge_Name,Lodge,RDS_Reference,Status,Check_in_Date,Check_out_Date,Tour,id';
+    var allBookings = [];
+    var bPage = 1;
+    var bMore = true;
+    while (bMore && bPage <= 5) {
+      var bR = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200&page=' + bPage);
+      var bData = (bR && bR.data) || [];
+      allBookings = allBookings.concat(bData);
+      bMore = bR && bR.info && bR.info.more_records;
+      bPage++;
+    }
+
+    // Index bookings by lodge id
+    var bookingsByLodgeId = {};
+    for (var bi2 = 0; bi2 < allBookings.length; bi2++) {
+      var bkg = allBookings[bi2];
+      var lodgeId = null;
+      if (bkg.Lodge && typeof bkg.Lodge === 'object' && bkg.Lodge.id) lodgeId = bkg.Lodge.id;
+      if (!lodgeId) continue;
+      if (!bookingsByLodgeId[lodgeId]) bookingsByLodgeId[lodgeId] = [];
+      bookingsByLodgeId[lodgeId].push(bkg);
+    }
+
+    // Index bookings by RDS reference (loose — also builds {booking name: bookings})
+    var bookingByRds = {};
+    for (var bi3 = 0; bi3 < allBookings.length; bi3++) {
+      var b2 = allBookings[bi3];
+      if (b2.RDS_Reference) bookingByRds[b2.RDS_Reference.trim().toLowerCase()] = b2;
+    }
+
+    // ─── Step 5: Fetch existing blob inventory so we don't overwrite ───
+    var existingBlobKeys = {};
+    var blobPageCursor = null;
+    var blobPages = 0;
+    while (blobPages < 5) {
+      if (Date.now() - t0 > 8000) break;
+      var blobRes = await list({ prefix: 'emails/', limit: 1000, cursor: blobPageCursor });
+      for (var bx = 0; bx < blobRes.blobs.length; bx++) {
+        existingBlobKeys[blobRes.blobs[bx].pathname] = true;
+      }
+      blobPageCursor = blobRes.cursor;
+      blobPages++;
+      if (!blobPageCursor) break;
+    }
+
+    // ─── Step 6: Fetch each message, classify, route ───
+    var counts = {
+      total: allMsgIds.length,
+      processed: 0,
+      matched_rds: 0,
+      matched_lodge_date: 0,
+      matched_tour_bucket: 0,
+      guest_skipped: 0,
+      unmatched: 0,
+      already_exists: 0,
+      errors: 0,
+    };
+    var routing = [];
+    var wrote = 0;
+    var writeErrors = [];
+    var batchSize = 15;
+    var hitTimeout = false;
+
+    for (var bi4 = 0; bi4 < allMsgIds.length; bi4 += batchSize) {
+      if (Date.now() - t0 > deadlineMs) { hitTimeout = true; break; }
+      var batch = allMsgIds.slice(bi4, bi4 + batchSize);
+      var msgs = await Promise.all(batch.map(function(m) {
+        return gmailApi(token, 'messages/' + m.id + '?format=full')
+          .then(function(r) { return { ok: true, id: m.id, msg: r }; })
+          .catch(function(e) { return { ok: false, id: m.id, err: e.message }; });
+      }));
+
+      for (var mi = 0; mi < msgs.length; mi++) {
+        counts.processed++;
+        if (!msgs[mi].ok) { counts.errors++; continue; }
+
+        var gmailId = msgs[mi].id;
+        var msg = msgs[mi].msg;
+        var hdrs = (msg.payload && msg.payload.headers) || [];
+        var subj = getHeader(hdrs, 'Subject');
+        var from = getHeader(hdrs, 'From');
+        var to = getHeader(hdrs, 'To');
+        var date = getHeader(hdrs, 'Date');
+        var body = extractBody(msg.payload);
+
+        var decision = { gmail_id: gmailId, subject: subj, from: from, to: to, date: date };
+
+        // Guest heuristic FIRST — skip entirely
+        if (isGuestEmail(from, to, subj)) {
+          decision.status = 'skipped_guest';
+          counts.guest_skipped++;
+          routing.push(decision);
+          continue;
+        }
+
+        // Tier 1: RDS reference in subject
+        var ref = extractRdsRef(subj) || extractRdsRef(body);
+        if (ref) {
+          var refLower = ref.trim().toLowerCase();
+          var bkByRef = bookingByRds[refLower];
+          if (bkByRef) {
+            decision.status = 'routed';
+            decision.match_method = 'rds_reference';
+            decision.target_booking_id = bkByRef.id;
+            decision.target_tour = (bkByRef.Tour && bkByRef.Tour.name) || '';
+            decision.target_lodge = (bkByRef.Lodge_Name && bkByRef.Lodge_Name.name) || bkByRef.Lodge_Name || bkByRef.Name;
+            counts.matched_rds++;
+            routing.push(decision);
+            if (!dry) await writeRecord(decision, { from: from, to: to, subject: subj, date: date, body: body }, existingBlobKeys, counts, writeErrors);
+            continue;
+          }
+        }
+
+        // Tier 2+3: Lodge email match
+        var fromAddr = parseEmailAddress(from);
+        var toAddr = parseEmailAddress(to);
+        var fromDom = parseDomain(from);
+        var toDom = parseDomain(to);
+
+        // Try exact address first (more reliable), then domain
+        var matchedLodge = emailToLodge[fromAddr] || emailToLodge[toAddr];
+        if (!matchedLodge) {
+          var fromLodges = domainToLodges[fromDom] || [];
+          var toLodges = domainToLodges[toDom] || [];
+          // If the domain uniquely identifies a lodge, use it
+          var allDomLodges = fromLodges.concat(toLodges);
+          var uniqueLodgeIds = {};
+          for (var dl = 0; dl < allDomLodges.length; dl++) uniqueLodgeIds[allDomLodges[dl].id] = allDomLodges[dl];
+          var uniqueList = Object.keys(uniqueLodgeIds).map(function(k) { return uniqueLodgeIds[k]; });
+          if (uniqueList.length === 1) matchedLodge = uniqueList[0];
+          // If more than one, leave unmatched — ambiguous
+        }
+
+        if (matchedLodge) {
+          var lodgeBookings = bookingsByLodgeId[matchedLodge.id] || [];
+          // Try date match on this lodge's bookings
+          var emailDates = extractIsoDates(subj + '\n' + body);
+          var dateMatch = null;
+          for (var lb = 0; lb < lodgeBookings.length; lb++) {
+            if (lodgeBookings[lb].Check_in_Date && emailDates.has(lodgeBookings[lb].Check_in_Date)) {
+              dateMatch = lodgeBookings[lb];
+              break;
+            }
+          }
+
+          if (dateMatch) {
+            decision.status = 'routed';
+            decision.match_method = 'lodge_email_date';
+            decision.target_booking_id = dateMatch.id;
+            decision.target_tour = (dateMatch.Tour && dateMatch.Tour.name) || '';
+            decision.target_lodge = matchedLodge.Name;
+            decision.target_check_in = dateMatch.Check_in_Date;
+            counts.matched_lodge_date++;
+            routing.push(decision);
+            if (!dry) await writeRecord(decision, { from: from, to: to, subject: subj, date: date, body: body }, existingBlobKeys, counts, writeErrors);
+            continue;
+          }
+
+          // No date match — but we know the lodge, so tour bucket for that lodge's tour
+          if (lodgeBookings.length > 0) {
+            // Most common tour for this lodge
+            var tourCounts = {};
+            for (var tc = 0; tc < lodgeBookings.length; tc++) {
+              var tn = (lodgeBookings[tc].Tour && lodgeBookings[tc].Tour.name) || '';
+              if (!tn) continue;
+              tourCounts[tn] = (tourCounts[tn] || 0) + 1;
+            }
+            var topTour = null;
+            var topCount = 0;
+            for (var tk in tourCounts) {
+              if (tourCounts[tk] > topCount) { topTour = tk; topCount = tourCounts[tk]; }
+            }
+            if (topTour) {
+              decision.status = 'routed';
+              decision.match_method = 'tour_bucket_via_lodge';
+              decision.target_tour = topTour;
+              decision.target_lodge = matchedLodge.Name;
+              decision.target_booking_id = null;
+              counts.matched_tour_bucket++;
+              routing.push(decision);
+              if (!dry) await writeRecord(decision, { from: from, to: to, subject: subj, date: date, body: body }, existingBlobKeys, counts, writeErrors);
+              continue;
+            }
+          }
+        }
+
+        // Tier 5: Unmatched
+        decision.status = 'unmatched';
+        counts.unmatched++;
+        routing.push(decision);
+        if (!dry) await writeRecord(decision, { from: from, to: to, subject: subj, date: date, body: body }, existingBlobKeys, counts, writeErrors);
+      }
+    }
+
+    res.status(200).json({
+      mode: dry ? 'dry-run' : 'live',
+      elapsed_ms: Date.now() - t0,
+      hit_timeout: hitTimeout,
+      window_days: days,
+      counts: counts,
+      wrote: counts.wrote || 0,
+      write_errors: writeErrors,
+      routing_sample: routing.slice(0, 60),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message, stack: e.stack, elapsed_ms: Date.now() - t0 });
+  }
+}
+
+// Helper: write a blob record if path is free; otherwise skip.
+async function writeRecord(decision, msgFields, existingBlobKeys, counts, writeErrors) {
+  var sId = safeId(decision.gmail_id);
+  var path;
+  if (decision.target_booking_id) {
+    path = 'emails/booking/' + decision.target_booking_id + '/' + sId + '.json';
+  } else if (decision.match_method === 'tour_bucket_via_lodge' && decision.target_tour) {
+    path = 'emails/tour-bucket/' + safeTourKey(decision.target_tour) + '/' + sId + '.json';
+  } else {
+    path = 'emails/unmatched/' + sId + '.json';
+  }
+
+  if (existingBlobKeys[path]) {
+    counts.already_exists++;
+    return;
+  }
+
+  var fromHdr = msgFields.from || '';
+  var isOutbound = fromHdr.toLowerCase().indexOf('bookings@ridedownsouth.com') > -1 ||
+                   fromHdr.toLowerCase().indexOf('@ridedownsouth.com') > -1;
+  var flags = [];
+  if (decision.match_method === 'tour_bucket_via_lodge') flags.push({ tour_bucket: true, matched_lodge: decision.target_lodge });
+  if (decision.match_method === 'rds_reference') flags.push({ backfill: true, via: 'rds_reference' });
+  if (decision.match_method === 'lodge_email_date') flags.push({ backfill: true, via: 'lodge_email_date' });
+
+  var record = {
+    id: sId,
+    message_id: decision.gmail_id,
+    gmail_message_id: decision.gmail_id,
+    type: isOutbound ? 'lodge_outbound' : 'lodge_inbound',
+    direction: isOutbound ? 'outbound' : 'inbound',
+    lodge_id: null,
+    booking_id: decision.target_booking_id || null,
+    tour_name: decision.target_tour || null,
+    from: msgFields.from,
+    to: msgFields.to,
+    subject: msgFields.subject,
+    body: msgFields.body,
+    date: msgFields.date,
+    attachments: [],
+    ai_summary: null,
+    ai_extractions: null,
+    ai_flags: flags,
+    processed_at: new Date().toISOString(),
+    _reindexed: true,
+    _reindex_pass: 'unlabelled_backfill',
+    _match_method: decision.match_method || null,
+  };
+
+  try {
+    await put(path, JSON.stringify(record), {
+      access: 'public', contentType: 'application/json', addRandomSuffix: false,
+    });
+    existingBlobKeys[path] = true;
+    counts.wrote = (counts.wrote || 0) + 1;
+  } catch (e) {
+    writeErrors.push({ gmail_id: decision.gmail_id, error: e.message });
+  }
+}
