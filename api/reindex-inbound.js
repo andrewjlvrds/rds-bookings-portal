@@ -196,12 +196,14 @@ export default async function handler(req, res) {
     var inboundBlobs = [];
     var outboundBlobs = [];
     var unmatchedBlobs = [];
+    var tourBucketBlobs = [];
     for (var i = 0; i < allBlobs.length; i++) {
       var b = allBlobs[i];
       try {
         var rr = await fetch(b.url);
         var em = await rr.json();
         if (b.pathname.indexOf('emails/unmatched/') === 0) unmatchedBlobs.push({ blob: b });
+        else if (b.pathname.indexOf('emails/tour-bucket/') === 0) tourBucketBlobs.push({ blob: b });
         else if (em.direction === 'outbound') outboundBlobs.push({ blob: b });
         else inboundBlobs.push({ blob: b });
       } catch (e) {
@@ -255,7 +257,7 @@ export default async function handler(req, res) {
 
     // ────────── Step 4: Fetch messages under each mapped label ──────────
     var routing = [];
-    var methodCounts = { routed: 0, routed_swap: 0, routed_anchor: 0, unmatched_no_booking: 0, unmatched_ambiguous: 0, error: 0 };
+    var methodCounts = { routed: 0, routed_swap: 0, routed_tour_bucket: 0, unmatched_no_booking: 0, unmatched_ambiguous: 0, error: 0 };
 
     for (var li = 0; li < mappedLabels.length; li++) {
       var lbl = mappedLabels[li];
@@ -382,28 +384,14 @@ export default async function handler(req, res) {
             continue;
           }
 
-          // ─── TOUR-ANCHOR FALLBACK ───
-          // No lodge match, no date match — but the label still tells us the
-          // TOUR. Attach to the first booking of that tour (by check-in date)
-          // so the email is findable on the tour. Flagged as 'tour_anchor' with
-          // the original lodge so UI can badge it as untagged/misrouted.
-          var anchorTarget = null;
-          var anchorTourBookings = [];
-          for (var tn3 = 0; tn3 < lbl.tourNames.length; tn3++) {
-            anchorTourBookings = anchorTourBookings.concat(bookingsByTour[lbl.tourNames[tn3]] || []);
-          }
-          if (anchorTourBookings.length > 0) {
-            // Sort by check-in date asc, take the first
-            anchorTourBookings.sort(function(a, b) {
-              var da = a.Check_in_Date || '9999-12-31';
-              var db = b.Check_in_Date || '9999-12-31';
-              return da < db ? -1 : da > db ? 1 : 0;
-            });
-            anchorTarget = anchorTourBookings[0];
-          }
-
-          if (anchorTarget) {
-            methodCounts.routed_anchor++;
+          // ─── TOUR BUCKET FALLBACK ───
+          // No lodge match, no date match. The label tells us which tour, so
+          // route to a tour-level bucket (NOT attached to any specific booking).
+          // Helen will find these in a "tour correspondence" UI section — kept
+          // clearly separate from per-booking email threads to avoid noise.
+          var tourBucketName = (lbl.tourNames && lbl.tourNames[0]) || null;
+          if (tourBucketName) {
+            methodCounts.routed_tour_bucket++;
             routing.push({
               gmail_id: mid,
               label: lbl.name,
@@ -411,12 +399,10 @@ export default async function handler(req, res) {
               subject: subj,
               date: date,
               status: 'routed',
-              match_method: 'tour_anchor',
+              match_method: 'tour_bucket',
               original_lodge: lbl.lodgeSegment,
-              target_booking_id: anchorTarget.id,
-              target_tour: (anchorTarget.Tour && anchorTarget.Tour.name) || anchorTarget.Tour || '',
-              target_lodge: (anchorTarget.Lodge_Name && anchorTarget.Lodge_Name.name) || anchorTarget.Lodge_Name || anchorTarget.Name,
-              target_check_in: anchorTarget.Check_in_Date,
+              target_tour: tourBucketName,
+              target_booking_id: null, // no booking — goes to tour bucket path
               email_dates_found: emailDates.size > 0 ? Array.from(emailDates) : [],
               _msg: dry ? null : { subject: subj, from: from, to: to, date: date, body: body, attachments: atts },
             });
@@ -424,9 +410,8 @@ export default async function handler(req, res) {
           }
 
           // ─── TRUE ORPHAN ───
-          // No tour bookings at all in Zoho. Only possible if we're scanning a
-          // label whose tour has 0 Lodge_Bookings (e.g. tour deleted / never
-          // migrated). Goes to unmatched bucket.
+          // Label wasn't even in the tour mapping (shouldn't normally happen —
+          // parseLabelPath already filters unknown labels out).
           methodCounts.unmatched_no_booking++;
           routing.push({
             gmail_id: mid,
@@ -452,6 +437,7 @@ export default async function handler(req, res) {
     // ────────── Step 5: Live pass (delete + write) ──────────
     var deletedInbound = 0;
     var deletedUnmatched = 0;
+    var deletedTourBucket = 0;
     var deleteErrors = [];
     var wrote = 0;
     var writeErrors = [];
@@ -467,6 +453,11 @@ export default async function handler(req, res) {
         try { await del(unmatchedBlobs[du].blob.url); deletedUnmatched++; }
         catch (e) { deleteErrors.push({ path: unmatchedBlobs[du].blob.pathname, error: e.message }); }
       }
+      // Delete existing tour-bucket blobs (will be recreated this pass)
+      for (var dtb = 0; dtb < tourBucketBlobs.length; dtb++) {
+        try { await del(tourBucketBlobs[dtb].blob.url); deletedTourBucket++; }
+        catch (e) { deleteErrors.push({ path: tourBucketBlobs[dtb].blob.pathname, error: e.message }); }
+      }
 
       // Write each routed message
       for (var wi = 0; wi < routing.length; wi++) {
@@ -474,11 +465,11 @@ export default async function handler(req, res) {
         if (!rt._msg || rt.error) continue;
         var safeId = rt.gmail_id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
         var isSwap = rt.match_method === 'lodge_swap';
-        var isAnchor = rt.match_method === 'tour_anchor';
+        var isTourBucket = rt.match_method === 'tour_bucket';
         var flags = [];
         if (isSwap) flags.push({ lodge_swap: true, original_lodge: rt.original_lodge });
-        if (isAnchor) flags.push({ tour_anchor: true, original_lodge: rt.original_lodge });
-        if (!rt.target_booking_id) flags.push({ unmatched_reason: 'no_zoho_booking_for_label', label: rt.label });
+        if (isTourBucket) flags.push({ tour_bucket: true, original_lodge: rt.original_lodge });
+        if (!rt.target_booking_id && !isTourBucket) flags.push({ unmatched_reason: 'no_zoho_booking_for_label', label: rt.label });
         var record = {
           id: safeId,
           message_id: rt.gmail_id,
@@ -487,6 +478,7 @@ export default async function handler(req, res) {
           direction: 'inbound',
           lodge_id: null,
           booking_id: rt.target_booking_id || null,
+          tour_name: rt.target_tour || null,
           from: rt._msg.from,
           to: rt._msg.to,
           subject: rt._msg.subject,
@@ -502,9 +494,20 @@ export default async function handler(req, res) {
           _match_method: rt.match_method || null,
           _original_lodge: rt.original_lodge || null,
         };
-        var path = rt.target_booking_id
-          ? ('emails/booking/' + rt.target_booking_id + '/' + safeId + '.json')
-          : ('emails/unmatched/' + safeId + '.json');
+        // Decide blob path:
+        //   1. Direct booking match / swap match → emails/booking/{id}/
+        //   2. Tour bucket fallback             → emails/tour-bucket/{tour}/
+        //   3. Truly unmatched                  → emails/unmatched/
+        var path;
+        if (rt.target_booking_id) {
+          path = 'emails/booking/' + rt.target_booking_id + '/' + safeId + '.json';
+        } else if (isTourBucket && rt.target_tour) {
+          // Use a safe tour key — replace non-alphanumerics with underscores
+          var safeTour = rt.target_tour.replace(/[^a-zA-Z0-9]+/g, '_');
+          path = 'emails/tour-bucket/' + safeTour + '/' + safeId + '.json';
+        } else {
+          path = 'emails/unmatched/' + safeId + '.json';
+        }
         try {
           await put(path, JSON.stringify(record), {
             access: 'public', contentType: 'application/json', addRandomSuffix: false,
@@ -540,6 +543,7 @@ export default async function handler(req, res) {
         inbound_existing: inboundBlobs.length,
         outbound_preserved: outboundBlobs.length,
         unmatched_existing: unmatchedBlobs.length,
+        tour_bucket_existing: tourBucketBlobs.length,
       },
       gmail: {
         mapped_labels_count: mappedLabels.length,
@@ -551,7 +555,7 @@ export default async function handler(req, res) {
         messages_processed: routing.length,
         routed: methodCounts.routed,
         routed_swap: methodCounts.routed_swap,
-        routed_anchor: methodCounts.routed_anchor,
+        routed_tour_bucket: methodCounts.routed_tour_bucket,
         unmatched_no_booking: methodCounts.unmatched_no_booking,
         errors: methodCounts.error,
       },
@@ -560,6 +564,7 @@ export default async function handler(req, res) {
       live_actions: dry ? null : {
         deleted_inbound: deletedInbound,
         deleted_unmatched: deletedUnmatched,
+        deleted_tour_bucket: deletedTourBucket,
         wrote: wrote,
         delete_errors: deleteErrors,
         write_errors: writeErrors,
