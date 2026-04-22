@@ -10,6 +10,74 @@ function extractRdsRef(text) {
   return match ? match[1] : null;
 }
 
+// Extract all dates from text and normalise each to YYYY-MM-DD (ISO).
+// Handles: "26 April 2026", "April 26, 2026", "26/04/2026", "2026-04-26".
+// Returns a Set of unique ISO date strings.
+function extractIsoDates(text) {
+  if (!text) return new Set();
+  var out = new Set();
+  var MONTH = {
+    jan:1,january:1, feb:2,february:2, mar:3,march:3, apr:4,april:4,
+    may:5, jun:6,june:6, jul:7,july:7, aug:8,august:8,
+    sep:9,sept:9,september:9, oct:10,october:10, nov:11,november:11, dec:12,december:12
+  };
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function push(y, m, d) {
+    if (y && m && d && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      out.add(y + '-' + pad(m) + '-' + pad(d));
+    }
+  }
+
+  // "26 April 2026" / "26 Apr 26" (require 4-digit year for safety)
+  var re1 = /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+(20\d{2})\b/gi;
+  var m;
+  while ((m = re1.exec(text)) !== null) {
+    push(parseInt(m[3], 10), MONTH[m[2].toLowerCase()], parseInt(m[1], 10));
+  }
+
+  // "April 26, 2026" / "Apr 26 2026"
+  var re2 = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2}),?\s+(20\d{2})\b/gi;
+  while ((m = re2.exec(text)) !== null) {
+    push(parseInt(m[3], 10), MONTH[m[1].toLowerCase()], parseInt(m[2], 10));
+  }
+
+  // "26/04/2026" or "26-04-2026" (DD/MM/YYYY — SA/UK convention — what lodges use)
+  var re3 = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})\b/g;
+  while ((m = re3.exec(text)) !== null) {
+    push(parseInt(m[3], 10), parseInt(m[2], 10), parseInt(m[1], 10));
+  }
+
+  // "2026-04-26" (ISO)
+  var re4 = /\b(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/g;
+  while ((m = re4.exec(text)) !== null) {
+    push(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
+  }
+
+  return out;
+}
+
+// Count how many dates from an email overlap with a booking's check-in /
+// check-out window (exact match on either end, or ±1 day tolerance for
+// checkout off-by-one quirks).
+function dateMatchScore(emailDates, checkIn, checkOut) {
+  if (!emailDates || emailDates.size === 0) return 0;
+  var score = 0;
+  function nearby(iso, target) {
+    if (!target) return false;
+    if (iso === target) return true;
+    // ±1 day tolerance
+    var d = new Date(iso); var t = new Date(target);
+    if (isNaN(d) || isNaN(t)) return false;
+    var diff = Math.abs(d - t) / 86400000;
+    return diff <= 1;
+  }
+  emailDates.forEach(function(iso) {
+    if (nearby(iso, checkIn)) score += 2;      // check-in match = strong
+    else if (nearby(iso, checkOut)) score += 1; // check-out = weaker
+  });
+  return score;
+}
+
 // Decode base64url string
 function decodeBase64Url(str) {
   if (!str) return '';
@@ -239,10 +307,22 @@ export default async function(req, res) {
       return res.status(200).json({ success: true, checked: 0, stored: 0, message: 'No new messages' });
     }
 
-    // Fetch all bookings with Enquiry Sent or later status to match against
+    // Fetch all bookings with Enquiry Sent or later status to match against.
+    // Paginate — per_page=200 is Zoho's max, and we may have more than 200
+    // total bookings so the first page alone isn't safe.
     var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Check_out_Date,Nights,Lodge,Tour,id,Deposit_Amount,Second_Payment_Amount,Third_Payment_Amount,Fourth_Payment_Amount,Deposit_Paid_Date,nd_Payment_Paid_Date,rd_Payment_Paid_Date,th_Payment_Paid_Date';
-    var bookingsResult = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200');
-    var allBookings = (bookingsResult && bookingsResult.data) || [];
+    var allBookings = [];
+    var bkPage = 1;
+    var bkHasMore = true;
+    while (bkHasMore && bkPage <= 5) {
+      var bkResult = await zohoApi('GET',
+        'Lodge_Bookings?fields=' + bookingFields + '&per_page=200&page=' + bkPage
+      );
+      var bkData = (bkResult && bkResult.data) || [];
+      allBookings = allBookings.concat(bkData);
+      bkHasMore = bkResult && bkResult.info && bkResult.info.more_records;
+      bkPage++;
+    }
 
     // Build lookup maps
     var refMap = {};  // RDS reference → booking
@@ -312,51 +392,60 @@ export default async function(req, res) {
           }
         }
 
-        // 3. Match by lodge name in subject or from address
+        // 3. Match by lodge name + check-in date.
+        //    Extract all dates from the email (subject + body). For each
+        //    candidate booking at the matching lodge, score how many email
+        //    dates line up with that booking's check-in/check-out window.
+        //    Pick the highest-scoring candidate. If nothing scores > 0,
+        //    REFUSE to match rather than guessing — better unmatched than
+        //    wrongly attributed.
         if (!matchedBooking) {
           var subjectLower = (subject || '').toLowerCase();
           var fromLower = (from || '').toLowerCase();
           var lodgeNames = Object.keys(nameMap);
 
-          // Extract dates from subject and body for matching
-          var emailText = (subject || '') + ' ' + (body || '').substring(0, 2000);
-          // Match various date formats: "May 29, 2026", "29/05/2026", "2026-05-29", "29 May 2026"
-          var dateMatches = emailText.match(/\b(20\d{2}[-\/]\d{1,2}[-\/]\d{1,2}|\d{1,2}[-\/]\d{1,2}[-\/]20\d{2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+20\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{1,2},?\s+20\d{2})\b/gi) || [];
-          var emailYear = '';
-          if (dateMatches.length > 0) {
-            var yearMatch = dateMatches[0].match(/20\d{2}/);
-            if (yearMatch) emailYear = yearMatch[0];
-          }
+          // Limit body scan — enough to catch quoted booking details
+          var emailText = (subject || '') + '\n' + (body || '').substring(0, 8000);
+          var emailDates = extractIsoDates(emailText);
 
           for (var ln = 0; ln < lodgeNames.length; ln++) {
             var name = lodgeNames[ln];
-            if (name.length > 3 && (subjectLower.indexOf(name) > -1 || fromLower.indexOf(name) > -1)) {
-              var candidates = nameMap[name].filter(function(b) {
-                return b.Status === 'Enquiry Sent' || b.Status === 'Ready to Send' ||
-                       b.Status === 'Availability Confirmed' || b.Status === 'Proforma Received' ||
-                       b.Status === 'Available' || b.Status === 'Partially Available';
-              });
-              if (candidates.length === 0) continue;
+            if (name.length <= 3) continue;
+            if (subjectLower.indexOf(name) === -1 && fromLower.indexOf(name) === -1) continue;
 
-              if (candidates.length === 1) {
-                matchedBooking = candidates[0];
-                matchMethod = 'lodge_name';
-              } else {
-                // Multiple bookings for same lodge — match by year/date from email
-                var best = candidates[0];
-                if (emailYear) {
-                  for (var ci = 0; ci < candidates.length; ci++) {
-                    var ciDate = candidates[ci].Check_in_Date || '';
-                    if (ciDate.indexOf(emailYear) > -1) {
-                      best = candidates[ci];
-                      break;
-                    }
-                  }
-                }
-                matchedBooking = best;
-                matchMethod = 'lodge_name_date';
+            // All bookings at this lodge, not just "active" ones — a proforma
+            // reply for a confirmed booking still needs to attach here.
+            var candidates = nameMap[name];
+            if (!candidates || candidates.length === 0) continue;
+
+            if (candidates.length === 1) {
+              // Single booking at this lodge — safe to attach without date check
+              matchedBooking = candidates[0];
+              matchMethod = 'lodge_name_unique';
+              break;
+            }
+
+            // Multiple bookings at this lodge: score each by date overlap
+            var best = null;
+            var bestScore = 0;
+            for (var ci = 0; ci < candidates.length; ci++) {
+              var c = candidates[ci];
+              var score = dateMatchScore(emailDates, c.Check_in_Date, c.Check_out_Date);
+              if (score > bestScore) {
+                bestScore = score;
+                best = c;
               }
             }
+
+            if (best && bestScore > 0) {
+              matchedBooking = best;
+              matchMethod = 'lodge_name_date_score_' + bestScore;
+              break;
+            }
+
+            // Multiple candidates but no confident date match — do NOT guess
+            matchMethod = 'lodge_name_ambiguous_no_date_match';
+            // leave matchedBooking null, fall through to noMatch
           }
         }
 
