@@ -10,6 +10,7 @@ export async function storeEmail(emailData) {
     id: safeId,
     message_id: messageId,
     gmail_message_id: emailData.gmail_message_id || messageId,
+    gmail_thread_id: emailData.gmail_thread_id || null,
     type: emailData.type || 'lodge_inbound',
     direction: emailData.direction || 'inbound',
     lodge_id: lodgeId || null,
@@ -23,6 +24,7 @@ export async function storeEmail(emailData) {
     ai_summary: emailData.ai_summary || null,
     ai_extractions: emailData.ai_extractions || null,
     ai_flags: emailData.ai_flags || [],
+    match_method: emailData.match_method || null,
     processed_at: new Date().toISOString(),
   };
 
@@ -50,5 +52,67 @@ export async function isEmailStored(bookingId, messageId) {
     return result.blobs && result.blobs.length > 0;
   } catch(e) {
     return false;
+  }
+}
+
+// Strip RFC Message-ID angle brackets and whitespace for blob-safe filename.
+//   "<20260422.x@ridedownsouth.com>"  →  "20260422.x@ridedownsouth.com"
+//   "  <foo@bar>  "                   →  "foo@bar"
+// Then alphanumeric-only for the filesystem path.
+export function normalizeMessageId(raw) {
+  if (!raw) return '';
+  var trimmed = String(raw).trim().replace(/^</, '').replace(/>$/, '').trim();
+  return trimmed;
+}
+export function safeMessageIdKey(raw) {
+  var norm = normalizeMessageId(raw);
+  return norm.replace(/[^a-zA-Z0-9_.\-@]/g, '_').substring(0, 120);
+}
+
+// Write a sent-index entry so we can match future inbound replies by the
+// In-Reply-To / References header that contains this Message-ID.
+//
+//   emails/sent-index/{safeKey}.json
+//   {
+//     rfc_message_id, gmail_message_id, booking_ids[], tour_name,
+//     lodge_name, to, subject, sent_at
+//   }
+//
+// Called from send-enquiry.js after a successful Gmail send.
+export async function storeSentIndex(entry) {
+  var rfc = entry.rfc_message_id;
+  if (!rfc) throw new Error('storeSentIndex: rfc_message_id required');
+  var key = safeMessageIdKey(rfc);
+  if (!key) throw new Error('storeSentIndex: message id produced empty key');
+  var record = {
+    rfc_message_id: normalizeMessageId(rfc),
+    gmail_message_id: entry.gmail_message_id || null,
+    booking_ids: Array.isArray(entry.booking_ids) ? entry.booking_ids : [],
+    tour_name: entry.tour_name || null,
+    lodge_name: entry.lodge_name || null,
+    to: entry.to || null,
+    subject: entry.subject || null,
+    sent_at: entry.sent_at || new Date().toISOString(),
+  };
+  await put('emails/sent-index/' + key + '.json',
+    JSON.stringify(record),
+    { access: 'public', contentType: 'application/json', addRandomSuffix: false });
+  return record;
+}
+
+// Look up a sent-index entry by any Message-ID (from In-Reply-To or References).
+// Returns null if not found.
+export async function lookupSentIndex(rfcMessageId) {
+  var key = safeMessageIdKey(rfcMessageId);
+  if (!key) return null;
+  try {
+    var result = await list({ prefix: 'emails/sent-index/' + key + '.json', limit: 1 });
+    if (!result.blobs || result.blobs.length === 0) return null;
+    var blob = result.blobs[0];
+    var rr = await fetch(blob.url);
+    if (!rr.ok) return null;
+    return await rr.json();
+  } catch(e) {
+    return null;
   }
 }

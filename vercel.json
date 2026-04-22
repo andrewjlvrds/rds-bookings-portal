@@ -23,6 +23,9 @@
     },
     "api/reindex-unlabelled.js": {
       "maxDuration": 60
+    },
+    "api/diag-reply-match-rate.js": {
+      "maxDuration": 60
     }
   }
 }

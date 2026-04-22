@@ -1,5 +1,5 @@
 import { getGmailToken, gmailApi, getOrCreateLabel, labelMessage, tourLabelName } from './_gmail.js';
-import { storeEmail, isEmailStored } from './_email-store.js';
+import { storeEmail, isEmailStored, lookupSentIndex, normalizeMessageId } from './_email-store.js';
 import { zohoApi } from './_zoho.js';
 import { parseEmail, extractionToZohoFields } from './_ai-parse.js';
 import {
@@ -263,9 +263,16 @@ export default async function(req, res) {
     var refMap = maps.refMap;
     var nameMap = maps.nameMap;
 
+    // Booking-by-id map, for Tier 0 (Message-ID header → booking)
+    var bookingsById = {};
+    for (var bid = 0; bid < allBookings.length; bid++) {
+      bookingsById[allBookings[bid].id] = allBookings[bid];
+    }
+
     var stored = 0;
     var skipped = 0;
     var noMatch = 0;
+    var tier0Hits = 0;
     var errors = [];
     var details = [];
 
@@ -291,7 +298,48 @@ export default async function(req, res) {
 
         // Try to match to a booking
         var body = extractBody(msg.payload);
-        var match = matchEmailToBooking(subject, body, from, refMap, nameMap);
+
+        // ─── Tier 0: RFC Message-ID header → sent-index ───
+        // If this inbound is a reply to an email we sent from the portal,
+        // its In-Reply-To (and/or References) header contains the Message-ID
+        // we generated. Look it up in emails/sent-index/ — if hit, we know
+        // exactly which booking(s) this belongs to with 100% certainty.
+        //
+        // No ambiguity, no lodge-name parsing, no date guessing. This is the
+        // reliable path for correspondence that originated in the portal.
+        var match = null;
+        var inReplyToHdr = getHeader(headers, 'In-Reply-To');
+        var referencesHdr = getHeader(headers, 'References');
+        var candidateIds = [];
+        if (inReplyToHdr) candidateIds.push(normalizeMessageId(inReplyToHdr));
+        if (referencesHdr) {
+          // References is a whitespace-separated list of Message-IDs
+          var refs = referencesHdr.split(/\s+/);
+          for (var rf = 0; rf < refs.length; rf++) {
+            var nn = normalizeMessageId(refs[rf]);
+            if (nn) candidateIds.push(nn);
+          }
+        }
+        for (var ci = 0; ci < candidateIds.length && !match; ci++) {
+          try {
+            var idx = await lookupSentIndex(candidateIds[ci]);
+            if (idx && idx.booking_ids && idx.booking_ids.length > 0) {
+              var bk0 = bookingsById[idx.booking_ids[0]];
+              if (bk0) {
+                match = { booking: bk0, method: 'message_id_header', all_booking_ids: idx.booking_ids };
+                tier0Hits++;
+                break;
+              }
+            }
+          } catch (e) {
+            // Lookup failure is non-fatal — fall through to existing matchers
+          }
+        }
+
+        // Fall back to the existing matcher (subject RDS ref, label, date...)
+        if (!match) {
+          match = matchEmailToBooking(subject, body, from, refMap, nameMap);
+        }
         var matchedBooking = match.booking;
         var matchMethod = match.method;
 
@@ -401,7 +449,44 @@ export default async function(req, res) {
           gmail_thread_id: threadId,
           gmail_message_id: msgId,
           attachments: attachmentsWithText,
+          match_method: matchMethod,
         });
+
+        // Multi-booking fan-out: when Tier 0 matched a sent-index entry that
+        // covered multiple bookings (one portal send → several bookings at the
+        // same lodge on consecutive nights), store the reply under each one
+        // so Helen sees the thread on every relevant booking.
+        if (match.all_booking_ids && match.all_booking_ids.length > 1) {
+          for (var abi = 0; abi < match.all_booking_ids.length; abi++) {
+            var otherId = match.all_booking_ids[abi];
+            if (otherId === bookingId) continue;
+            // Dedup guard — skip if we already stored this message under this booking
+            if (!refetch) {
+              var otherStored = await isEmailStored(otherId, msgId);
+              if (otherStored) continue;
+            }
+            try {
+              await storeEmail({
+                booking_id: otherId,
+                message_id: msgId,
+                type: 'lodge_reply',
+                direction: 'inbound',
+                email_from: from,
+                email_to: to,
+                email_subject: subject,
+                email_content: body,
+                email_date: date ? new Date(date).toISOString() : new Date().toISOString(),
+                gmail_thread_id: threadId,
+                gmail_message_id: msgId,
+                attachments: attachmentsWithText,
+                match_method: matchMethod,
+                ai_flags: [{ fanned_out_from: bookingId, via: 'message_id_header' }],
+              });
+            } catch (fanErr) {
+              console.error('Fan-out store failed for booking', otherId, fanErr.message);
+            }
+          }
+        }
 
         // Detect auto-replies — store but don't update booking status
         var isAutoReply = false;
@@ -529,7 +614,7 @@ export default async function(req, res) {
       await new Promise(function(r) { setTimeout(r, 200); });
     }
 
-    console.log('poll-gmail: checked', messages.length, 'stored', stored, 'skipped', skipped, 'no-match', noMatch);
+    console.log('poll-gmail: checked', messages.length, 'stored', stored, 'skipped', skipped, 'no-match', noMatch, 'tier0-hits', tier0Hits);
 
     res.status(200).json({
       success: true,
@@ -537,6 +622,7 @@ export default async function(req, res) {
       stored: stored,
       skipped: skipped,
       no_match: noMatch,
+      tier0_message_id_hits: tier0Hits,
       errors: errors.length > 0 ? errors : undefined,
       details: details.length > 0 ? details : undefined,
     });

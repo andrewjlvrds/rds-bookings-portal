@@ -1,23 +1,47 @@
 import { zohoApi } from './_zoho.js';
-import { storeEmail } from './_email-store.js';
+import { storeEmail, storeSentIndex } from './_email-store.js';
 import { getGmailToken, getOrCreateLabel, labelMessage, tourLabelName } from './_gmail.js';
 
-// Build RFC 2822 email and base64url encode it
-function buildRawEmail(from, to, subject, bodyText) {
-  var boundary = 'boundary_' + Date.now();
-  var raw = [
+// Build RFC 2822 email and base64url encode it.
+// Caller must provide messageId (RFC 5322 format, including angle brackets).
+// We set it explicitly so we know the exact value Gmail will use — this lets
+// us build a lookup index for when lodges reply (the reply's In-Reply-To
+// header will echo this ID back).
+//
+// inReplyTo (optional) — the RFC Message-ID we're replying to. When present,
+// we add In-Reply-To and References headers so the lodge's mail client
+// threads the reply correctly AND Gmail threads our outbound with the
+// original thread in our sent folder.
+function buildRawEmail(from, to, subject, bodyText, messageId, inReplyTo) {
+  var lines = [
     'From: ' + from,
     'To: ' + to,
     'Subject: ' + subject,
-    'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-    '',
-    bodyText,
-  ].join('\r\n');
+    'Message-ID: ' + messageId,
+  ];
+  if (inReplyTo) {
+    var normalized = String(inReplyTo).trim();
+    if (!/^</.test(normalized)) normalized = '<' + normalized + '>';
+    lines.push('In-Reply-To: ' + normalized);
+    lines.push('References: ' + normalized);
+  }
+  lines.push('MIME-Version: 1.0');
+  lines.push('Content-Type: text/plain; charset=UTF-8');
+  lines.push('');
+  lines.push(bodyText);
+  var raw = lines.join('\r\n');
 
   // Base64url encode
   return Buffer.from(raw).toString('base64')
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Generate an RFC 5322 compliant Message-ID with our domain.
+// Format: <timestamp.rand@ridedownsouth.com>
+function generateMessageId() {
+  var ts = Date.now().toString(36);
+  var rand = Math.random().toString(36).substring(2, 12);
+  return '<' + ts + '.' + rand + '@ridedownsouth.com>';
 }
 
 export default async function(req, res) {
@@ -39,6 +63,7 @@ export default async function(req, res) {
     var lodgeName = body.lodge_name || '';
     var tourName = body.tour_name || '';
     var isReply = body.is_reply || false;
+    var inReplyTo = body.in_reply_to_message_id || null;
 
     if (!to) return res.status(400).json({ error: 'No recipient email' });
     if (!emailBody) return res.status(400).json({ error: 'No email body' });
@@ -53,10 +78,11 @@ export default async function(req, res) {
     var emailError = null;
     var gmailMessageId = null;
     var gmailThreadId = null;
+    var rfcMessageId = generateMessageId();
 
     try {
       var token = await getGmailToken();
-      var raw = buildRawEmail(fromFull, to, subject, emailBody);
+      var raw = buildRawEmail(fromFull, to, subject, emailBody, rfcMessageId, inReplyTo);
 
       var gmailRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
         method: 'POST',
@@ -73,6 +99,52 @@ export default async function(req, res) {
         emailSent = true;
         gmailMessageId = gmailData.id;
         gmailThreadId = gmailData.threadId;
+
+        // Read back the actual Message-ID Gmail assigned.
+        // Gmail usually respects ours but sometimes rewrites it. If it did,
+        // we want to index the value that lodges will actually see and
+        // reply to — that's the header on the sent message, not ours.
+        var actualMessageId = rfcMessageId;
+        try {
+          var sentMsg = await fetch(
+            'https://gmail.googleapis.com/gmail/v1/users/me/messages/' + gmailMessageId + '?format=metadata&metadataHeaders=Message-ID',
+            { headers: { 'Authorization': 'Bearer ' + token } }
+          );
+          if (sentMsg.ok) {
+            var sentData = await sentMsg.json();
+            var sentHdrs = (sentData.payload && sentData.payload.headers) || [];
+            for (var shi = 0; shi < sentHdrs.length; shi++) {
+              if (sentHdrs[shi].name && sentHdrs[shi].name.toLowerCase() === 'message-id') {
+                actualMessageId = sentHdrs[shi].value;
+                break;
+              }
+            }
+          }
+        } catch (readBackErr) {
+          console.error('Failed to read back Message-ID:', readBackErr.message);
+          // Fall back to our generated one — usually correct
+        }
+
+        // Write sent-index BEFORE labelling — this is the critical one.
+        // If the label step fails, matching still works via Message-ID.
+        // If the sent-index write fails, we fall back to subject/label matching.
+        try {
+          await storeSentIndex({
+            rfc_message_id: actualMessageId,
+            gmail_message_id: gmailMessageId,
+            booking_ids: bookingIds,
+            tour_name: tourName,
+            lodge_name: lodgeName,
+            to: to,
+            subject: subject,
+            sent_at: new Date().toISOString(),
+          });
+          // Update outer var so response reflects what we actually indexed
+          rfcMessageId = actualMessageId;
+        } catch (sxErr) {
+          console.error('Failed to write sent-index:', sxErr.message);
+          // Non-fatal — email is already sent
+        }
 
         // Apply Gmail label for the tour/lodge
         if (tourName) {
@@ -161,6 +233,7 @@ export default async function(req, res) {
       email_error: emailError,
       gmail_message_id: gmailMessageId,
       gmail_thread_id: gmailThreadId,
+      rfc_message_id: rfcMessageId,
       bookings_updated: updatedCount,
       update_errors: updateErrors,
     });
