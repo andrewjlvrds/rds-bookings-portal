@@ -142,14 +142,32 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         }}>
           ← Back to {tour ? tour.name : 'itinerary'}
         </button>
-        <button
-          onClick={() => { if (onRefresh) onRefresh(); fetchEmails() }}
-          style={{
-            background: 'none', border: '0.5px solid var(--border-default)',
-            borderRadius: 4, fontSize: 11, padding: '3px 10px', cursor: 'pointer',
-            color: 'var(--text-muted)',
-          }}
-        >↻ Refresh</button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {booking.New_Reply === true && (
+            <button
+              onClick={() => handleSave('New_Reply', false)}
+              disabled={savingEdit}
+              title="Clear the new-reply flag on this booking"
+              style={{
+                background: '#FFEBEE', border: '0.5px solid #C62828',
+                borderRadius: 4, fontSize: 11, padding: '3px 10px', cursor: 'pointer',
+                color: '#C62828', fontWeight: 500,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C62828' }} />
+              {savingEdit ? 'Marking...' : 'Mark actioned'}
+            </button>
+          )}
+          <button
+            onClick={() => { if (onRefresh) onRefresh(); fetchEmails() }}
+            style={{
+              background: 'none', border: '0.5px solid var(--border-default)',
+              borderRadius: 4, fontSize: 11, padding: '3px 10px', cursor: 'pointer',
+              color: 'var(--text-muted)',
+            }}
+          >↻ Refresh</button>
+        </div>
       </div>
 
       {/* Header */}

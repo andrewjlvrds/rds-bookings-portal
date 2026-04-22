@@ -101,6 +101,20 @@ export default function TourCorrespondence({ tour, lodges, onRefresh }) {
   const inboundCount = rows.filter(r => r.direction !== 'outbound').length
   const outboundCount = rows.filter(r => r.direction === 'outbound').length
 
+  const handleMarkActioned = async (bookingId) => {
+    try {
+      const res = await fetch('/api/update-bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_ids: [bookingId], updates: { New_Reply: false } }),
+      })
+      if (!res.ok) throw new Error('Update failed (' + res.status + ')')
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      alert('Could not mark actioned: ' + err.message)
+    }
+  }
+
   const handlePoll = async () => {
     setPolling(true)
     setPollResult(null)
@@ -214,6 +228,7 @@ export default function TourCorrespondence({ tour, lodges, onRefresh }) {
               isLast={i === filtered.length - 1}
               expanded={expandedKey === r.key}
               onToggle={() => setExpandedKey(expandedKey === r.key ? null : r.key)}
+              onMarkActioned={handleMarkActioned}
             />
           ))}
         </div>
@@ -251,7 +266,7 @@ function FilterBtn({ label, count, active, onClick, accent }) {
   )
 }
 
-function EmailListRow({ row, isLast, expanded, onToggle }) {
+function EmailListRow({ row, isLast, expanded, onToggle, onMarkActioned }) {
   const isOutbound = row.direction === 'outbound'
   const firstLine = (row.body || '').split('\n').filter(l => l.trim())[0] || ''
   const preview = firstLine.length > 140 ? firstLine.substring(0, 140) + '...' : firstLine
@@ -331,6 +346,22 @@ function EmailListRow({ row, isLast, expanded, onToggle }) {
           }}>
             {row.body || '(no content)'}
           </div>
+          {row.hasNewReply && !isOutbound && onMarkActioned && (
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onMarkActioned(row.bookingId) }}
+                style={{
+                  background: '#FFEBEE', border: '0.5px solid #C62828',
+                  borderRadius: 4, fontSize: 11, padding: '4px 10px', cursor: 'pointer',
+                  color: '#C62828', fontWeight: 500,
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C62828' }} />
+                Mark actioned
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -472,7 +472,10 @@ export default async function(req, res) {
 
         // AI parse the email + attachment text to extract booking data (skip for auto-replies)
         var aiResult = null;
-        var zohoUpdates = { Last_Response_Date: new Date().toISOString().split('T')[0] };
+        var zohoUpdates = {
+          Last_Response_Date: new Date().toISOString().split('T')[0],
+          New_Reply: true,
+        };
 
         // Use fullContent (body + attachment text) for AI parsing — much richer data source
         var contentForParsing = fullContent || '';
