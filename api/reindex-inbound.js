@@ -35,7 +35,7 @@ var TOUR_MAPPING = {
   'INBOX/2026-03 (30 Mar - 18 Apr)': ['FoSA Mar 26'],
   'INBOX/2026-04 (24 Apr - 13 May)': ['FoSA Apr 26'],
   'INBOX/2026-05 (25 May - 6 June)': ['BoN May 26'],
-  'INBOX/2026-07 Great Lakes': ['GL 24 Jul 26', 'GL 14 Jul 26'],
+  'INBOX/2026-07 Great Lakes': ['GL Jul 26'],
   'INBOX/2026-09 Sept (9-28) Group B': ['FoSA 9 Sep 26'],
   'INBOX/2026-09 Sept (11-30) Group A': ['FoSA 11 Sep 26'],
   'INBOX/2026-10 October': ['FoSA Oct 26'],
