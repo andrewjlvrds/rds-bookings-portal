@@ -42,8 +42,10 @@ export default async function handler(req, res) {
       }
     }
 
+    // Chronological order (oldest first) — the sequence the conversation
+    // actually happened in real life. Inbound and outbound interleaved.
     emails.sort(function(a, b) {
-      return new Date(b.date || b.email_date || 0) - new Date(a.date || a.email_date || 0);
+      return new Date(a.date || a.email_date || 0) - new Date(b.date || b.email_date || 0);
     });
 
     res.status(200).json({

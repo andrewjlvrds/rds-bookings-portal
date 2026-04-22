@@ -257,7 +257,7 @@ export default async function handler(req, res) {
 
     // ────────── Step 4: Fetch messages under each mapped label ──────────
     var routing = [];
-    var methodCounts = { routed: 0, routed_swap: 0, routed_tour_bucket: 0, unmatched_no_booking: 0, unmatched_ambiguous: 0, error: 0 };
+    var methodCounts = { routed: 0, routed_swap: 0, routed_tour_bucket: 0, outbound_routed: 0, unmatched_no_booking: 0, unmatched_ambiguous: 0, error: 0 };
 
     for (var li = 0; li < mappedLabels.length; li++) {
       var lbl = mappedLabels[li];
@@ -305,20 +305,18 @@ export default async function handler(req, res) {
           var from = getHeader(headers, 'From');
           var to = getHeader(headers, 'To');
           var date = getHeader(headers, 'Date');
-          // We need body regardless now — swap-fallback needs to extract dates.
-          // In dry mode, extract body but don't attach it to the routing record
-          // (keeps response size manageable).
+          // We need body regardless — swap-fallback needs to extract dates,
+          // and outbound emails need their body stored for threading.
           var body = extractBody(msg.payload);
           var atts = dry ? [] : extractAttachments(msg.payload);
 
-          // Skip outbound (from us)
-          if (from.indexOf('bookings@ridedownsouth.com') > -1 || from.indexOf('@ridedownsouth.com') > -1) {
-            continue;
-          }
+          // Detect direction: outbound (from us) vs inbound (from lodges/external)
+          var isOutbound = (from.indexOf('bookings@ridedownsouth.com') > -1 || from.indexOf('@ridedownsouth.com') > -1);
 
           // ─── PRIMARY: direct lodge-name match ───
           if (matchedBookings.length > 0) {
-            methodCounts.routed++;
+            if (isOutbound) methodCounts.outbound_routed++;
+            else methodCounts.routed++;
             for (var mb = 0; mb < matchedBookings.length; mb++) {
               var bk = matchedBookings[mb];
               routing.push({
@@ -328,6 +326,7 @@ export default async function handler(req, res) {
                 subject: subj,
                 date: date,
                 status: 'routed',
+                direction: isOutbound ? 'outbound' : 'inbound',
                 match_method: 'direct_lodge_match',
                 target_booking_id: bk.id,
                 target_tour: (bk.Tour && bk.Tour.name) || bk.Tour || '',
@@ -365,7 +364,8 @@ export default async function handler(req, res) {
           }
 
           if (swapTarget) {
-            methodCounts.routed_swap++;
+            if (isOutbound) methodCounts.outbound_routed++;
+            else methodCounts.routed_swap++;
             routing.push({
               gmail_id: mid,
               label: lbl.name,
@@ -373,6 +373,7 @@ export default async function handler(req, res) {
               subject: subj,
               date: date,
               status: 'routed',
+              direction: isOutbound ? 'outbound' : 'inbound',
               match_method: 'lodge_swap',
               original_lodge: lbl.lodgeSegment,
               target_booking_id: swapTarget.id,
@@ -391,7 +392,8 @@ export default async function handler(req, res) {
           // clearly separate from per-booking email threads to avoid noise.
           var tourBucketName = (lbl.tourNames && lbl.tourNames[0]) || null;
           if (tourBucketName) {
-            methodCounts.routed_tour_bucket++;
+            if (isOutbound) methodCounts.outbound_routed++;
+            else methodCounts.routed_tour_bucket++;
             routing.push({
               gmail_id: mid,
               label: lbl.name,
@@ -399,6 +401,7 @@ export default async function handler(req, res) {
               subject: subj,
               date: date,
               status: 'routed',
+              direction: isOutbound ? 'outbound' : 'inbound',
               match_method: 'tour_bucket',
               original_lodge: lbl.lodgeSegment,
               target_tour: tourBucketName,
@@ -420,6 +423,7 @@ export default async function handler(req, res) {
             subject: subj,
             date: date,
             status: 'unmatched_no_booking',
+            direction: isOutbound ? 'outbound' : 'inbound',
             expected_tour: lbl.tourNames,
             expected_lodge: lbl.lodgeSegment,
             email_dates_found: emailDates.size > 0 ? Array.from(emailDates) : [],
@@ -436,6 +440,7 @@ export default async function handler(req, res) {
 
     // ────────── Step 5: Live pass (delete + write) ──────────
     var deletedInbound = 0;
+    var deletedOutbound = 0;
     var deletedUnmatched = 0;
     var deletedTourBucket = 0;
     var deleteErrors = [];
@@ -447,6 +452,12 @@ export default async function handler(req, res) {
       for (var di = 0; di < inboundBlobs.length; di++) {
         try { await del(inboundBlobs[di].blob.url); deletedInbound++; }
         catch (e) { deleteErrors.push({ path: inboundBlobs[di].blob.pathname, error: e.message }); }
+      }
+      // Delete existing outbound blobs — reindex rebuilds them from Gmail so
+      // each booking gets the full inbound+outbound thread chronologically.
+      for (var dob = 0; dob < outboundBlobs.length; dob++) {
+        try { await del(outboundBlobs[dob].blob.url); deletedOutbound++; }
+        catch (e) { deleteErrors.push({ path: outboundBlobs[dob].blob.pathname, error: e.message }); }
       }
       // Delete existing unmatched blobs (will be recreated if still unmatched)
       for (var du = 0; du < unmatchedBlobs.length; du++) {
@@ -466,6 +477,7 @@ export default async function handler(req, res) {
         var safeId = rt.gmail_id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
         var isSwap = rt.match_method === 'lodge_swap';
         var isTourBucket = rt.match_method === 'tour_bucket';
+        var isOutbound = rt.direction === 'outbound';
         var flags = [];
         if (isSwap) flags.push({ lodge_swap: true, original_lodge: rt.original_lodge });
         if (isTourBucket) flags.push({ tour_bucket: true, original_lodge: rt.original_lodge });
@@ -474,8 +486,8 @@ export default async function handler(req, res) {
           id: safeId,
           message_id: rt.gmail_id,
           gmail_message_id: rt.gmail_id,
-          type: 'lodge_inbound',
-          direction: 'inbound',
+          type: isOutbound ? 'lodge_outbound' : 'lodge_inbound',
+          direction: isOutbound ? 'outbound' : 'inbound',
           lodge_id: null,
           booking_id: rt.target_booking_id || null,
           tour_name: rt.target_tour || null,
@@ -502,7 +514,6 @@ export default async function handler(req, res) {
         if (rt.target_booking_id) {
           path = 'emails/booking/' + rt.target_booking_id + '/' + safeId + '.json';
         } else if (isTourBucket && rt.target_tour) {
-          // Use a safe tour key — replace non-alphanumerics with underscores
           var safeTour = rt.target_tour.replace(/[^a-zA-Z0-9]+/g, '_');
           path = 'emails/tour-bucket/' + safeTour + '/' + safeId + '.json';
         } else {
@@ -541,7 +552,7 @@ export default async function handler(req, res) {
       inventory: {
         total_blobs: allBlobs.length,
         inbound_existing: inboundBlobs.length,
-        outbound_preserved: outboundBlobs.length,
+        outbound_existing: outboundBlobs.length,
         unmatched_existing: unmatchedBlobs.length,
         tour_bucket_existing: tourBucketBlobs.length,
       },
@@ -556,6 +567,7 @@ export default async function handler(req, res) {
         routed: methodCounts.routed,
         routed_swap: methodCounts.routed_swap,
         routed_tour_bucket: methodCounts.routed_tour_bucket,
+        outbound_routed: methodCounts.outbound_routed,
         unmatched_no_booking: methodCounts.unmatched_no_booking,
         errors: methodCounts.error,
       },
@@ -563,6 +575,7 @@ export default async function handler(req, res) {
       labels_with_no_zoho_booking: labelsWithNoBooking,
       live_actions: dry ? null : {
         deleted_inbound: deletedInbound,
+        deleted_outbound: deletedOutbound,
         deleted_unmatched: deletedUnmatched,
         deleted_tour_bucket: deletedTourBucket,
         wrote: wrote,
