@@ -2,81 +2,15 @@ import { getGmailToken, gmailApi, getOrCreateLabel, labelMessage, tourLabelName 
 import { storeEmail, isEmailStored } from './_email-store.js';
 import { zohoApi } from './_zoho.js';
 import { parseEmail, extractionToZohoFields } from './_ai-parse.js';
+import {
+  extractRdsRef,
+  extractIsoDates,
+  dateMatchScore,
+  buildMatchMaps,
+  matchEmailToBooking,
+} from './_email-match.js';
 
-// Extract RDS reference from text, e.g. RDS-FoSA-Mar26-CanyonVillage-26/04/03
-function extractRdsRef(text) {
-  if (!text) return null;
-  var match = text.match(/\[?(RDS-[A-Za-z0-9\-\/]+)\]?/);
-  return match ? match[1] : null;
-}
-
-// Extract all dates from text and normalise each to YYYY-MM-DD (ISO).
-// Handles: "26 April 2026", "April 26, 2026", "26/04/2026", "2026-04-26".
-// Returns a Set of unique ISO date strings.
-function extractIsoDates(text) {
-  if (!text) return new Set();
-  var out = new Set();
-  var MONTH = {
-    jan:1,january:1, feb:2,february:2, mar:3,march:3, apr:4,april:4,
-    may:5, jun:6,june:6, jul:7,july:7, aug:8,august:8,
-    sep:9,sept:9,september:9, oct:10,october:10, nov:11,november:11, dec:12,december:12
-  };
-  function pad(n) { return (n < 10 ? '0' : '') + n; }
-  function push(y, m, d) {
-    if (y && m && d && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      out.add(y + '-' + pad(m) + '-' + pad(d));
-    }
-  }
-
-  // "26 April 2026" / "26 Apr 26" (require 4-digit year for safety)
-  var re1 = /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+(20\d{2})\b/gi;
-  var m;
-  while ((m = re1.exec(text)) !== null) {
-    push(parseInt(m[3], 10), MONTH[m[2].toLowerCase()], parseInt(m[1], 10));
-  }
-
-  // "April 26, 2026" / "Apr 26 2026"
-  var re2 = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2}),?\s+(20\d{2})\b/gi;
-  while ((m = re2.exec(text)) !== null) {
-    push(parseInt(m[3], 10), MONTH[m[1].toLowerCase()], parseInt(m[2], 10));
-  }
-
-  // "26/04/2026" or "26-04-2026" (DD/MM/YYYY — SA/UK convention — what lodges use)
-  var re3 = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})\b/g;
-  while ((m = re3.exec(text)) !== null) {
-    push(parseInt(m[3], 10), parseInt(m[2], 10), parseInt(m[1], 10));
-  }
-
-  // "2026-04-26" (ISO)
-  var re4 = /\b(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/g;
-  while ((m = re4.exec(text)) !== null) {
-    push(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
-  }
-
-  return out;
-}
-
-// Count how many dates from an email overlap with a booking's check-in /
-// check-out window (exact match on either end, or ±1 day tolerance for
-// checkout off-by-one quirks).
-function dateMatchScore(emailDates, checkIn, checkOut) {
-  if (!emailDates || emailDates.size === 0) return 0;
-  var score = 0;
-  function nearby(iso, target) {
-    if (!target) return false;
-    if (iso === target) return true;
-    // ±1 day tolerance
-    var d = new Date(iso); var t = new Date(target);
-    if (isNaN(d) || isNaN(t)) return false;
-    var diff = Math.abs(d - t) / 86400000;
-    return diff <= 1;
-  }
-  emailDates.forEach(function(iso) {
-    if (nearby(iso, checkIn)) score += 2;      // check-in match = strong
-    else if (nearby(iso, checkOut)) score += 1; // check-out = weaker
-  });
-  return score;
-}
+// (extractRdsRef, extractIsoDates, dateMatchScore imported from _email-match.js)
 
 // Decode base64url string
 function decodeBase64Url(str) {
@@ -325,19 +259,9 @@ export default async function(req, res) {
     }
 
     // Build lookup maps
-    var refMap = {};  // RDS reference → booking
-    var nameMap = {}; // lodge name (lowercase) → bookings array
-    allBookings.forEach(function(bk) {
-      var ref = bk.RDS_Reference || '';
-      if (ref) refMap[ref.toLowerCase()] = bk;
-
-      var lodge = bk.Lodge_Name || bk.Name || '';
-      var lodgeClean = lodge.split(' - ')[0].toLowerCase().trim();
-      if (lodgeClean) {
-        if (!nameMap[lodgeClean]) nameMap[lodgeClean] = [];
-        nameMap[lodgeClean].push(bk);
-      }
-    });
+    var maps = buildMatchMaps(allBookings);
+    var refMap = maps.refMap;
+    var nameMap = maps.nameMap;
 
     var stored = 0;
     var skipped = 0;
@@ -366,90 +290,32 @@ export default async function(req, res) {
         }
 
         // Try to match to a booking
-        var matchedBooking = null;
-        var matchMethod = '';
-
-        // Extract body for matching
         var body = extractBody(msg.payload);
-
-        // 1. Match by RDS reference in subject
-        var rdsRef = extractRdsRef(subject);
-        if (rdsRef && refMap[rdsRef.toLowerCase()]) {
-          matchedBooking = refMap[rdsRef.toLowerCase()];
-          matchMethod = 'rds_reference_subject';
-        }
-
-        // 2. Match by RDS reference in body (quoted reply text)
-        if (!matchedBooking && body) {
-          var bodyRefs = body.match(/RDS-[A-Za-z0-9\-\/]+/g) || [];
-          for (var br = 0; br < bodyRefs.length; br++) {
-            var bodyRef = bodyRefs[br].toLowerCase();
-            if (refMap[bodyRef]) {
-              matchedBooking = refMap[bodyRef];
-              matchMethod = 'rds_reference_body';
-              break;
-            }
-          }
-        }
-
-        // 3. Match by lodge name + check-in date.
-        //    Extract all dates from the email (subject + body). For each
-        //    candidate booking at the matching lodge, score how many email
-        //    dates line up with that booking's check-in/check-out window.
-        //    Pick the highest-scoring candidate. If nothing scores > 0,
-        //    REFUSE to match rather than guessing — better unmatched than
-        //    wrongly attributed.
-        if (!matchedBooking) {
-          var subjectLower = (subject || '').toLowerCase();
-          var fromLower = (from || '').toLowerCase();
-          var lodgeNames = Object.keys(nameMap);
-
-          // Limit body scan — enough to catch quoted booking details
-          var emailText = (subject || '') + '\n' + (body || '').substring(0, 8000);
-          var emailDates = extractIsoDates(emailText);
-
-          for (var ln = 0; ln < lodgeNames.length; ln++) {
-            var name = lodgeNames[ln];
-            if (name.length <= 3) continue;
-            if (subjectLower.indexOf(name) === -1 && fromLower.indexOf(name) === -1) continue;
-
-            // All bookings at this lodge, not just "active" ones — a proforma
-            // reply for a confirmed booking still needs to attach here.
-            var candidates = nameMap[name];
-            if (!candidates || candidates.length === 0) continue;
-
-            if (candidates.length === 1) {
-              // Single booking at this lodge — safe to attach without date check
-              matchedBooking = candidates[0];
-              matchMethod = 'lodge_name_unique';
-              break;
-            }
-
-            // Multiple bookings at this lodge: score each by date overlap
-            var best = null;
-            var bestScore = 0;
-            for (var ci = 0; ci < candidates.length; ci++) {
-              var c = candidates[ci];
-              var score = dateMatchScore(emailDates, c.Check_in_Date, c.Check_out_Date);
-              if (score > bestScore) {
-                bestScore = score;
-                best = c;
-              }
-            }
-
-            if (best && bestScore > 0) {
-              matchedBooking = best;
-              matchMethod = 'lodge_name_date_score_' + bestScore;
-              break;
-            }
-
-            // Multiple candidates but no confident date match — do NOT guess
-            matchMethod = 'lodge_name_ambiguous_no_date_match';
-            // leave matchedBooking null, fall through to noMatch
-          }
-        }
+        var match = matchEmailToBooking(subject, body, from, refMap, nameMap);
+        var matchedBooking = match.booking;
+        var matchMethod = match.method;
 
         if (!matchedBooking) {
+          // Store in unmatched bucket so Helen/Andrew can route it manually.
+          // storeEmail() routes to emails/unmatched/ automatically when no
+          // booking_id or lodge_id is provided.
+          try {
+            await storeEmail({
+              gmail_message_id: msgId,
+              message_id: msgId,
+              type: 'lodge_inbound',
+              direction: 'inbound',
+              email_from: from,
+              email_to: to,
+              email_subject: subject,
+              email_content: body,
+              email_date: date,
+              attachments: extractAttachments(msg.payload),
+              ai_flags: [{ unmatched_reason: match.reason || 'no_match', ambiguous_lodge: match.lodge || null }],
+            });
+          } catch (e) {
+            console.error('Failed to store unmatched email:', msgId, e.message);
+          }
           noMatch++;
           continue;
         }
