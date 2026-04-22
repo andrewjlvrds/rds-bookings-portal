@@ -78,7 +78,12 @@ export default function TourPanel({
       )}
 
       {activeTab === 'correspondence' && (
-        <TourCorrespondence tour={tour} lodges={lodges} onRefresh={onRefresh} />
+        <TourCorrespondence
+          tour={tour}
+          lodges={lodges}
+          onSelectBooking={(bk) => onSelectBooking(bk, 'correspondence')}
+          onRefresh={onRefresh}
+        />
       )}
 
       {activeTab === 'payments' && (
