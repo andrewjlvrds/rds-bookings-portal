@@ -15,6 +15,10 @@ export default async function(req, res) {
     var bookingIds = body.booking_ids || [];
     var updates = body.updates || {};
     var inputRecords = body.records || null; // alternative: array of {id, ...fields}
+    // Which Zoho module to write to. Defaults to Lodge_Bookings (the legacy
+    // use case — lodge enquiry records). Pass module: 'Bookings' for guest
+    // bookings in the Bookings module.
+    var zohoModule = body.module || 'Lodge_Bookings';
 
     // Two supported shapes:
     //   1. { booking_ids: [...], updates: {...} } — uniform update across all IDs
@@ -43,7 +47,7 @@ export default async function(req, res) {
 
     for (var i = 0; i < records.length; i += 100) {
       var batch = records.slice(i, i + 100);
-      var result = await zohoApi('PUT', 'Lodge_Bookings', { data: batch });
+      var result = await zohoApi('PUT', zohoModule, { data: batch });
 
       if (result && result.data) {
         result.data.forEach(function(r) {
@@ -65,6 +69,6 @@ export default async function(req, res) {
 
   } catch(err) {
     console.error('update-bookings error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, module: req.body ? (req.body.module || 'Lodge_Bookings') : 'unknown' });
   }
 }

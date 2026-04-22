@@ -353,11 +353,19 @@ function ReadinessPanel({ g }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          module: 'Bookings',
           booking_ids: [g.id],
           updates: { Actions_Completed: Array.from(nextSet) },
         }),
       })
-      if (!res.ok) throw new Error('Update failed (' + res.status + ')')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || ('Update failed (' + res.status + ')'))
+      }
+      const data = await res.json()
+      if (data.errors && data.errors > 0) {
+        throw new Error('Zoho rejected: ' + JSON.stringify(data.details && data.details.errors))
+      }
     } catch (err) {
       setLocalActions(prev) // rollback
       alert('Could not update: ' + err.message)
