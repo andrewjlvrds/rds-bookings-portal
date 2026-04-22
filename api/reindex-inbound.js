@@ -255,7 +255,7 @@ export default async function handler(req, res) {
 
     // ────────── Step 4: Fetch messages under each mapped label ──────────
     var routing = [];
-    var methodCounts = { routed: 0, routed_swap: 0, unmatched_no_booking: 0, unmatched_ambiguous: 0, error: 0 };
+    var methodCounts = { routed: 0, routed_swap: 0, routed_anchor: 0, unmatched_no_booking: 0, unmatched_ambiguous: 0, error: 0 };
 
     for (var li = 0; li < mappedLabels.length; li++) {
       var lbl = mappedLabels[li];
@@ -382,8 +382,51 @@ export default async function handler(req, res) {
             continue;
           }
 
+          // ─── TOUR-ANCHOR FALLBACK ───
+          // No lodge match, no date match — but the label still tells us the
+          // TOUR. Attach to the first booking of that tour (by check-in date)
+          // so the email is findable on the tour. Flagged as 'tour_anchor' with
+          // the original lodge so UI can badge it as untagged/misrouted.
+          var anchorTarget = null;
+          var anchorTourBookings = [];
+          for (var tn3 = 0; tn3 < lbl.tourNames.length; tn3++) {
+            anchorTourBookings = anchorTourBookings.concat(bookingsByTour[lbl.tourNames[tn3]] || []);
+          }
+          if (anchorTourBookings.length > 0) {
+            // Sort by check-in date asc, take the first
+            anchorTourBookings.sort(function(a, b) {
+              var da = a.Check_in_Date || '9999-12-31';
+              var db = b.Check_in_Date || '9999-12-31';
+              return da < db ? -1 : da > db ? 1 : 0;
+            });
+            anchorTarget = anchorTourBookings[0];
+          }
+
+          if (anchorTarget) {
+            methodCounts.routed_anchor++;
+            routing.push({
+              gmail_id: mid,
+              label: lbl.name,
+              from: from,
+              subject: subj,
+              date: date,
+              status: 'routed',
+              match_method: 'tour_anchor',
+              original_lodge: lbl.lodgeSegment,
+              target_booking_id: anchorTarget.id,
+              target_tour: (anchorTarget.Tour && anchorTarget.Tour.name) || anchorTarget.Tour || '',
+              target_lodge: (anchorTarget.Lodge_Name && anchorTarget.Lodge_Name.name) || anchorTarget.Lodge_Name || anchorTarget.Name,
+              target_check_in: anchorTarget.Check_in_Date,
+              email_dates_found: emailDates.size > 0 ? Array.from(emailDates) : [],
+              _msg: dry ? null : { subject: subj, from: from, to: to, date: date, body: body, attachments: atts },
+            });
+            continue;
+          }
+
           // ─── TRUE ORPHAN ───
-          // No lodge match, no date match. Genuine unmatched — goes to bucket.
+          // No tour bookings at all in Zoho. Only possible if we're scanning a
+          // label whose tour has 0 Lodge_Bookings (e.g. tour deleted / never
+          // migrated). Goes to unmatched bucket.
           methodCounts.unmatched_no_booking++;
           routing.push({
             gmail_id: mid,
@@ -431,6 +474,11 @@ export default async function handler(req, res) {
         if (!rt._msg || rt.error) continue;
         var safeId = rt.gmail_id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
         var isSwap = rt.match_method === 'lodge_swap';
+        var isAnchor = rt.match_method === 'tour_anchor';
+        var flags = [];
+        if (isSwap) flags.push({ lodge_swap: true, original_lodge: rt.original_lodge });
+        if (isAnchor) flags.push({ tour_anchor: true, original_lodge: rt.original_lodge });
+        if (!rt.target_booking_id) flags.push({ unmatched_reason: 'no_zoho_booking_for_label', label: rt.label });
         var record = {
           id: safeId,
           message_id: rt.gmail_id,
@@ -447,9 +495,7 @@ export default async function handler(req, res) {
           attachments: rt._msg.attachments || [],
           ai_summary: null,
           ai_extractions: null,
-          ai_flags: rt.target_booking_id
-            ? (isSwap ? [{ lodge_swap: true, original_lodge: rt.original_lodge }] : [])
-            : [{ unmatched_reason: 'no_zoho_booking_for_label', label: rt.label }],
+          ai_flags: flags,
           processed_at: new Date().toISOString(),
           _reindexed: true,
           _source_label: rt.label,
@@ -505,6 +551,7 @@ export default async function handler(req, res) {
         messages_processed: routing.length,
         routed: methodCounts.routed,
         routed_swap: methodCounts.routed_swap,
+        routed_anchor: methodCounts.routed_anchor,
         unmatched_no_booking: methodCounts.unmatched_no_booking,
         errors: methodCounts.error,
       },
