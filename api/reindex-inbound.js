@@ -25,17 +25,6 @@ import { getGmailToken, gmailApi } from './_gmail.js';
 import { zohoApi } from './_zoho.js';
 import { buildMatchMaps, matchEmailToBooking } from './_email-match.js';
 
-// Label name patterns that identify RDS tour correspondence
-function isRdsTourLabel(labelName) {
-  if (!labelName) return false;
-  var n = labelName.toLowerCase();
-  // Tour-prefix labels
-  if (/^(fosa|bon|edge|eoa|gl|great lakes|wh-ct)\b/.test(n)) return true;
-  // Legacy INBOX/YYYY-MM nested labels
-  if (n.indexOf('inbox/20') === 0) return true;
-  return false;
-}
-
 // Decode Gmail base64url → UTF-8
 function decodeBase64Url(str) {
   if (!str) return '';
@@ -156,39 +145,37 @@ export default async function handler(req, res) {
     }
     var maps = buildMatchMaps(allBookings);
 
-    // ───────────────────────── Step 3: Fetch Gmail messages under RDS tour labels ─────────────────────────
+    // ───────────────────────── Step 3: Fetch Gmail messages ─────────────────────────
+    //
+    // Same approach as poll-gmail: time-window query, no label filter. The
+    // tour labels referenced in project docs don't actually exist on the
+    // bookings@ mailbox (only "Zoho Notifications" and "Portal Messages"
+    // are present). Rely on the sender filter and time window instead.
+    //
+    // Default window: 365 days. Override with ?days=N.
+    var days = parseInt(req.query.days || '365', 10);
     var token = await getGmailToken();
+    var query = 'newer_than:' + days + 'd -from:bookings@ridedownsouth.com';
 
-    // List all Gmail labels and filter to RDS tour labels
-    var labelsRes = await gmailApi(token, 'labels');
-    var allLabels = labelsRes.labels || [];
-    var tourLabels = allLabels.filter(function(l) { return isRdsTourLabel(l.name); });
-
-    // For each tour label, list message IDs. Exclude outbound (from us).
     var seenMsgIds = {};
     var messageIds = [];
-    for (var li = 0; li < tourLabels.length; li++) {
-      var lbl = tourLabels[li];
-      var nextToken = null;
-      do {
-        var qs = 'messages?labelIds=' + encodeURIComponent(lbl.id) +
-          '&q=' + encodeURIComponent('-from:bookings@ridedownsouth.com') +
-          '&maxResults=500' +
-          (nextToken ? '&pageToken=' + nextToken : '');
-        var listMsgRes = await gmailApi(token, qs);
-        var msgs = listMsgRes.messages || [];
-        for (var mi = 0; mi < msgs.length; mi++) {
-          if (!seenMsgIds[msgs[mi].id]) {
-            seenMsgIds[msgs[mi].id] = true;
-            messageIds.push(msgs[mi].id);
-            if (messageIds.length >= maxMessages) break;
-          }
+    var nextToken = null;
+    do {
+      var qs = 'messages?q=' + encodeURIComponent(query) +
+        '&maxResults=500' +
+        (nextToken ? '&pageToken=' + nextToken : '');
+      var listMsgRes = await gmailApi(token, qs);
+      var msgs = listMsgRes.messages || [];
+      for (var mi = 0; mi < msgs.length; mi++) {
+        if (!seenMsgIds[msgs[mi].id]) {
+          seenMsgIds[msgs[mi].id] = true;
+          messageIds.push(msgs[mi].id);
+          if (messageIds.length >= maxMessages) break;
         }
-        nextToken = listMsgRes.nextPageToken || null;
-        if (messageIds.length >= maxMessages) break;
-      } while (nextToken);
+      }
+      nextToken = listMsgRes.nextPageToken || null;
       if (messageIds.length >= maxMessages) break;
-    }
+    } while (nextToken);
 
     // ───────────────────────── Step 4: Fetch + match each message ─────────────────────────
     var routing = []; // what WOULD happen / what DID happen per message
@@ -303,7 +290,8 @@ export default async function handler(req, res) {
         undetermined: undetermined.length,
       },
       gmail: {
-        tour_labels_found: tourLabels.map(function(l) { return l.name; }),
+        query: query,
+        days_scanned: days,
         messages_scanned: messageIds.length,
       },
       matching: {
