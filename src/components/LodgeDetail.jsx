@@ -10,6 +10,11 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
   const [gmailResults, setGmailResults] = useState([])
   const [searchingGmail, setSearchingGmail] = useState(false)
   const [lastDismissed, setLastDismissed] = useState(null)
+  // If the booking arrives with a pending new-reply flag, land on the
+  // Correspondence tab so Helen sees the thread first.
+  const [activeDetailTab, setActiveDetailTab] = useState(
+    booking.New_Reply === true ? 'correspondence' : 'details'
+  )
 
   const bookingId = booking.id || booking['Record Id']
   const lodgeName = (booking.Lodge_Name || booking.Name || '').split(' - ')[0]
@@ -239,6 +244,50 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
         )}
       </div>
 
+      {/* Internal tab bar: Details | Correspondence */}
+      <div style={{
+        display: 'flex', gap: 0, marginBottom: 16,
+        borderBottom: '0.5px solid var(--border-default)',
+      }}>
+        <button
+          onClick={() => setActiveDetailTab('details')}
+          style={{
+            padding: '8px 16px', fontSize: 13, fontWeight: 500,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: activeDetailTab === 'details' ? 'var(--blue-text)' : 'var(--text-muted)',
+            borderBottom: activeDetailTab === 'details' ? '2px solid var(--blue-mid)' : '2px solid transparent',
+            marginBottom: -0.5,
+          }}
+        >
+          Details
+        </button>
+        <button
+          onClick={() => setActiveDetailTab('correspondence')}
+          style={{
+            padding: '8px 16px', fontSize: 13, fontWeight: 500,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: activeDetailTab === 'correspondence' ? 'var(--blue-text)' : 'var(--text-muted)',
+            borderBottom: activeDetailTab === 'correspondence' ? '2px solid var(--blue-mid)' : '2px solid transparent',
+            marginBottom: -0.5,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          <span>Correspondence</span>
+          {emails.length > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 500, color: 'var(--text-muted)',
+              background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: 9,
+            }}>
+              {emails.length}
+            </span>
+          )}
+          {booking.New_Reply === true && (
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C62828' }} />
+          )}
+        </button>
+      </div>
+
+      {activeDetailTab === 'details' && (<>
       {/* Row 1: Tour details + Booking details */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Tour details panel */}
@@ -414,7 +463,9 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
           </div>
         </div>
       </div>
+      </>)}
 
+      {activeDetailTab === 'correspondence' && (<>
       {/* Email thread */}
       <div className="panel">
         <div className="panel-head">
@@ -518,6 +569,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
           />
         </div>
       </div>
+      </>)}
     </div>
   )
 }

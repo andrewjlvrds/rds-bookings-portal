@@ -1024,6 +1024,15 @@ ${merged.map((bk, i) => {
                         style={{ fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                         title="Click to edit lodge"
                       >
+                        {bk.New_Reply === true && (
+                          <span
+                            title="New reply from lodge — needs response"
+                            style={{
+                              width: 7, height: 7, borderRadius: '50%',
+                              background: '#C62828', flexShrink: 0,
+                            }}
+                          />
+                        )}
                         {lodge}
                       </div>
                     )}

@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import Itinerary from './Itinerary'
 import Payments from './Payments'
-import TourCorrespondence from './TourCorrespondence'
 import { fmtDateFull } from '../utils/helpers'
 
 /*
- * TourPanel wraps the three tour-level sub-views:
+ * TourPanel wraps the two tour-level sub-views:
  *   - Itinerary (default)
- *   - Correspondence
  *   - Payments
  *
- * It preserves all props that used to be passed straight to Itinerary,
- * and uses local state for activeTab so the sub-tab choice survives
- * between renders but resets when you navigate to a different tour.
+ * Correspondence is no longer a tour-level tab — it lives inside
+ * LodgeDetail as a per-lodge thread, which is where the conversation
+ * actually belongs.
  */
 export default function TourPanel({
   tour,
@@ -24,12 +22,15 @@ export default function TourPanel({
   onEnquireReady,
   onRefresh,
 }) {
-  const [activeTab, setActiveTab] = useState(initialTab || 'itinerary')
+  const VALID_TABS = ['itinerary', 'payments']
+  const safeInitial = VALID_TABS.indexOf(initialTab) >= 0 ? initialTab : 'itinerary'
+  const [activeTab, setActiveTab] = useState(safeInitial)
 
   // If the caller passes a new initialTab (e.g. "Back" from LodgeDetail
-  // restores the tab you came from), honour it.
+  // restores the tab you came from), honour it — but only if it's valid.
   useEffect(() => {
-    if (initialTab && initialTab !== activeTab) setActiveTab(initialTab)
+    const next = VALID_TABS.indexOf(initialTab) >= 0 ? initialTab : 'itinerary'
+    if (next !== activeTab) setActiveTab(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTab, tour && tour.id])
 
@@ -41,12 +42,23 @@ export default function TourPanel({
       {/* Tour header strip */}
       <div style={{ marginBottom: 12 }}>
         <h1 style={{ fontSize: 18, fontWeight: 500, letterSpacing: -0.2 }}>{tour.name}</h1>
-        {tour.departure_date && (
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
-            Departs {fmtDateFull(tour.departure_date)}
-            {tour.end_date ? '  ·  returns ' + fmtDateFull(tour.end_date) : ''}
-          </div>
-        )}
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
+          {tour.departure_date && (
+            <span>
+              Departs {fmtDateFull(tour.departure_date)}
+              {tour.end_date ? '  ·  returns ' + fmtDateFull(tour.end_date) : ''}
+            </span>
+          )}
+          {newReplyCount > 0 && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 12, color: '#C62828', fontWeight: 500,
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#C62828' }} />
+              {newReplyCount} lodge{newReplyCount !== 1 ? 's' : ''} need{newReplyCount === 1 ? 's' : ''} response
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Tab bar */}
@@ -55,12 +67,6 @@ export default function TourPanel({
         borderBottom: '0.5px solid var(--border-default)',
       }}>
         <TabBtn label="Itinerary" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} />
-        <TabBtn
-          label="Correspondence"
-          active={activeTab === 'correspondence'}
-          onClick={() => setActiveTab('correspondence')}
-          badge={newReplyCount}
-        />
         <TabBtn label="Payments" active={activeTab === 'payments'} onClick={() => setActiveTab('payments')} />
       </div>
 
@@ -77,15 +83,6 @@ export default function TourPanel({
         />
       )}
 
-      {activeTab === 'correspondence' && (
-        <TourCorrespondence
-          tour={tour}
-          lodges={lodges}
-          onSelectBooking={(bk) => onSelectBooking(bk, 'correspondence')}
-          onRefresh={onRefresh}
-        />
-      )}
-
       {activeTab === 'payments' && (
         <Payments
           allBookings={bookings}
@@ -98,7 +95,7 @@ export default function TourPanel({
   )
 }
 
-function TabBtn({ label, active, onClick, badge }) {
+function TabBtn({ label, active, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -108,22 +105,11 @@ function TabBtn({ label, active, onClick, badge }) {
         color: active ? 'var(--blue-text)' : 'var(--text-muted)',
         borderBottom: active ? '2px solid var(--blue-mid)' : '2px solid transparent',
         marginBottom: -0.5,
-        display: 'flex', alignItems: 'center', gap: 6,
       }}
       onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-primary)' }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-muted)' }}
     >
-      <span>{label}</span>
-      {badge > 0 && (
-        <span style={{
-          fontSize: 10, fontWeight: 600,
-          background: '#C62828', color: '#fff',
-          padding: '1px 6px', borderRadius: 9, lineHeight: 1.3,
-          minWidth: 18, textAlign: 'center',
-        }}>
-          {badge}
-        </span>
-      )}
+      {label}
     </button>
   )
 }
