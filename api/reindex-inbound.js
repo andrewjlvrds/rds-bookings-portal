@@ -25,6 +25,7 @@
 import { list, put, del } from '@vercel/blob';
 import { getGmailToken, gmailApi } from './_gmail.js';
 import { zohoApi } from './_zoho.js';
+import { extractIsoDates } from './_email-match.js';
 
 // ────────────────────────────── Label → Tour mapping ──────────────────────────────
 // Gmail label prefix (everything before the final /LodgeName segment) → Zoho
@@ -254,7 +255,7 @@ export default async function handler(req, res) {
 
     // ────────── Step 4: Fetch messages under each mapped label ──────────
     var routing = [];
-    var methodCounts = { routed: 0, unmatched_no_booking: 0, unmatched_ambiguous: 0, error: 0 };
+    var methodCounts = { routed: 0, routed_swap: 0, unmatched_no_booking: 0, unmatched_ambiguous: 0, error: 0 };
 
     for (var li = 0; li < mappedLabels.length; li++) {
       var lbl = mappedLabels[li];
@@ -302,7 +303,10 @@ export default async function handler(req, res) {
           var from = getHeader(headers, 'From');
           var to = getHeader(headers, 'To');
           var date = getHeader(headers, 'Date');
-          var body = dry ? '' : extractBody(msg.payload);
+          // We need body regardless now — swap-fallback needs to extract dates.
+          // In dry mode, extract body but don't attach it to the routing record
+          // (keeps response size manageable).
+          var body = extractBody(msg.payload);
           var atts = dry ? [] : extractAttachments(msg.payload);
 
           // Skip outbound (from us)
@@ -310,26 +314,56 @@ export default async function handler(req, res) {
             continue;
           }
 
-          if (matchedBookings.length === 0) {
-            methodCounts.unmatched_no_booking++;
-            routing.push({
-              gmail_id: mid,
-              label: lbl.name,
-              from: from,
-              subject: subj,
-              date: date,
-              status: 'unmatched_no_booking',
-              expected_tour: lbl.tourNames,
-              expected_lodge: lbl.lodgeSegment,
-              _msg: dry ? null : { subject: subj, from: from, to: to, date: date, body: body, attachments: atts },
-            });
+          // ─── PRIMARY: direct lodge-name match ───
+          if (matchedBookings.length > 0) {
+            methodCounts.routed++;
+            for (var mb = 0; mb < matchedBookings.length; mb++) {
+              var bk = matchedBookings[mb];
+              routing.push({
+                gmail_id: mid,
+                label: lbl.name,
+                from: from,
+                subject: subj,
+                date: date,
+                status: 'routed',
+                match_method: 'direct_lodge_match',
+                target_booking_id: bk.id,
+                target_tour: (bk.Tour && bk.Tour.name) || bk.Tour || '',
+                target_lodge: (bk.Lodge_Name && bk.Lodge_Name.name) || bk.Lodge_Name || bk.Name,
+                target_check_in: bk.Check_in_Date,
+                _msg: dry ? null : { subject: subj, from: from, to: to, date: date, body: body, attachments: atts },
+              });
+            }
             continue;
           }
 
-          // Matched — record one entry per target booking (GL labels apply to 2 tours)
-          methodCounts.routed++;
-          for (var mb = 0; mb < matchedBookings.length; mb++) {
-            var bk = matchedBookings[mb];
+          // ─── SWAP FALLBACK ───
+          // No booking for this label's lodge on this tour. The lodge may have
+          // been swapped out (availability issue). Try to find the booking on
+          // this tour whose Check_in_Date matches a date mentioned in the email.
+          // Attach to that booking with a flag noting the original lodge.
+          var emailText = (subj || '') + '\n' + (body || '').substring(0, 8000);
+          var emailDates = extractIsoDates(emailText);
+          var swapTarget = null;
+
+          if (emailDates.size > 0) {
+            // Gather all bookings on this label's tour(s)
+            var tourBookings = [];
+            for (var tn2 = 0; tn2 < lbl.tourNames.length; tn2++) {
+              tourBookings = tourBookings.concat(bookingsByTour[lbl.tourNames[tn2]] || []);
+            }
+            // Pick the booking whose Check_in_Date is in the email's date set
+            for (var tb = 0; tb < tourBookings.length; tb++) {
+              var tbk = tourBookings[tb];
+              if (tbk.Check_in_Date && emailDates.has(tbk.Check_in_Date)) {
+                swapTarget = tbk;
+                break;
+              }
+            }
+          }
+
+          if (swapTarget) {
+            methodCounts.routed_swap++;
             routing.push({
               gmail_id: mid,
               label: lbl.name,
@@ -337,13 +371,32 @@ export default async function handler(req, res) {
               subject: subj,
               date: date,
               status: 'routed',
-              target_booking_id: bk.id,
-              target_tour: (bk.Tour && bk.Tour.name) || bk.Tour || '',
-              target_lodge: (bk.Lodge_Name && bk.Lodge_Name.name) || bk.Lodge_Name || bk.Name,
-              target_check_in: bk.Check_in_Date,
+              match_method: 'lodge_swap',
+              original_lodge: lbl.lodgeSegment,
+              target_booking_id: swapTarget.id,
+              target_tour: (swapTarget.Tour && swapTarget.Tour.name) || swapTarget.Tour || '',
+              target_lodge: (swapTarget.Lodge_Name && swapTarget.Lodge_Name.name) || swapTarget.Lodge_Name || swapTarget.Name,
+              target_check_in: swapTarget.Check_in_Date,
               _msg: dry ? null : { subject: subj, from: from, to: to, date: date, body: body, attachments: atts },
             });
+            continue;
           }
+
+          // ─── TRUE ORPHAN ───
+          // No lodge match, no date match. Genuine unmatched — goes to bucket.
+          methodCounts.unmatched_no_booking++;
+          routing.push({
+            gmail_id: mid,
+            label: lbl.name,
+            from: from,
+            subject: subj,
+            date: date,
+            status: 'unmatched_no_booking',
+            expected_tour: lbl.tourNames,
+            expected_lodge: lbl.lodgeSegment,
+            email_dates_found: emailDates.size > 0 ? Array.from(emailDates) : [],
+            _msg: dry ? null : { subject: subj, from: from, to: to, date: date, body: body, attachments: atts },
+          });
         } catch (e) {
           methodCounts.error++;
           routing.push({ gmail_id: mid, label: lbl.name, error: e.message });
@@ -377,6 +430,7 @@ export default async function handler(req, res) {
         var rt = routing[wi];
         if (!rt._msg || rt.error) continue;
         var safeId = rt.gmail_id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
+        var isSwap = rt.match_method === 'lodge_swap';
         var record = {
           id: safeId,
           message_id: rt.gmail_id,
@@ -393,10 +447,14 @@ export default async function handler(req, res) {
           attachments: rt._msg.attachments || [],
           ai_summary: null,
           ai_extractions: null,
-          ai_flags: rt.target_booking_id ? [] : [{ unmatched_reason: 'no_zoho_booking_for_label', label: rt.label }],
+          ai_flags: rt.target_booking_id
+            ? (isSwap ? [{ lodge_swap: true, original_lodge: rt.original_lodge }] : [])
+            : [{ unmatched_reason: 'no_zoho_booking_for_label', label: rt.label }],
           processed_at: new Date().toISOString(),
           _reindexed: true,
           _source_label: rt.label,
+          _match_method: rt.match_method || null,
+          _original_lodge: rt.original_lodge || null,
         };
         var path = rt.target_booking_id
           ? ('emails/booking/' + rt.target_booking_id + '/' + safeId + '.json')
@@ -446,6 +504,7 @@ export default async function handler(req, res) {
       matching: {
         messages_processed: routing.length,
         routed: methodCounts.routed,
+        routed_swap: methodCounts.routed_swap,
         unmatched_no_booking: methodCounts.unmatched_no_booking,
         errors: methodCounts.error,
       },
