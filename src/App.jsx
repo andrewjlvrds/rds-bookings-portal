@@ -1,11 +1,11 @@
 import React, { useState, useEffect, Component } from 'react'
 import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
-import Itinerary from './components/Itinerary'
 import ItineraryEditor from './components/ItineraryEditor'
 import EnquiryPreview from './components/EnquiryPreview'
 import Payments from './components/Payments'
 import LodgeDetail from './components/LodgeDetail'
+import TourPanel from './components/TourPanel'
 import GettingStarted from './components/GettingStarted'
 import Lodges from './components/Lodges'
 import Correspondence from './components/Correspondence'
@@ -57,6 +57,9 @@ export default function App() {
   const [activeTour, setActiveTour] = useState(null)
   const [activeView, setActiveView] = useState('lodge-dashboard')
   const [activeBooking, setActiveBooking] = useState(null)
+  // When a user opens LodgeDetail from inside the TourPanel, remember which
+  // tab they came from so the Back button returns them there.
+  const [returnToTourTab, setReturnToTourTab] = useState('itinerary')
 
   // Refresh data from API without losing current view
   const refreshData = (keepTourId, retriesLeft = 3) => {
@@ -129,13 +132,14 @@ export default function App() {
   const handleSelectTour = (tour) => {
     setActiveTour(tour)
     setActiveBooking(null)
-    // Layout handles routing to itinerary vs guest-tour based on section
+    // Layout handles routing to tour-panel vs guest-tour based on section
     // This is the fallback for programmatic calls
-    setActiveView('itinerary')
+    setActiveView('tour-panel')
   }
 
-  const handleSelectBooking = (bk) => {
+  const handleSelectBooking = (bk, fromTab) => {
     setActiveBooking(bk)
+    if (fromTab) setReturnToTourTab(fromTab)
     setActiveView('lodge-detail')
   }
 
@@ -172,7 +176,7 @@ export default function App() {
     // Add to state immediately
     setTours(prev => [...prev, localTour])
     setActiveTour(localTour)
-    setActiveView('itinerary')
+    setActiveView('tour-panel')
   }
 
   const handleDeleteTour = async (tourId, tourName) => {
@@ -212,7 +216,7 @@ export default function App() {
           booking={activeBooking}
           tour={activeTour}
           lodges={lodges}
-          onBack={() => { setActiveBooking(null); setActiveView('itinerary') }}
+          onBack={() => { setActiveBooking(null); setActiveView('tour-panel') }}
           onRefresh={() => refreshData(activeTour ? activeTour.id : null)}
         />
       )
@@ -227,7 +231,7 @@ export default function App() {
         <Dashboard
           tours={tours}
           allBookings={allBookings}
-          onSelectTour={(tour) => { setActiveTour(tour); setActiveView('itinerary') }}
+          onSelectTour={(tour) => { setActiveTour(tour); setActiveView('tour-panel') }}
           onSelectView={setActiveView}
           onSelectBooking={handleSelectBooking}
         />
@@ -285,7 +289,7 @@ export default function App() {
         <EnquiryPreview
           tour={activeTour}
           lodges={lodges}
-          onBack={() => setActiveView('itinerary')}
+          onBack={() => setActiveView('tour-panel')}
           onRefresh={() => refreshData(activeTour.id)}
         />
       )
@@ -296,23 +300,40 @@ export default function App() {
         <ItineraryEditor
           tour={activeTour}
           lodges={lodges}
-          onBack={() => setActiveView('itinerary')}
+          onBack={() => setActiveView('tour-panel')}
           onSave={(result) => {
             // If this was a local tour that just got pushed to Zoho, the id has changed.
             // Refresh against the new Zoho id so activeTour reflects the real record.
             const freshId = (result && result.tour_id) || activeTour.id
-            setActiveView('itinerary')
+            setActiveView('tour-panel')
             refreshData(freshId)
           }}
         />
       )
     }
 
-    if (activeTour && activeView === 'itinerary') {
+    if (activeTour && activeView === 'tour-panel') {
       return (
-        <Itinerary
+        <TourPanel
           tour={activeTour}
           lodges={lodges}
+          initialTab={returnToTourTab}
+          onSelectBooking={handleSelectBooking}
+          onEditItinerary={() => setActiveView('edit-itinerary')}
+          onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}
+          onEnquireReady={() => setActiveView('enquiry-preview')}
+          onRefresh={() => refreshData(activeTour.id)}
+        />
+      )
+    }
+
+    // Legacy itinerary route — keep for back-compat but also render inside TourPanel
+    if (activeTour && activeView === 'itinerary') {
+      return (
+        <TourPanel
+          tour={activeTour}
+          lodges={lodges}
+          initialTab="itinerary"
           onSelectBooking={handleSelectBooking}
           onEditItinerary={() => setActiveView('edit-itinerary')}
           onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}

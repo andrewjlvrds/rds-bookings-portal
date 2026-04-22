@@ -38,7 +38,7 @@ function categorizeTours(tours) {
 }
 
 const PLANNER_VIEWS = ['dashboard', 'itinerary', 'edit-itinerary', 'enquiry-preview']
-const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'correspondence', 'lodges']
+const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'correspondence', 'lodges', 'tour-panel']
 const GUEST_VIEWS = ['guest-dashboard', 'guest-tour', 'guest-detail', 'transfers', 'guest-excursions', 'guest-accommodation', 'guest-payments', 'guest-bikes']
 
 function getSection(activeView) {
@@ -144,7 +144,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
     return true
   })
 
-  const tourClickView = section === 'guests' ? 'guest-tour' : 'itinerary'
+  const tourClickView = section === 'guests' ? 'guest-tour' : 'tour-panel'
   const handleTourClick = (tour) => {
     onSelectTour(tour)
     onSelectView(tourClickView)
@@ -374,6 +374,7 @@ function TourItem({ tour, active, onClick, dimmed, isDraft }) {
   const bookings = tour.bookings || []
   const confirmed = bookings.filter(b => isConfirmed(b)).length
   const total = bookings.length
+  const newReplies = bookings.filter(b => b && b.New_Reply === true).length
 
   let hasDraft = false
   try {
@@ -400,8 +401,23 @@ function TourItem({ tour, active, onClick, dimmed, isDraft }) {
           <span style={{ fontSize: 9, color: 'var(--amber-text)', fontWeight: 500 }}>draft</span>
         )}
       </span>
-      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0, marginLeft: 8 }}>
-        {confirmed}/{total}
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+        {newReplies > 0 && (
+          <span
+            title={newReplies + ' new ' + (newReplies === 1 ? 'reply' : 'replies') + ' from lodges'}
+            style={{
+              fontSize: 10, fontWeight: 600,
+              background: '#C62828', color: '#fff',
+              padding: '1px 6px', borderRadius: 9, lineHeight: 1.3,
+              minWidth: 16, textAlign: 'center',
+            }}
+          >
+            {newReplies}
+          </span>
+        )}
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+          {confirmed}/{total}
+        </span>
       </span>
     </button>
   )
