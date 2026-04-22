@@ -165,15 +165,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
         </div>
       )}
 
-      {section === 'guests' && (
-        <div style={{ padding: '8px 0', borderBottom: '0.5px solid var(--border-default)' }}>
-          <NavItem label="Transfers" active={activeView === 'transfers'} onClick={() => { onSelectTour(null); onSelectView('transfers') }} />
-          <NavItem label="Excursions" active={activeView === 'guest-excursions'} onClick={() => { onSelectTour(null); onSelectView('guest-excursions') }} />
-          <NavItem label="Accommodation" active={activeView === 'guest-accommodation'} onClick={() => { onSelectTour(null); onSelectView('guest-accommodation') }} />
-          <NavItem label="Payments" active={activeView === 'guest-payments'} onClick={() => { onSelectTour(null); onSelectView('guest-payments') }} />
-          <NavItem label="Bikes & gear" active={activeView === 'guest-bikes'} onClick={() => { onSelectTour(null); onSelectView('guest-bikes') }} />
-        </div>
-      )}
+      {section === 'guests' && null}
 
       {/* Tour list */}
       <div style={{ flex: 1, overflow: 'auto' }}>

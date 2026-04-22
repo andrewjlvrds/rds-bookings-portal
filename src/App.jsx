@@ -12,6 +12,7 @@ import Correspondence from './components/Correspondence'
 import Transfers from './components/Transfers'
 import Guests from './components/Guests'
 import GuestDashboard from './components/GuestDashboard'
+import GuestTourPanel from './components/GuestTourPanel'
 import PlannerDashboard from './components/PlannerDashboard'
 import NewTour from './components/NewTour'
 import './styles/global.css'
@@ -261,7 +262,7 @@ export default function App() {
     }
 
     if (activeTour && activeView === 'guest-tour') {
-      return <Guests tours={tours} filterTour={activeTour.name} />
+      return <GuestTourPanel tour={activeTour} tours={tours} />
     }
 
     if (activeView === 'guest-excursions') {
