@@ -91,6 +91,10 @@ export default async function handler(req, res) {
 
   var dry = (req.query.dry !== 'false'); // default: dry-run true for safety
   var maxMessages = parseInt(req.query.max || '2000', 10);
+  // Quick mode: only run step 1 (inventory), skip Gmail+matching. Use this
+  // first to confirm blob counts before running the full reindex which
+  // takes much longer.
+  var inventoryOnly = req.query.inventory === 'true';
 
   try {
     // ───────────────────────── Step 1: Inventory existing blobs ─────────────────────────
@@ -105,19 +109,35 @@ export default async function handler(req, res) {
       pagesScanned++;
     }
 
-    // Bucket by inbound/outbound (fetch each to check direction)
+    // Bucket by inbound/outbound. We parallelise the direction-check fetches
+    // in batches of 25 to keep total inventory time under ~10s for ~300 blobs.
     var inboundBlobs = [];
     var outboundBlobs = [];
     var unmatchedBlobs = [];
     var undetermined = [];
 
-    for (var i = 0; i < allBlobs.length; i++) {
-      var b = allBlobs[i];
-      // Fast path: outbound can be in any booking prefix; only way to know
-      // is the `direction` field inside the blob. Fetch and check.
+    async function checkOne(b) {
       try {
         var r = await fetch(b.url);
         var em = await r.json();
+        return { blob: b, email: em };
+      } catch (e) {
+        return { blob: b, error: e.message };
+      }
+    }
+
+    var BATCH = 25;
+    for (var i = 0; i < allBlobs.length; i += BATCH) {
+      var chunk = allBlobs.slice(i, i + BATCH);
+      var results = await Promise.all(chunk.map(checkOne));
+      for (var j = 0; j < results.length; j++) {
+        var r = results[j];
+        if (r.error) {
+          undetermined.push({ pathname: r.blob.pathname, error: r.error });
+          continue;
+        }
+        var b = r.blob;
+        var em = r.email;
         if (b.pathname.indexOf('emails/unmatched/') === 0) {
           unmatchedBlobs.push({ blob: b, email: em });
         } else if (em.direction === 'outbound') {
@@ -125,9 +145,21 @@ export default async function handler(req, res) {
         } else {
           inboundBlobs.push({ blob: b, email: em });
         }
-      } catch (e) {
-        undetermined.push({ pathname: b.pathname, error: e.message });
       }
+    }
+
+    // Inventory-only bailout — return what we have without touching Gmail.
+    if (inventoryOnly) {
+      return res.status(200).json({
+        mode: 'inventory-only',
+        total_blobs: allBlobs.length,
+        inbound_existing: inboundBlobs.length,
+        outbound_preserved: outboundBlobs.length,
+        unmatched_existing: unmatchedBlobs.length,
+        undetermined: undetermined.length,
+        sample_inbound_paths: inboundBlobs.slice(0, 5).map(function(b) { return b.blob.pathname; }),
+        sample_outbound_paths: outboundBlobs.slice(0, 5).map(function(b) { return b.blob.pathname; }),
+      });
     }
 
     // ───────────────────────── Step 2: Fetch bookings + build maps ─────────────────────────
