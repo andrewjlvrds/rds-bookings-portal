@@ -98,6 +98,18 @@ function safeId(gmailId) {
   return gmailId.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
 }
 
+// Real tour names we know about. A routed tour bucket must match one of these,
+// otherwise the tour field in Zoho is stale/malformed and routing there would
+// create phantom buckets.
+var KNOWN_TOURS = {
+  'FoSA Mar 26': 1, 'FoSA Apr 26': 1, 'BoN May 26': 1,
+  'GL Jul 26': 1, 'FoSA 9 Sep 26': 1, 'FoSA 11 Sep 26': 1,
+  'FoSA Oct 26': 1, 'FoSA Mar 27': 1,
+};
+function isKnownTour(name) {
+  return !!(name && KNOWN_TOURS[name]);
+}
+
 // Subject pattern that looks like Helen's lodge correspondence:
 //   "Re: Lodge Name: Date:" or "Re: Lodge Name - Date"
 // If this matches, it's a lodge email regardless of recipient domain.
@@ -416,6 +428,12 @@ export default async function handler(req, res) {
         // The Lodges module often has no/stale email addresses, but Helen's
         // subject line reliably contains the lodge name: "Re: Drotskys: 24 Sep 2026".
         // Scan subject tokens against our lodge-keyword index and cross with date.
+        //
+        // When multiple lodge candidates match (e.g. "Desert Sands" subject hits
+        // Desert Sands, Desert Camp, Desert Lodge via shared 'desert' keyword),
+        // we must prefer the candidate whose full lodge name has the LONGEST
+        // substring overlap with the subject. This prevents misrouting to
+        // look-alike lodges.
         var subjLower = (subj || '').toLowerCase();
         var candidateBookings = [];
         var seenBookingIds = {};
@@ -431,9 +449,34 @@ export default async function handler(req, res) {
           }
         }
 
+        // Score each candidate by how much of its lodge name appears in subject
+        if (candidateBookings.length > 0) {
+          function candidateLodgeName(c) {
+            var n = (c.Lodge_Name && c.Lodge_Name.name) || c.Lodge_Name || c.Name || '';
+            if (typeof n !== 'string') return '';
+            return n.replace(/\s*-\s*Day\s+\d+.*$/i, '').replace(/\s*-\s*\d{4}-\d{2}-\d{2}.*$/, '').trim().toLowerCase();
+          }
+          function scoreCandidate(c) {
+            var nm = candidateLodgeName(c);
+            if (!nm) return 0;
+            // Try exact full name
+            if (subjLower.indexOf(nm) > -1) return nm.length * 10;
+            // Else find longest contiguous prefix-match on words
+            var words = nm.split(/\s+/);
+            var best = 0;
+            for (var wn = 0; wn < words.length; wn++) {
+              if (STOP_WORDS[words[wn]]) continue;
+              if (subjLower.indexOf(words[wn]) > -1) best += words[wn].length;
+            }
+            return best;
+          }
+          candidateBookings.sort(function(a, b) { return scoreCandidate(b) - scoreCandidate(a); });
+        }
+
         if (candidateBookings.length > 0) {
           var emailDatesAll = extractIsoDates(subj + '\n' + body);
           var subjDateMatch = null;
+          // Walk candidates in score order — higher score = better name match
           for (var cb = 0; cb < candidateBookings.length; cb++) {
             if (candidateBookings[cb].Check_in_Date && emailDatesAll.has(candidateBookings[cb].Check_in_Date)) {
               subjDateMatch = candidateBookings[cb];
@@ -442,12 +485,17 @@ export default async function handler(req, res) {
           }
 
           if (subjDateMatch) {
+            var sdmTour = (subjDateMatch.Tour && subjDateMatch.Tour.name) || '';
+            // Safety: only route if tour is a known real tour. Otherwise the
+            // booking has a malformed Tour lookup and we shouldn't blindly
+            // trust it — fall through to tour bucket with unknown_tour label.
             decision.status = 'routed';
             decision.match_method = 'lodge_subject_date';
             decision.target_booking_id = subjDateMatch.id;
-            decision.target_tour = (subjDateMatch.Tour && subjDateMatch.Tour.name) || '';
+            decision.target_tour = sdmTour;
             decision.target_lodge = (subjDateMatch.Lodge_Name && subjDateMatch.Lodge_Name.name) || subjDateMatch.Lodge_Name || subjDateMatch.Name;
             decision.target_check_in = subjDateMatch.Check_in_Date;
+            if (!isKnownTour(sdmTour)) decision.warning = 'unknown_tour_name_on_booking';
             counts.matched_subject_date = (counts.matched_subject_date || 0) + 1;
             routing.push(decision);
             if (!dry) await writeRecord(decision, { from: from, to: to, subject: subj, date: date, body: body }, existingBlobKeys, counts, writeErrors);
@@ -455,18 +503,15 @@ export default async function handler(req, res) {
           }
 
           // Subject mentions a lodge but date doesn't match any of its bookings.
-          // If all candidates belong to the same tour, route to that tour bucket.
-          var candTours = {};
-          for (var ct = 0; ct < candidateBookings.length; ct++) {
-            var ctn = (candidateBookings[ct].Tour && candidateBookings[ct].Tour.name) || '';
-            if (ctn) candTours[ctn] = (candTours[ctn] || 0) + 1;
-          }
-          var candTourKeys = Object.keys(candTours);
-          if (candTourKeys.length === 1) {
+          // If the top-scored candidate's tour is valid (exists in TOUR_LABEL_PREFIXES
+          // mapping), route to that tour bucket. Otherwise skip this fallback.
+          var topCandidate = candidateBookings[0];
+          var topTourName = (topCandidate.Tour && topCandidate.Tour.name) || '';
+          if (topTourName && isKnownTour(topTourName)) {
             decision.status = 'routed';
             decision.match_method = 'tour_bucket_via_subject';
-            decision.target_tour = candTourKeys[0];
-            decision.target_lodge = (candidateBookings[0].Lodge_Name && candidateBookings[0].Lodge_Name.name) || candidateBookings[0].Lodge_Name || candidateBookings[0].Name;
+            decision.target_tour = topTourName;
+            decision.target_lodge = (topCandidate.Lodge_Name && topCandidate.Lodge_Name.name) || topCandidate.Lodge_Name || topCandidate.Name;
             decision.target_booking_id = null;
             counts.matched_tour_bucket++;
             routing.push(decision);
