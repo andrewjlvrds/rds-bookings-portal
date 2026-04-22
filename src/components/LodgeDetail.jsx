@@ -57,7 +57,9 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
 
   const fetchEmails = () => {
     setLoadingEmails(true)
-    fetch('/api/bp-emails?booking_id=' + bookingId)
+    const url = '/api/bp-emails?booking_id=' + bookingId +
+      (lodgeName ? '&lodge=' + encodeURIComponent(lodgeName) : '')
+    fetch(url)
       .then(r => r.json())
       .then(d => { setEmails(d.emails || []); setLoadingEmails(false) })
       .catch(() => setLoadingEmails(false))
