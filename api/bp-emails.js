@@ -1,15 +1,18 @@
 import { list } from '@vercel/blob';
 
 /*
- * bp-emails — lodge email thread for a booking.
+ * bp-emails — lodge email thread for a specific booking.
  *
- * Primary lookup: list blobs under emails/booking/{bookingId}/
+ * Strictly scoped to the booking ID. Each booking (a specific lodge stay
+ * on a specific tour) has its own email thread stored under
+ * emails/booking/{bookingId}/. We do NOT aggregate across bookings for
+ * the same lodge — different stays at the same lodge on different tours
+ * are deliberately separate threads.
  *
- * Fallback (if primary returns 0 AND ?lodge=NAME is provided):
- * scan all emails/booking/ blobs, fetch each, and match by lodge name
- * appearing in subject/body/from/to. Handles the case where emails
- * exist in blob under an older/different bookingId for the same lodge
- * (stale from booking recreation or legacy lodge_correspondence routing).
+ * If this endpoint returns 0 emails, that's the accurate answer — either
+ * no emails have been sent via the portal for this booking yet, or
+ * inbound replies weren't matched to this booking by poll-gmail. Fix at
+ * the source (import from Gmail, or improve matching), not here.
  */
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -20,11 +23,9 @@ export default async function handler(req, res) {
   var bookingId = req.query.booking_id;
   if (!bookingId) return res.status(400).json({ error: 'booking_id required' });
 
-  var lodgeName = (req.query.lodge || '').trim();
   var prefix = 'emails/booking/' + bookingId + '/';
 
   try {
-    // ─── Primary lookup ───
     var result = await list({ prefix: prefix });
     var blobs = result.blobs || [];
 
@@ -41,52 +42,6 @@ export default async function handler(req, res) {
       }
     }
 
-    var fallbackUsed = false;
-    var fallbackScanned = 0;
-
-    // ─── Fallback: search by lodge name when primary is empty ───
-    if (emails.length === 0 && lodgeName) {
-      fallbackUsed = true;
-      var needle = lodgeName.toLowerCase();
-
-      var allBlobs = [];
-      var cursor = undefined;
-      var page = 0;
-      while (page < 20) {
-        var pageResult = await list({
-          prefix: 'emails/booking/',
-          limit: 1000,
-          cursor: cursor,
-        });
-        allBlobs = allBlobs.concat(pageResult.blobs || []);
-        if (!pageResult.hasMore || !pageResult.cursor) break;
-        cursor = pageResult.cursor;
-        page++;
-      }
-
-      for (var j = 0; j < allBlobs.length; j++) {
-        var b = allBlobs[j];
-        // Skip blobs under the original (empty) prefix we already scanned
-        if (b.pathname.indexOf(prefix) === 0) continue;
-        fallbackScanned++;
-        try {
-          var r = await fetch(b.url);
-          var em = await r.json();
-          var haystack = [
-            em.subject || em.email_subject || '',
-            em.body || em.email_content || '',
-            em.from || em.email_from || '',
-            em.to || '',
-          ].join(' ').toLowerCase();
-          if (haystack.indexOf(needle) > -1) {
-            emails.push(em);
-          }
-        } catch (e) {
-          fetchErrors++;
-        }
-      }
-    }
-
     emails.sort(function(a, b) {
       return new Date(b.date || b.email_date || 0) - new Date(a.date || a.email_date || 0);
     });
@@ -99,9 +54,6 @@ export default async function handler(req, res) {
         prefix_searched: prefix,
         blobs_found: blobs.length,
         fetch_errors: fetchErrors,
-        fallback_used: fallbackUsed,
-        fallback_lodge: fallbackUsed ? lodgeName : null,
-        fallback_scanned: fallbackScanned,
       }
     });
   } catch(err) {
