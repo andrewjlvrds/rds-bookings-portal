@@ -683,6 +683,12 @@ function EmailRow({ email, bookingId, onDelete }) {
   const firstLine = body.split('\n').filter(l => l.trim())[0] || ''
   const preview = firstLine.length > 120 ? firstLine.substring(0, 120) + '...' : firstLine
 
+  // Extract flags from ai_flags array
+  const flags = Array.isArray(email.ai_flags) ? email.ai_flags : []
+  const swapFlag = flags.find(f => f && f.lodge_swap)
+  const fanOutFlag = flags.find(f => f && f.fanned_out_from)
+  const matchMethod = email.match_method || email._match_method || null
+
   const downloadUrl = (att) => {
     if (!att.attachmentId || !gmailMsgId) return null
     return '/api/gmail-attachment?messageId=' + encodeURIComponent(gmailMsgId) +
@@ -720,6 +726,22 @@ function EmailRow({ email, bookingId, onDelete }) {
         <span style={{ color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {expanded ? subject : (preview || subject)}
         </span>
+        {swapFlag && (
+          <span style={{
+            fontSize: 9, flexShrink: 0, padding: '1px 5px', borderRadius: 3,
+            background: 'var(--amber-bg, #fef3c7)', color: 'var(--amber-text, #92400e)', fontWeight: 600,
+          }} title={'Originally filed under ' + (swapFlag.original_lodge || 'another lodge')}>
+            {swapFlag.original_lodge || 'lodge swap'}
+          </span>
+        )}
+        {fanOutFlag && (
+          <span style={{
+            fontSize: 9, flexShrink: 0, padding: '1px 5px', borderRadius: 3,
+            background: 'var(--blue-bg)', color: 'var(--blue-text)', fontWeight: 500,
+          }} title="Copy of reply fanned out from a sibling booking via Message-ID match">
+            fan-out
+          </span>
+        )}
         {attachments.length > 0 && (
           <span style={{
             color: hasExtracted ? 'var(--green-text)' : 'var(--text-muted)',
@@ -736,6 +758,13 @@ function EmailRow({ email, bookingId, onDelete }) {
       {expanded && (
         <div style={{ padding: '8px 14px 14px 88px' }}>
           {subject && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Subject: {subject}</div>}
+          {(matchMethod || swapFlag || fanOutFlag) && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 6, fontSize: 10, color: 'var(--text-muted)' }}>
+              {matchMethod && <span>Match: {matchMethod}</span>}
+              {swapFlag && <span style={{ color: 'var(--amber-text, #92400e)' }}>Lodge swap from: {swapFlag.original_lodge || '?'}</span>}
+              {fanOutFlag && <span style={{ color: 'var(--blue-text)' }}>Fanned out from booking {fanOutFlag.fanned_out_from}</span>}
+            </div>
+          )}
           <div style={{
             fontSize: 12, lineHeight: 1.7, color: 'var(--text-primary)',
             whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto',
