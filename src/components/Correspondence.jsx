@@ -15,12 +15,143 @@ const TOUR_NAMES = {
 }
 
 function tourDisplay(shortName) {
-  // Check direct mapping first
   if (TOUR_NAMES[shortName]) return TOUR_NAMES[shortName]
-  // Try matching just the part before any /
   const base = shortName.split('/')[0]
   if (TOUR_NAMES[base]) return TOUR_NAMES[base]
   return shortName
+}
+
+// Derive the blob-safe tour key used in emails/tour-bucket/{key}/
+function toSafeKey(name) {
+  return (name || '').replace(/[^a-zA-Z0-9]+/g, '_')
+}
+
+// ── Shared email row component ──
+function EmailRow({ em, isExpanded, onToggle }) {
+  const isOut = em.direction === 'outbound'
+  const fromDisplay = isOut
+    ? (em.to || '').split('<')[0].trim() || em.to
+    : (em.from || '').split('<')[0].trim() || em.from
+  const originalLodge = em.ai_flags && Array.isArray(em.ai_flags)
+    ? (em.ai_flags.find(f => f && f.original_lodge) || {}).original_lodge
+    : null
+
+  return (
+    <div style={{ borderBottom: '0.5px solid var(--border-light)' }}>
+      <div
+        onClick={onToggle}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '9px 14px', cursor: 'pointer', fontSize: 12,
+          background: isExpanded ? 'var(--bg-secondary)' : 'transparent',
+        }}
+      >
+        <span style={{
+          fontWeight: 600, fontSize: 10, width: 40, flexShrink: 0, textAlign: 'center',
+          padding: '2px 0', borderRadius: 3,
+          background: isOut ? 'var(--blue-bg)' : 'var(--green-bg)',
+          color: isOut ? 'var(--blue-text)' : 'var(--green-text)',
+        }}>
+          {isOut ? 'OUT' : 'IN'}
+        </span>
+        <span style={{
+          fontWeight: 500, width: 180, flexShrink: 0,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {fromDisplay || '—'}
+        </span>
+        <span style={{
+          color: 'var(--text-secondary)', flex: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {em.subject || '(no subject)'}
+        </span>
+        {originalLodge && (
+          <span style={{
+            fontSize: 10, flexShrink: 0, padding: '1px 5px', borderRadius: 3,
+            background: 'var(--amber-bg, #fef3c7)', color: 'var(--amber-text, #92400e)',
+          }}>
+            {originalLodge}
+          </span>
+        )}
+        {em.attachments && em.attachments.length > 0 && (
+          <span style={{
+            fontSize: 10, flexShrink: 0,
+            color: em.attachments.some(a => a && a.extractedText) ? 'var(--green-text)' : 'var(--text-muted)',
+            background: em.attachments.some(a => a && a.extractedText) ? 'var(--green-bg)' : 'var(--bg-secondary)',
+            padding: '1px 5px', borderRadius: 3,
+          }}>
+            📎 {em.attachments.length}
+          </span>
+        )}
+        <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 72, textAlign: 'right' }}>
+          {fmtDate(em.date)}
+        </span>
+      </div>
+
+      {isExpanded && (
+        <div style={{ padding: '4px 14px 14px 62px', background: 'var(--bg-secondary)' }}>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+            <span><strong>From:</strong> {em.from || '—'}</span>
+            <span><strong>To:</strong> {em.to || '—'}</span>
+            {em.match_method && (
+              <span><strong>Match:</strong> {em.match_method}</span>
+            )}
+          </div>
+          <div style={{
+            fontSize: 12, lineHeight: 1.7, color: 'var(--text-primary)',
+            whiteSpace: 'pre-wrap', maxHeight: 500, overflowY: 'auto',
+            background: 'var(--bg-primary)', padding: '12px 14px',
+            borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-light)',
+          }}>
+            {em.body || em.snippet || '(no content)'}
+          </div>
+          {em.attachments && em.attachments.length > 0 && (
+            <div style={{
+              marginTop: 8, padding: '6px 10px',
+              background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)',
+              border: '0.5px solid var(--border-light)',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                Attachments ({em.attachments.length})
+              </div>
+              {em.attachments.map((att, aidx) => {
+                const gmailMsgId = em.gmail_message_id || em.message_id || ''
+                const attUrl = att.attachmentId && gmailMsgId
+                  ? '/api/gmail-attachment?messageId=' + encodeURIComponent(gmailMsgId) +
+                    '&attachmentId=' + encodeURIComponent(att.attachmentId) +
+                    '&filename=' + encodeURIComponent(att.filename || 'attachment') +
+                    '&mimeType=' + encodeURIComponent(att.mimeType || 'application/octet-stream')
+                  : null
+                return (
+                  <div key={aidx} style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0',
+                    fontSize: 11, color: 'var(--text-primary)',
+                  }}>
+                    <span style={{ fontSize: 12 }}>
+                      {(att.mimeType || '').includes('pdf') ? '📄' : '📎'}
+                    </span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {att.filename || 'attachment'}
+                    </span>
+                    {att.extractedText && (
+                      <span style={{ color: 'var(--green-text)', fontSize: 10 }}>✓ extracted</span>
+                    )}
+                    {attUrl && (
+                      <a href={attUrl} target="_blank" rel="noopener noreferrer"
+                        style={{ color: 'var(--blue-text)', fontSize: 10, textDecoration: 'none' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >Download</a>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function Correspondence() {
@@ -38,6 +169,13 @@ export default function Correspondence() {
   const [summary, setSummary] = useState(null)
   const [loadingSummary, setLoadingSummary] = useState(false)
 
+  // Tour bucket state
+  const [bucketCounts, setBucketCounts] = useState({})
+  const [bucketEmails, setBucketEmails] = useState([])
+  const [loadingBucket, setLoadingBucket] = useState(false)
+  const [bucketExpanded, setBucketExpanded] = useState(null)
+  const [bucketOpen, setBucketOpen] = useState(false)
+
   // Load labels on mount
   useEffect(() => {
     fetch('/api/gmail-labels')
@@ -53,6 +191,20 @@ export default function Correspondence() {
         setLoadingLabels(false)
       })
       .catch(() => setLoadingLabels(false))
+  }, [])
+
+  // Load tour-bucket counts on mount
+  useEffect(() => {
+    fetch('/api/tour-bucket-emails')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.buckets) {
+          const counts = {}
+          d.buckets.forEach(b => { counts[b.tour_key] = b.count })
+          setBucketCounts(counts)
+        }
+      })
+      .catch(() => {})
   }, [])
 
   // Parse label hierarchy — merge all sources, skip noise labels
@@ -121,6 +273,26 @@ export default function Correspondence() {
       })
       .catch(() => setLoadingEmails(false))
   }, [activeLabel])
+
+  // Load tour-bucket emails when tour changes
+  useEffect(() => {
+    if (!selectedTour) { setBucketEmails([]); setBucketOpen(false); return }
+    const display = tourDisplay(selectedTour.key)
+    const safeKey = toSafeKey(display)
+    const count = bucketCounts[safeKey] || 0
+    if (count === 0) { setBucketEmails([]); return }
+
+    setLoadingBucket(true)
+    setBucketEmails([])
+    setBucketExpanded(null)
+    fetch('/api/tour-bucket-emails?tour_key=' + encodeURIComponent(safeKey))
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) setBucketEmails(d.emails || [])
+        setLoadingBucket(false)
+      })
+      .catch(() => setLoadingBucket(false))
+  }, [selectedTour, bucketCounts])
 
   const loadMore = () => {
     if (!nextPageToken || !activeLabel || loadingEmails) return
@@ -197,6 +369,7 @@ export default function Correspondence() {
   const inCount = emails.filter(e => e.direction === 'inbound').length
   const outCount = emails.filter(e => e.direction === 'outbound').length
   const currentLodges = selectedTour ? (lodgesByTour[selectedTour.key] || []) : []
+  const selectedBucketCount = selectedTour ? (bucketCounts[toSafeKey(tourDisplay(selectedTour.key))] || 0) : 0
 
   return (
     <div>
@@ -213,6 +386,7 @@ export default function Correspondence() {
           {tours.map(t => {
             const isSelected = selectedTour && selectedTour.key === t.key
             const lodgeCount = (lodgesByTour[t.key] || []).length
+            const bCount = bucketCounts[toSafeKey(tourDisplay(t.key))] || 0
             // Determine year for colour coding
             const yearMatch = t.key.match(/(20\d{2})/) || tourDisplay(t.key).match(/'(\d{2})/)
             let yearColor = 'var(--border-default)'
@@ -239,6 +413,14 @@ export default function Correspondence() {
                 {tourDisplay(t.key)}
                 {lodgeCount > 0 && (
                   <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.6 }}>{lodgeCount}</span>
+                )}
+                {bCount > 0 && (
+                  <span style={{
+                    fontSize: 9, marginLeft: 3, padding: '0 4px', borderRadius: 8,
+                    background: 'var(--amber-bg, #fef3c7)', color: 'var(--amber-text, #92400e)',
+                  }}>
+                    {bCount}
+                  </span>
                 )}
               </button>
             )
@@ -367,119 +549,14 @@ export default function Correspondence() {
                     : 'No emails match this filter'}
                 </div>
               ) : (
-                filtered.map(em => {
-                  const isOut = em.direction === 'outbound'
-                  const isExpanded = expanded === em.id
-                  const fromDisplay = isOut
-                    ? (em.to || '').split('<')[0].trim() || em.to
-                    : (em.from || '').split('<')[0].trim() || em.from
-
-                  return (
-                    <div key={em.id} style={{ borderBottom: '0.5px solid var(--border-light)' }}>
-                      <div
-                        onClick={() => setExpanded(isExpanded ? null : em.id)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '9px 14px', cursor: 'pointer', fontSize: 12,
-                          background: isExpanded ? 'var(--bg-secondary)' : 'transparent',
-                        }}
-                      >
-                        <span style={{
-                          fontWeight: 600, fontSize: 10, width: 40, flexShrink: 0, textAlign: 'center',
-                          padding: '2px 0', borderRadius: 3,
-                          background: isOut ? 'var(--blue-bg)' : 'var(--green-bg)',
-                          color: isOut ? 'var(--blue-text)' : 'var(--green-text)',
-                        }}>
-                          {isOut ? 'OUT' : 'IN'}
-                        </span>
-                        <span style={{
-                          fontWeight: 500, width: 180, flexShrink: 0,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
-                          {fromDisplay || '—'}
-                        </span>
-                        <span style={{
-                          color: 'var(--text-secondary)', flex: 1,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
-                          {em.subject || '(no subject)'}
-                        </span>
-                        {em.attachments && em.attachments.length > 0 && (
-                          <span style={{
-                            fontSize: 10, flexShrink: 0,
-                            color: em.attachments.some(a => a && a.extractedText) ? 'var(--green-text)' : 'var(--text-muted)',
-                            background: em.attachments.some(a => a && a.extractedText) ? 'var(--green-bg)' : 'var(--bg-secondary)',
-                            padding: '1px 5px', borderRadius: 3,
-                          }}>
-                            📎 {em.attachments.length}
-                          </span>
-                        )}
-                        <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 72, textAlign: 'right' }}>
-                          {fmtDate(em.date)}
-                        </span>
-                      </div>
-
-                      {isExpanded && (
-                        <div style={{ padding: '4px 14px 14px 62px', background: 'var(--bg-secondary)' }}>
-                          <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                            <span><strong>From:</strong> {em.from || '—'}</span>
-                            <span><strong>To:</strong> {em.to || '—'}</span>
-                          </div>
-                          <div style={{
-                            fontSize: 12, lineHeight: 1.7, color: 'var(--text-primary)',
-                            whiteSpace: 'pre-wrap', maxHeight: 500, overflowY: 'auto',
-                            background: 'var(--bg-primary)', padding: '12px 14px',
-                            borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-light)',
-                          }}>
-                            {em.body || em.snippet || '(no content)'}
-                          </div>
-                          {em.attachments && em.attachments.length > 0 && (
-                            <div style={{
-                              marginTop: 8, padding: '6px 10px',
-                              background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)',
-                              border: '0.5px solid var(--border-light)',
-                            }}>
-                              <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                                Attachments ({em.attachments.length})
-                              </div>
-                              {em.attachments.map((att, aidx) => {
-                                const gmailMsgId = em.gmail_message_id || em.message_id || ''
-                                const attUrl = att.attachmentId && gmailMsgId
-                                  ? '/api/gmail-attachment?messageId=' + encodeURIComponent(gmailMsgId) +
-                                    '&attachmentId=' + encodeURIComponent(att.attachmentId) +
-                                    '&filename=' + encodeURIComponent(att.filename || 'attachment') +
-                                    '&mimeType=' + encodeURIComponent(att.mimeType || 'application/octet-stream')
-                                  : null
-                                return (
-                                  <div key={aidx} style={{
-                                    display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0',
-                                    fontSize: 11, color: 'var(--text-primary)',
-                                  }}>
-                                    <span style={{ fontSize: 12 }}>
-                                      {(att.mimeType || '').includes('pdf') ? '📄' : '📎'}
-                                    </span>
-                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {att.filename || 'attachment'}
-                                    </span>
-                                    {att.extractedText && (
-                                      <span style={{ color: 'var(--green-text)', fontSize: 10 }}>✓ extracted</span>
-                                    )}
-                                    {attUrl && (
-                                      <a href={attUrl} target="_blank" rel="noopener noreferrer"
-                                        style={{ color: 'var(--blue-text)', fontSize: 10, textDecoration: 'none' }}
-                                        onClick={(e) => e.stopPropagation()}
-                                      >Download</a>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
+                filtered.map(em => (
+                  <EmailRow
+                    key={em.id}
+                    em={em}
+                    isExpanded={expanded === em.id}
+                    onToggle={() => setExpanded(expanded === em.id ? null : em.id)}
+                  />
+                ))
               )}
             </div>
           </div>
@@ -494,6 +571,60 @@ export default function Correspondence() {
               >
                 {loadingEmails ? 'Loading...' : 'Load more'}
               </button>
+            </div>
+          )}
+
+          {/* ── Tour-bucket correspondence ── */}
+          {selectedBucketCount > 0 && (
+            <div style={{ marginTop: 18 }}>
+              <div
+                onClick={() => setBucketOpen(!bucketOpen)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                  padding: '10px 14px',
+                  background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)',
+                  border: '0.5px solid var(--border-default)',
+                }}
+              >
+                <span style={{ fontSize: 12, transform: bucketOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>▶</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Unmatched tour emails
+                </span>
+                <span style={{
+                  fontSize: 10, padding: '1px 7px', borderRadius: 8,
+                  background: 'var(--amber-bg, #fef3c7)', color: 'var(--amber-text, #92400e)', fontWeight: 600,
+                }}>
+                  {selectedBucketCount}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', flex: 1 }}>
+                  Emails linked to this tour but not matched to a specific booking
+                </span>
+              </div>
+
+              {bucketOpen && (
+                <div className="panel" style={{ marginTop: 6 }}>
+                  <div className="panel-body" style={{ padding: 0 }}>
+                    {loadingBucket ? (
+                      <div style={{ padding: 20, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                        Loading tour-bucket emails...
+                      </div>
+                    ) : bucketEmails.length === 0 ? (
+                      <div style={{ padding: 20, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                        No emails in tour bucket
+                      </div>
+                    ) : (
+                      bucketEmails.map(em => (
+                        <EmailRow
+                          key={em.id || em.message_id}
+                          em={em}
+                          isExpanded={bucketExpanded === (em.id || em.message_id)}
+                          onToggle={() => setBucketExpanded(bucketExpanded === (em.id || em.message_id) ? null : (em.id || em.message_id))}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>
