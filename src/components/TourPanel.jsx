@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Itinerary from './Itinerary'
 import Payments from './Payments'
 import { fmtDateFull } from '../utils/helpers'
@@ -25,6 +25,16 @@ export default function TourPanel({
   const VALID_TABS = ['itinerary', 'payments']
   const safeInitial = VALID_TABS.indexOf(initialTab) >= 0 ? initialTab : 'itinerary'
   const [activeTab, setActiveTab] = useState(safeInitial)
+  const [showReplyList, setShowReplyList] = useState(false)
+  const replyDropRef = useRef(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showReplyList) return
+    const handler = (e) => { if (replyDropRef.current && !replyDropRef.current.contains(e.target)) setShowReplyList(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showReplyList])
 
   // If the caller passes a new initialTab (e.g. "Back" from LodgeDetail
   // restores the tab you came from), honour it — but only if it's valid.
@@ -35,7 +45,8 @@ export default function TourPanel({
   }, [initialTab, tour && tour.id])
 
   const bookings = (tour && tour.bookings) || []
-  const newReplyCount = bookings.filter(b => b && b.New_Reply === true).length
+  const replyBookings = bookings.filter(b => b && b.New_Reply === true)
+  const newReplyCount = replyBookings.length
 
   return (
     <div>
@@ -50,12 +61,59 @@ export default function TourPanel({
             </span>
           )}
           {newReplyCount > 0 && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              fontSize: 12, color: '#C62828', fontWeight: 500,
-            }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#C62828' }} />
-              {newReplyCount} lodge{newReplyCount !== 1 ? 's' : ''} need{newReplyCount === 1 ? 's' : ''} response
+            <span style={{ position: 'relative' }} ref={replyDropRef}>
+              <span
+                onClick={() => setShowReplyList(!showReplyList)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 12, color: '#C62828', fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#C62828' }} />
+                {newReplyCount} lodge{newReplyCount !== 1 ? 's' : ''} need{newReplyCount === 1 ? 's' : ''} response
+                <span style={{ fontSize: 10, opacity: 0.7 }}>▾</span>
+              </span>
+              {showReplyList && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, marginTop: 6,
+                  background: 'var(--bg-primary)', border: '0.5px solid var(--border-default)',
+                  borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  minWidth: 240, zIndex: 20,
+                }}>
+                  <div style={{ padding: '8px 12px', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', borderBottom: '0.5px solid var(--border-light)' }}>
+                    Lodges awaiting response
+                  </div>
+                  {replyBookings.map(bk => {
+                    const lodge = (bk.Lodge_Name && bk.Lodge_Name.name) || bk.Lodge_Name || bk.Name || ''
+                    const checkIn = bk.Check_in_Date || ''
+                    const lastResp = bk.Last_Response_Date || ''
+                    return (
+                      <div
+                        key={bk.id || bk['Record Id']}
+                        onClick={() => { setShowReplyList(false); onSelectBooking(bk, 'itinerary') }}
+                        style={{
+                          padding: '8px 12px', cursor: 'pointer', fontSize: 12,
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          borderBottom: '0.5px solid var(--border-light)',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 500 }}>{lodge}</div>
+                          {checkIn && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>Check-in: {checkIn}</div>}
+                        </div>
+                        {lastResp && (
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                            {lastResp}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </span>
           )}
         </div>
