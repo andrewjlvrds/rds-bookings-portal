@@ -157,11 +157,28 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap) {
       return { booking: candidates[0], method: 'lodge_name_unique' };
     }
 
-    // Multiple candidates — score each by date overlap
+    // Multiple candidates — Sep 26 Group A/B disambiguation
+    // Pre-new-protocol emails use "Group A" (FoSA 11 Sep 26) and "Group B" (FoSA 9 Sep 26)
+    var groupFiltered = candidates;
+    var groupAMatch = /group\s*a\b/i.test(subj);
+    var groupBMatch = /group\s*b\b/i.test(subj);
+    if (groupAMatch || groupBMatch) {
+      var targetTour = groupAMatch ? 'FoSA 11 Sep' : 'FoSA 9 Sep';
+      var filtered = candidates.filter(function(c) {
+        var tourName = (c.Tour && c.Tour.name) || c.Tour || '';
+        return tourName.indexOf(targetTour) !== -1;
+      });
+      if (filtered.length === 1) {
+        return { booking: filtered[0], method: 'group_ab_' + (groupAMatch ? 'a' : 'b') };
+      }
+      if (filtered.length > 0) groupFiltered = filtered;
+    }
+
+    // Score remaining candidates by date overlap
     var best = null;
     var bestScore = 0;
-    for (var ci = 0; ci < candidates.length; ci++) {
-      var c = candidates[ci];
+    for (var ci = 0; ci < groupFiltered.length; ci++) {
+      var c = groupFiltered[ci];
       var score = dateMatchScore(emailDates, c.Check_in_Date, c.Check_out_Date);
       if (score > bestScore) { bestScore = score; best = c; }
     }
