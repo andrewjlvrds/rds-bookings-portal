@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { isConfirmed } from '../utils/helpers'
 
 function categorizeTours(tours) {
   const today = new Date().toISOString().split('T')[0]
@@ -364,9 +363,24 @@ function TourGroup({ label, tours, activeTour, onTourClick, onAdd, drafts }) {
 
 function TourItem({ tour, active, onClick, dimmed, isDraft }) {
   const bookings = tour.bookings || []
-  const confirmed = bookings.filter(b => isConfirmed(b)).length
-  const total = bookings.length
   const newReplies = bookings.filter(b => b && b.New_Reply === true).length
+
+  // Count overdue payments across all bookings
+  const now = new Date().toISOString().slice(0, 10)
+  let overdueCount = 0
+  bookings.forEach(b => {
+    const status = (b.Status || '')
+    if (status === 'Balance Paid' || status === 'Cancelled' || status === 'Not Available') return
+    const slots = [
+      [b.Deposit_Due_Date, b.Deposit_Amount, b.Deposit_Paid_Date],
+      [b.Second_Payment_Due_Date, b.Second_Payment_Amount, b.nd_Payment_Paid_Date],
+      [b.Third_Payment_Due_Date, b.Third_Payment_Amount, b.rd_Payment_Paid_Date],
+      [b.Fourth_Payment_Due_Date, b.Fourth_Payment_Amount, b.th_Payment_Paid_Date],
+    ]
+    slots.forEach(([due, amount, paid]) => {
+      if (due && !paid && parseFloat(amount) > 0 && due < now) overdueCount++
+    })
+  })
 
   let hasDraft = false
   try {
@@ -389,11 +403,11 @@ function TourItem({ tour, active, onClick, dimmed, isDraft }) {
     >
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
         {tour.name}
-        {((hasDraft && total === 0) || isDraft) && (
+        {((hasDraft && bookings.length === 0) || isDraft) && (
           <span style={{ fontSize: 9, color: 'var(--amber-text)', fontWeight: 500 }}>draft</span>
         )}
       </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, marginLeft: 8 }}>
         {newReplies > 0 && (
           <span
             title={newReplies + ' new ' + (newReplies === 1 ? 'reply' : 'replies') + ' from lodges'}
@@ -407,9 +421,19 @@ function TourItem({ tour, active, onClick, dimmed, isDraft }) {
             {newReplies}
           </span>
         )}
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-          {confirmed}/{total}
-        </span>
+        {overdueCount > 0 && (
+          <span
+            title={overdueCount + ' overdue payment' + (overdueCount !== 1 ? 's' : '')}
+            style={{
+              fontSize: 10, fontWeight: 600,
+              background: '#E65100', color: '#fff',
+              padding: '1px 6px', borderRadius: 9, lineHeight: 1.3,
+              minWidth: 16, textAlign: 'center',
+            }}
+          >
+            {overdueCount}
+          </span>
+        )}
       </span>
     </button>
   )
