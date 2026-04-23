@@ -565,6 +565,10 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             rdsRef={rdsRef}
             tourName={tour ? tour.name : ''}
             lastSubject={emails.length > 0 ? (emails[0].subject || emails[0].email_subject || '') : ''}
+            lastInboundMessageId={(() => {
+              var inbound = emails.find(e => e.direction === 'inbound' && e.rfc_message_id)
+              return inbound ? inbound.rfc_message_id : null
+            })()}
             onSent={() => { setTimeout(() => { fetchEmails(); if (onRefresh) onRefresh() }, 1000) }}
           />
         </div>
@@ -968,7 +972,7 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
   )
 }
 
-function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, lastSubject, onSent }) {
+function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, lastSubject, lastInboundMessageId, onSent }) {
   const [open, setOpen] = useState(false)
   const [sent, setSent] = useState(false)
   const defaultSubject = lastSubject && lastSubject.startsWith('Re:')
@@ -991,6 +995,7 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, las
         body: JSON.stringify({
           to: toAddr, subject, body: body.trim(),
           booking_ids: [bookingId], lodge_name: lodgeName, tour_name: tourName, is_reply: true,
+          in_reply_to_message_id: lastInboundMessageId || null,
         }),
       })
       const result = await res.json()

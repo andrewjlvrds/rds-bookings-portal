@@ -11,6 +11,7 @@ export async function storeEmail(emailData) {
     message_id: messageId,
     gmail_message_id: emailData.gmail_message_id || messageId,
     gmail_thread_id: emailData.gmail_thread_id || null,
+    rfc_message_id: emailData.rfc_message_id || null,
     type: emailData.type || 'lodge_inbound',
     direction: emailData.direction || 'inbound',
     lodge_id: lodgeId || null,

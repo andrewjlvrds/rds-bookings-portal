@@ -289,6 +289,7 @@ export default async function(req, res) {
         var to = getHeader(headers, 'To');
         var date = getHeader(headers, 'Date');
         var threadId = msg.threadId || '';
+        var rfcMessageId = getHeader(headers, 'Message-ID') || getHeader(headers, 'Message-Id') || null;
 
         // Skip if from us
         if (from.indexOf('bookings@ridedownsouth.com') > -1 || from.indexOf('ridedownsouth.com') > -1) {
@@ -351,6 +352,7 @@ export default async function(req, res) {
             await storeEmail({
               gmail_message_id: msgId,
               message_id: msgId,
+              rfc_message_id: rfcMessageId,
               type: 'lodge_inbound',
               direction: 'inbound',
               email_from: from,
@@ -448,6 +450,7 @@ export default async function(req, res) {
           email_date: date ? new Date(date).toISOString() : new Date().toISOString(),
           gmail_thread_id: threadId,
           gmail_message_id: msgId,
+          rfc_message_id: rfcMessageId,
           attachments: attachmentsWithText,
           match_method: matchMethod,
         });
@@ -478,6 +481,7 @@ export default async function(req, res) {
                 email_date: date ? new Date(date).toISOString() : new Date().toISOString(),
                 gmail_thread_id: threadId,
                 gmail_message_id: msgId,
+                rfc_message_id: rfcMessageId,
                 attachments: attachmentsWithText,
                 match_method: matchMethod,
                 ai_flags: [{ fanned_out_from: bookingId, via: 'message_id_header' }],
