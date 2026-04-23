@@ -72,17 +72,23 @@ export function extractIsoDates(text) {
 export function dateMatchScore(emailDates, checkIn, checkOut) {
   if (!emailDates || emailDates.size === 0) return 0;
   var score = 0;
-  function nearby(iso, target) {
-    if (!target) return false;
-    if (iso === target) return true;
+  function matchType(iso, target) {
+    if (!target) return 0;
+    if (iso === target) return 2; // exact
     var d = new Date(iso); var t = new Date(target);
-    if (isNaN(d) || isNaN(t)) return false;
+    if (isNaN(d) || isNaN(t)) return 0;
     var diff = Math.abs(d - t) / 86400000;
-    return diff <= 1;
+    if (diff <= 1) return 1; // nearby
+    return 0;
   }
   emailDates.forEach(function(iso) {
-    if (nearby(iso, checkIn)) score += 2;
-    else if (nearby(iso, checkOut)) score += 1;
+    var ciMatch = matchType(iso, checkIn);
+    var coMatch = matchType(iso, checkOut);
+    // Exact check-in = 4, nearby check-in = 2, exact check-out = 2, nearby check-out = 1
+    if (ciMatch === 2) score += 4;
+    else if (ciMatch === 1) score += 2;
+    else if (coMatch === 2) score += 2;
+    else if (coMatch === 1) score += 1;
   });
   return score;
 }
