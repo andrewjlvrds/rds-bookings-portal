@@ -115,7 +115,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       const fields = getSlotFields(p.slot)
       if (fields) {
         byBooking[p.bookingId].updates[fields.date] = paidDate
-        byBooking[p.bookingId].updates[fields.amount] = p.amount || 0
+        byBooking[p.bookingId].updates[fields.amount] = Math.round((p.amount || 0) * 100) / 100
       }
       byBooking[p.bookingId].payments.push(p)
       paidKeys.push(p.key)
