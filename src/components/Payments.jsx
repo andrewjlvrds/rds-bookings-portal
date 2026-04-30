@@ -11,6 +11,8 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const [selected, setSelected] = useState(new Set())
   const [bulkPaying, setBulkPaying] = useState(false)
   const [lastPaidKeys, setLastPaidKeys] = useState([]) // for undo
+  const [amountOverrides, setAmountOverrides] = useState({}) // key -> overridden amount
+  const [editingAmount, setEditingAmount] = useState(null) // key of row being edited
   const lastClickedIdx = useRef(null)
 
   const now = today()
@@ -89,7 +91,8 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
 
   // Mark single payment as paid
   const handleMarkPaid = async (p) => {
-    if (!confirm(`Mark ${p.label} for ${p.lodge} as paid (${p.currency} ${p.amount ? p.amount.toLocaleString() : '—'})?`)) return
+    const finalAmount = amountOverrides[p.key] !== undefined ? amountOverrides[p.key] : p.amount
+    if (!confirm(`Mark ${p.label} for ${p.lodge} as paid (${p.currency} ${finalAmount ? finalAmount.toLocaleString() : '—'})?`)) return
     await markPaid([p])
   }
 
@@ -97,7 +100,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const handleBulkPaid = async () => {
     const toPay = filtered.filter(p => selected.has(p.key) && p.statusKey !== 'paid')
     if (toPay.length === 0) return
-    const total = toPay.reduce((s, p) => s + (p.amount || 0), 0)
+    const total = toPay.reduce((s, p) => s + (amountOverrides[p.key] !== undefined ? amountOverrides[p.key] : (p.amount || 0)), 0)
     if (!confirm(`Mark ${toPay.length} payment${toPay.length > 1 ? 's' : ''} as paid (total: R ${total.toLocaleString()})?`)) return
     await markPaid(toPay)
   }
@@ -114,8 +117,9 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       if (!byBooking[p.bookingId]) byBooking[p.bookingId] = { updates: { id: p.bookingId }, payments: [] }
       const fields = getSlotFields(p.slot)
       if (fields) {
+        const finalAmount = amountOverrides[p.key] !== undefined ? amountOverrides[p.key] : p.amount
         byBooking[p.bookingId].updates[fields.date] = paidDate
-        byBooking[p.bookingId].updates[fields.amount] = Math.round((p.amount || 0) * 100) / 100
+        byBooking[p.bookingId].updates[fields.amount] = Math.round((finalAmount || 0) * 100) / 100
       }
       byBooking[p.bookingId].payments.push(p)
       paidKeys.push(p.key)
@@ -144,6 +148,8 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       if (!res.ok || result.error) throw new Error(result.error || 'Update failed')
       setLastPaidKeys(paidKeys)
       setSelected(new Set())
+      setAmountOverrides({})
+      setEditingAmount(null)
       if (onRefresh) onRefresh()
     } catch (err) {
       console.error('Mark paid error:', err)
@@ -399,7 +405,47 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
                 </td>
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.label}</td>
                 <td style={{ textAlign: 'right', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                  {p.amount ? p.amount.toLocaleString() : '—'}
+                  {p.statusKey !== 'paid' && editingAmount === p.key ? (
+                    <input
+                      type="number"
+                      step="0.01"
+                      autoFocus
+                      defaultValue={amountOverrides[p.key] !== undefined ? amountOverrides[p.key] : p.amount}
+                      onBlur={(e) => {
+                        const val = parseFloat(e.target.value)
+                        if (!isNaN(val) && val !== p.amount) {
+                          setAmountOverrides(prev => ({ ...prev, [p.key]: val }))
+                        } else if (val === p.amount) {
+                          setAmountOverrides(prev => { const n = { ...prev }; delete n[p.key]; return n })
+                        }
+                        setEditingAmount(null)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.target.blur()
+                        if (e.key === 'Escape') { setEditingAmount(null) }
+                      }}
+                      style={{
+                        width: '100%', textAlign: 'right', fontWeight: 500,
+                        fontVariantNumeric: 'tabular-nums', fontSize: 13,
+                        padding: '2px 4px', border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-sm)', background: 'var(--bg-secondary)',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      onClick={p.statusKey !== 'paid' ? () => setEditingAmount(p.key) : undefined}
+                      style={{
+                        cursor: p.statusKey !== 'paid' ? 'pointer' : 'default',
+                        color: amountOverrides[p.key] !== undefined ? 'var(--blue-text)' : undefined,
+                        borderBottom: p.statusKey !== 'paid' ? '1px dashed var(--border-color)' : undefined,
+                      }}
+                      title={p.statusKey !== 'paid' ? 'Click to edit amount' : undefined}
+                    >
+                      {(amountOverrides[p.key] !== undefined ? amountOverrides[p.key] : p.amount)
+                        ? (amountOverrides[p.key] !== undefined ? amountOverrides[p.key] : p.amount).toLocaleString()
+                        : '—'}
+                    </span>
+                  )}
                 </td>
                 <td style={{ fontSize: 12 }}>{p.currency}</td>
                 <td>
