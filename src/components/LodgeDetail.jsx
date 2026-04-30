@@ -288,6 +288,18 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
       </div>
 
       {activeDetailTab === 'details' && (<>
+      {/* Discrepancy warning banner */}
+      {booking.Reservation_Comments && booking.Reservation_Comments.includes('⚠') && (
+        <div style={{
+          background: '#FFF3E0', border: '1px solid #FFB74D', borderRadius: 6,
+          padding: '10px 14px', marginBottom: 16, fontSize: 13, lineHeight: 1.5
+        }}>
+          <span style={{ fontWeight: 600, color: '#E65100' }}>⚠ Lodge response mismatch</span>
+          <span style={{ color: '#BF360C', marginLeft: 8 }}>
+            {booking.Reservation_Comments.split('|')[0].trim()}
+          </span>
+        </div>
+      )}
       {/* Row 1: Tour details + Booking details */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Tour details panel */}

@@ -1033,6 +1033,14 @@ ${merged.map((bk, i) => {
                             }}
                           />
                         )}
+                        {(bk.Reservation_Comments || '').includes('⚠') && (
+                          <span
+                            title={(bk.Reservation_Comments || '').split('|')[0].trim()}
+                            style={{
+                              fontSize: 12, cursor: 'help', flexShrink: 0,
+                            }}
+                          >⚠️</span>
+                        )}
                         {lodge}
                       </div>
                     )}

@@ -67,11 +67,36 @@ var SYSTEM_PROMPT = [
   '- For payment confirmations, extract payment_received_amount, payment_received_date, and payment_slot. If the lodge mentions "deposit" → payment_slot is "deposit". If they mention "balance" or "final payment" → infer the appropriate slot.',
   '- If payment confirmation and deposit was paid, suggested_status should be "Deposit Paid". If balance/final payment, "Balance Paid".',
   '',
+  'VALIDATION — COMPARE LODGE RESPONSE AGAINST BOOKING CONTEXT:',
+  'After extracting fields, compare what the lodge has quoted/confirmed against the booking context above.',
+  'Check for discrepancies in:',
+  '- CHECK-IN DATE: Does the lodge\'s invoice/confirmation date match the requested check-in?',
+  '- CHECK-OUT DATE: Does it match the requested check-out?',
+  '- NUMBER OF NIGHTS: Does the number of nights on the invoice match what was requested?',
+  '- ROOM COUNT: Does the total number of rooms (guest + guide) match what was requested?',
+  '  Room config format is "single/twin/double/guides" e.g. "8/2/1/3" means 8 single, 2 twin, 1 double, 3 guide rooms.',
+  '  Count total rooms in the lodge response and compare against the total from the config.',
+  '- GUEST COUNT: Does the number of guests/pax on the invoice match expected pax from the room config?',
+  '  Expected pax = singles + (twins × 2) + (doubles × 2). Guides are separate.',
+  '- MEAL BASIS: Does the meal basis match what was requested (BB, DBB, HB, FB etc)?',
+  '',
+  'Only flag CLEAR discrepancies — not minor formatting differences.',
+  'If the booking context field is "Unknown" or empty, skip that check.',
+  '',
+  'Include discrepancies in the output as an array. Each discrepancy should have:',
+  '- field: what was checked (e.g. "check_in", "nights", "room_count", "guest_count", "meals")',
+  '- expected: what RDS requested (from booking context)',
+  '- received: what the lodge quoted/confirmed',
+  '- severity: "high" (wrong dates or significantly wrong counts) or "medium" (minor count differences, meal basis)',
+  '',
   'RESPOND WITH VALID JSON ONLY:',
   '{',
   '  "extracted": {',
   '    "field_name": { "value": <value>, "confidence": "high|medium|low" }',
   '  },',
+  '  "discrepancies": [',
+  '    { "field": "check_in", "expected": "2026-05-02", "received": "2026-05-03", "severity": "high" }',
+  '  ],',
   '  "summary": "One sentence summary",',
   '  "requires_action": "Action needed from RDS, or null",',
   '  "flags": ["anything unusual"]',
@@ -122,7 +147,7 @@ export async function parseEmail(emailBody, bookingContext) {
   var userMessage = '';
 
   if (bookingContext) {
-    userMessage += '--- BOOKING CONTEXT ---\n';
+    userMessage += '--- BOOKING CONTEXT (what RDS requested) ---\n';
     userMessage += 'Lodge: ' + (bookingContext.lodge_name || 'Unknown') + '\n';
     userMessage += 'Tour: ' + (bookingContext.tour_name || 'Unknown') + '\n';
     userMessage += 'Check-in: ' + (bookingContext.check_in || 'Unknown') + '\n';
@@ -130,7 +155,13 @@ export async function parseEmail(emailBody, bookingContext) {
     userMessage += 'Nights: ' + (bookingContext.nights || 'Unknown') + '\n';
     userMessage += 'Current status: ' + (bookingContext.status || 'Unknown') + '\n';
     if (bookingContext.rooms_requested) {
-      userMessage += 'Rooms requested: ' + bookingContext.rooms_requested + ' total\n';
+      userMessage += 'Room config requested (single/twin/double/guides): ' + bookingContext.rooms_requested + '\n';
+    }
+    if (bookingContext.guide_rooms) {
+      userMessage += 'Guide rooms: ' + bookingContext.guide_rooms + '\n';
+    }
+    if (bookingContext.meals_requested) {
+      userMessage += 'Meal basis requested: ' + bookingContext.meals_requested + '\n';
     }
     if (bookingContext.deposit_amount) {
       userMessage += 'Deposit amount: ' + bookingContext.deposit_amount + ' (paid: ' + (bookingContext.deposit_paid || 'unknown') + ')\n';
@@ -273,5 +304,25 @@ export function extractionToZohoFields(extraction) {
     updates.Cancellation_Policy_Text = updates.Cancellation_Policy_Text.substring(0, 252) + '...';
   }
 
-  return { updates: updates, flagged: flagged, has_flags: Object.keys(flagged).length > 0 };
+  // Handle discrepancies from validation
+  var discrepancies = extraction.discrepancies || [];
+  if (discrepancies.length > 0) {
+    // Build a warning string for Reservation_Comments
+    var warnings = discrepancies.map(function(d) {
+      return '⚠ ' + d.field + ': expected ' + d.expected + ', got ' + d.received;
+    });
+    var warningStr = warnings.join('; ');
+    // Prepend to reservation comments so it's visible
+    if (updates.Reservation_Comments) {
+      updates.Reservation_Comments = warningStr + ' | ' + updates.Reservation_Comments;
+    } else {
+      updates.Reservation_Comments = warningStr;
+    }
+    // Re-truncate after prepending
+    if (updates.Reservation_Comments.length > 255) {
+      updates.Reservation_Comments = updates.Reservation_Comments.substring(0, 252) + '...';
+    }
+  }
+
+  return { updates: updates, flagged: flagged, has_flags: Object.keys(flagged).length > 0, discrepancies: discrepancies };
 }

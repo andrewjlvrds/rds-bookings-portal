@@ -244,7 +244,7 @@ export default async function(req, res) {
     // Fetch all bookings with Enquiry Sent or later status to match against.
     // Paginate — per_page=200 is Zoho's max, and we may have more than 200
     // total bookings so the first page alone isn't safe.
-    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Check_out_Date,Nights,Lodge,Tour,id,Deposit_Amount,Second_Payment_Amount,Third_Payment_Amount,Fourth_Payment_Amount,Deposit_Paid_Date,nd_Payment_Paid_Date,rd_Payment_Paid_Date,th_Payment_Paid_Date';
+    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Check_out_Date,Nights,Lodge,Tour,id,Deposit_Amount,Second_Payment_Amount,Third_Payment_Amount,Fourth_Payment_Amount,Deposit_Paid_Date,nd_Payment_Paid_Date,rd_Payment_Paid_Date,th_Payment_Paid_Date,Sgl_Twin_Dbl_Guides,Guide_Rooms,Meals';
     var allBookings = [];
     var bkPage = 1;
     var bkHasMore = true;
@@ -525,11 +525,20 @@ export default async function(req, res) {
         var contentForParsing = fullContent || '';
         if (!isAutoReply && contentForParsing && contentForParsing.trim().length > 10) {
           try {
+            var tourName = '';
+            if (matchedBooking.Tour) {
+              tourName = typeof matchedBooking.Tour === 'object' ? matchedBooking.Tour.name : matchedBooking.Tour;
+            }
+            var roomConfig = matchedBooking.Sgl_Twin_Dbl_Guides || '';
             var bookingContext = {
               lodge_name: matchedBooking.Lodge_Name || matchedBooking.Name || '',
+              tour_name: tourName,
               check_in: matchedBooking.Check_in_Date || '',
               check_out: matchedBooking.Check_out_Date || '',
               nights: matchedBooking.Nights || '',
+              rooms_requested: roomConfig,
+              guide_rooms: matchedBooking.Guide_Rooms || '',
+              meals_requested: matchedBooking.Meals || '',
               status: matchedBooking.Status || '',
               deposit_amount: matchedBooking.Deposit_Amount || '',
               deposit_paid: matchedBooking.Deposit_Paid_Date ? 'yes' : 'no',
@@ -555,6 +564,9 @@ export default async function(req, res) {
 
             if (fieldResult.has_flags) {
               console.log('AI flagged fields for review:', JSON.stringify(fieldResult.flagged));
+            }
+            if (fieldResult.discrepancies && fieldResult.discrepancies.length > 0) {
+              console.log('⚠ DISCREPANCIES detected for', matchedBooking.Name || bookingId, ':', JSON.stringify(fieldResult.discrepancies));
             }
           } catch (aiErr) {
             console.error('AI parse failed for', bookingId, aiErr.message);
@@ -606,6 +618,7 @@ export default async function(req, res) {
           auto_reply: isAutoReply,
           ai_summary: isAutoReply ? 'Auto-reply — no status change' : (aiResult ? aiResult.summary : null),
           ai_status: isAutoReply ? null : (aiResult && aiResult.extracted && aiResult.extracted.suggested_status ? aiResult.extracted.suggested_status.value : null),
+          discrepancies: (!isAutoReply && aiResult && aiResult.discrepancies && aiResult.discrepancies.length > 0) ? aiResult.discrepancies : null,
           fields_updated: isAutoReply ? 0 : Object.keys(zohoUpdates).length - 1,
         });
 
