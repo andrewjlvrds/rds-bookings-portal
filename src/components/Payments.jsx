@@ -13,7 +13,16 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const [lastPaidKeys, setLastPaidKeys] = useState([]) // for undo
   const [amountOverrides, setAmountOverrides] = useState({}) // key -> overridden amount
   const [editingAmount, setEditingAmount] = useState(null) // key of row being edited
+  const [dismissed, setDismissed] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('rds_dismissed_payments') || '[]')) }
+    catch { return new Set() }
+  })
   const lastClickedIdx = useRef(null)
+
+  const persistDismissed = (next) => {
+    setDismissed(next)
+    localStorage.setItem('rds_dismissed_payments', JSON.stringify([...next]))
+  }
 
   const now = today()
   const allPayments = extractPayments(allBookings, now)
@@ -28,10 +37,13 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
     }).map(t => t.name)
   )
   const payments = allPayments.filter(p => futureTourNames.has(p.tour))
+  const [showDismissed, setShowDismissed] = useState(false)
+  const dismissedCount = payments.filter(p => dismissed.has(p.key)).length
+  const activePayments = payments.filter(p => !dismissed.has(p.key))
 
   // Apply filters
-  let filtered = payments
-  if (filter !== 'all') {
+  let filtered = showDismissed ? payments.filter(p => dismissed.has(p.key)) : activePayments
+  if (!showDismissed && filter !== 'all') {
     if (filter === 'upcoming') {
       filtered = filtered.filter(p => p.statusKey === 'upcoming' || p.statusKey === 'due-soon')
     } else {
@@ -42,11 +54,11 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
     filtered = filtered.filter(p => p.tour === tourFilter)
   }
 
-  // Metrics
-  const overdue = payments.filter(p => p.statusKey === 'overdue')
-  const dueThisWeek = payments.filter(p => p.statusKey === 'due-soon')
-  const upcoming = payments.filter(p => p.statusKey === 'upcoming')
-  const paid = payments.filter(p => p.statusKey === 'paid')
+  // Metrics (exclude dismissed)
+  const overdue = activePayments.filter(p => p.statusKey === 'overdue')
+  const dueThisWeek = activePayments.filter(p => p.statusKey === 'due-soon')
+  const upcoming = activePayments.filter(p => p.statusKey === 'upcoming')
+  const paid = activePayments.filter(p => p.statusKey === 'paid')
 
   const overdueTotal = overdue.reduce((s, p) => s + (p.amount || 0), 0)
   const weekTotal = dueThisWeek.reduce((s, p) => s + (p.amount || 0), 0)
@@ -229,7 +241,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
         <div className="metric-card">
           <div className="metric-label">Paid to date</div>
           <div className="metric-value" style={{ color: 'var(--green-text)' }}>{paid.length}</div>
-          <div className="metric-sub">of {payments.length} total</div>
+          <div className="metric-sub">of {activePayments.length} total</div>
         </div>
       </div>
 
@@ -238,12 +250,21 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
         {['all', 'overdue', 'upcoming', 'paid'].map(f => (
           <button
             key={f}
-            className={'filter-btn' + (filter === f ? ' active' : '')}
-            onClick={() => setFilter(f)}
+            className={'filter-btn' + (!showDismissed && filter === f ? ' active' : '')}
+            onClick={() => { setShowDismissed(false); setFilter(f) }}
           >
             {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
         ))}
+        {dismissedCount > 0 && (
+          <button
+            className={'filter-btn' + (showDismissed ? ' active' : '')}
+            onClick={() => setShowDismissed(!showDismissed)}
+            style={showDismissed ? { background: '#F3E5F5', color: '#7B1FA2', borderColor: '#CE93D8' } : { color: 'var(--text-muted)' }}
+          >
+            Dismissed ({dismissedCount})
+          </button>
+        )}
         <span style={{ fontSize: 12, color: 'var(--text-hint)', padding: '5px 4px' }}>|</span>
         <button
           className={'filter-btn' + (tourFilter === 'all' ? ' active' : '')}
@@ -292,7 +313,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
           <span style={{ fontWeight: 500, color: 'var(--blue-text)' }}>
             {selectedCount} selected
           </span>
-          {selectedUnpaid > 0 && (
+          {selectedUnpaid > 0 && !showDismissed && (
             <button
               className="btn btn-sm"
               style={{ fontSize: 11, padding: '3px 10px', background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7' }}
@@ -300,6 +321,21 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
               disabled={bulkPaying}
             >
               {bulkPaying ? 'Updating...' : `Mark ${selectedUnpaid} as paid`}
+            </button>
+          )}
+          {selectedUnpaid > 0 && !showDismissed && (
+            <button
+              className="btn btn-sm"
+              style={{ fontSize: 11, padding: '3px 10px', color: 'var(--text-muted)' }}
+              onClick={() => {
+                const toDismiss = filtered.filter(p => selected.has(p.key) && p.statusKey !== 'paid')
+                const next = new Set(dismissed)
+                toDismiss.forEach(p => next.add(p.key))
+                persistDismissed(next)
+                setSelected(new Set())
+              }}
+            >
+              Dismiss {selectedUnpaid}
             </button>
           )}
           <button
@@ -453,24 +489,46 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                    {p.statusKey !== 'paid' && (
-                      <button
-                        className="btn btn-sm"
-                        style={{ fontSize: 11, padding: '3px 8px', background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7' }}
-                        onClick={() => handleMarkPaid(p)}
-                        disabled={paying === p.key || bulkPaying}
-                      >
-                        {paying === p.key ? '...' : 'Paid'}
-                      </button>
-                    )}
-                    {p.booking && (
+                    {showDismissed ? (
                       <button
                         className="btn btn-sm"
                         style={{ fontSize: 11, padding: '3px 8px' }}
-                        onClick={() => handleView(p)}
+                        onClick={() => { const next = new Set(dismissed); next.delete(p.key); persistDismissed(next) }}
                       >
-                        View
+                        Restore
                       </button>
+                    ) : (
+                      <>
+                        {p.statusKey !== 'paid' && (
+                          <button
+                            className="btn btn-sm"
+                            style={{ fontSize: 11, padding: '3px 8px', background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7' }}
+                            onClick={() => handleMarkPaid(p)}
+                            disabled={paying === p.key || bulkPaying}
+                          >
+                            {paying === p.key ? '...' : 'Paid'}
+                          </button>
+                        )}
+                        {p.statusKey !== 'paid' && (
+                          <button
+                            className="btn btn-sm"
+                            style={{ fontSize: 11, padding: '3px 8px', color: 'var(--text-muted)' }}
+                            onClick={() => { const next = new Set(dismissed); next.add(p.key); persistDismissed(next) }}
+                            title="Dismiss this payment"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {p.booking && (
+                          <button
+                            className="btn btn-sm"
+                            style={{ fontSize: 11, padding: '3px 8px' }}
+                            onClick={() => handleView(p)}
+                          >
+                            View
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </td>
