@@ -3,7 +3,7 @@ import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, getStatus, daysBetwe
 import { BookingActivityLog } from './ActivityLog'
 import RoutingPicker from './RoutingPicker'
 
-export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead, tours }) {
+export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead, tours, backLabel, focusEmailId }) {
   const [emails, setEmails] = useState([])
   const [loadingEmails, setLoadingEmails] = useState(true)
   const [editing, setEditing] = useState(null)
@@ -12,10 +12,11 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
   const [gmailResults, setGmailResults] = useState([])
   const [searchingGmail, setSearchingGmail] = useState(false)
   const [lastDismissed, setLastDismissed] = useState(null)
-  // If the booking arrives with a pending new-reply flag, land on the
-  // Correspondence tab so Helen sees the thread first.
+  // If the booking arrives with a pending new-reply flag, OR if Helen
+  // navigated here by clicking a specific email, land on the
+  // Correspondence tab so she sees the thread first.
   const [activeDetailTab, setActiveDetailTab] = useState(
-    booking.New_Reply === true ? 'correspondence' : 'details'
+    (focusEmailId || booking.New_Reply === true) ? 'correspondence' : 'details'
   )
 
   const bookingId = booking.id || booking['Record Id']
@@ -147,7 +148,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
           background: 'none', border: 'none', color: 'var(--text-muted)',
           fontSize: 13, padding: '0 0 12px', cursor: 'pointer',
         }}>
-          ← Back to {tour ? tour.name : 'itinerary'}
+          ← {backLabel || ('Back to ' + (tour ? tour.name : 'itinerary'))}
         </button>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {booking.New_Reply === true && (
@@ -556,7 +557,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>No emails recorded for this booking yet.</div>
           ) : (
             <div>
-              {emails.map((em, i) => <EmailRow key={em.id || i} email={em} bookingId={bookingId} onDelete={fetchEmails} readState={readState} onMarkRead={onMarkRead} tours={tours} onReassigned={() => { fetchEmails(); if (onRefresh) onRefresh() }} />)}
+              {emails.map((em, i) => <EmailRow key={em.id || i} email={em} bookingId={bookingId} onDelete={fetchEmails} readState={readState} onMarkRead={onMarkRead} tours={tours} onReassigned={() => { fetchEmails(); if (onRefresh) onRefresh() }} autoExpand={focusEmailId && em.id === focusEmailId} />)}
             </div>
           )}
 
@@ -707,12 +708,13 @@ function EditableCell({ value, display, field, type, onEdit }) {
   )
 }
 
-function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, onReassigned }) {
-  const [expanded, setExpanded] = useState(false)
+function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, onReassigned, autoExpand }) {
+  const [expanded, setExpanded] = useState(!!autoExpand)
   const [showAttText, setShowAttText] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [reassigning, setReassigning] = useState(false)
   const [reassignError, setReassignError] = useState(null)
+  const rowRef = React.useRef(null)
   const isOutbound = email.direction === 'outbound'
   const isUnread = !isOutbound && email.id && readState && !readState[email.id]
   const date = email.date || email.email_date || ''
@@ -724,6 +726,19 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
   const hasExtracted = attachments.some(a => a && a.extractedText)
   const firstLine = body.split('\n').filter(l => l.trim())[0] || ''
   const preview = firstLine.length > 120 ? firstLine.substring(0, 120) + '...' : firstLine
+
+  // When this row is the auto-expand target, scroll it into view
+  // and mark read once on mount.
+  useEffect(() => {
+    if (autoExpand && rowRef.current) {
+      // Defer slightly so the layout has settled.
+      setTimeout(() => {
+        rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+      if (onMarkRead && email.id && isUnread) onMarkRead(email.id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoExpand])
 
   const handleToggle = () => {
     const next = !expanded
@@ -823,7 +838,13 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
   }
 
   return (
-    <div style={{ borderBottom: '0.5px solid var(--border-light)' }}>
+    <div
+      ref={rowRef}
+      style={{
+        borderBottom: '0.5px solid var(--border-light)',
+        boxShadow: autoExpand ? '0 0 0 2px var(--blue-mid, #4A90E2) inset' : 'none',
+      }}
+    >
       <div
         onClick={handleToggle}
         style={{

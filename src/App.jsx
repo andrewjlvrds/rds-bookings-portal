@@ -62,6 +62,13 @@ export default function App() {
   // When a user opens LodgeDetail from inside the TourPanel, remember which
   // tab they came from so the Back button returns them there.
   const [returnToTourTab, setReturnToTourTab] = useState('itinerary')
+  // Track where Helen navigated to LodgeDetail FROM — Inbox or Tour panel.
+  // Drives the Back button label and destination.
+  const [lodgeDetailOrigin, setLodgeDetailOrigin] = useState('tour-panel')
+  // When she opens LodgeDetail by clicking a specific email (e.g. from
+  // Inbox), pass the email ID through so LodgeDetail can auto-expand
+  // and scroll to that email instead of dropping her on a list of 13.
+  const [focusEmailId, setFocusEmailId] = useState(null)
 
   // Shared (Helen + Andrew) email read-state. Loaded from /api/email-read-state
   // on mount. Map of { emailId: readAtISO }. Mutations write through to the
@@ -225,9 +232,12 @@ export default function App() {
     setActiveView('tour-panel')
   }
 
-  const handleSelectBooking = (bk, fromTab) => {
+  const handleSelectBooking = (bk, fromTab, opts) => {
     setActiveBooking(bk)
     if (fromTab) setReturnToTourTab(fromTab)
+    if (opts && opts.origin) setLodgeDetailOrigin(opts.origin)
+    else setLodgeDetailOrigin('tour-panel')
+    setFocusEmailId(opts && opts.focusEmailId ? opts.focusEmailId : null)
     setActiveView('lodge-detail')
   }
 
@@ -299,13 +309,21 @@ export default function App() {
     }
 
     if (activeView === 'lodge-detail' && activeBooking) {
+      const backToInbox = lodgeDetailOrigin === 'inbox'
+      const backLabel = backToInbox ? 'Back to inbox' : ('Back to ' + (activeTour ? activeTour.name : 'itinerary'))
       return (
         <LodgeDetail
           booking={activeBooking}
           tour={activeTour}
           tours={tours}
           lodges={lodges}
-          onBack={() => { setActiveBooking(null); setActiveView('tour-panel') }}
+          onBack={() => {
+            setActiveBooking(null)
+            setFocusEmailId(null)
+            setActiveView(backToInbox ? 'inbox' : 'tour-panel')
+          }}
+          backLabel={backLabel}
+          focusEmailId={focusEmailId}
           onRefresh={() => refreshData(activeTour ? activeTour.id : null)}
           readState={readState}
           onMarkRead={markRead}
@@ -327,7 +345,7 @@ export default function App() {
           ensureFresh={() => fetchInboxStats(false)}
           onLocalUpdate={(updater) => setInboxData(prev => prev ? updater(prev) : prev)}
           onLocalReadyDoneUpdate={(updater) => setInboxReadyToMarkDone(updater)}
-          onSelectBooking={(bk) => handleSelectBooking(bk, 'correspondence')}
+          onSelectBooking={(bk, emailId) => handleSelectBooking(bk, 'correspondence', { origin: 'inbox', focusEmailId: emailId })}
           onMarkRead={markRead}
           onMarkManyRead={markManyRead}
         />

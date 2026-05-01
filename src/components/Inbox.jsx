@@ -87,7 +87,7 @@ export default function Inbox({
       return
     }
     if (onMarkRead && email.id) onMarkRead(email.id)
-    onSelectBooking(bk)
+    onSelectBooking(bk, email.id)
   }
 
   const handleDismiss = (email) => {
