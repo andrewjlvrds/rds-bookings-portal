@@ -85,38 +85,73 @@ export function extractCheckInDate(body) {
  * Find the lodge name in an email body by cross-referencing against
  * the known lodges directory. Returns the matched lodge record or null.
  *
- * Approach: each known lodge name is checked against the body; the
- * one with the most distinct mentions wins. Ties broken by length
- * (longer/more specific name preferred over shorter ambiguous one).
+ * Strategy:
+ *   1. Authoritative signal first: "welcome to <lodge>" / "details on <lodge>"
+ *      — Perfectstay's own templates name the booking's property in these
+ *      lines. Other mentions in the body (Reception, Wifi, parking) refer
+ *      to the shared physical operation, not the booked property.
+ *   2. If no authoritative signal matches a known lodge, fall back to
+ *      occurrence-count across the whole body.
+ *
+ * This matters for Perfectstay's Swakopmund operation, where 'Desert Sands'
+ * and 'Studio Apartment Self Catering' are both bookable properties run
+ * by the same outfit and both names appear in every email body.
  */
 export function extractLodgeFromBody(body, lodges) {
   if (!body || !Array.isArray(lodges) || lodges.length === 0) return null;
 
   var bodyLower = body.toLowerCase();
+
+  // Pass 1 — authoritative signals. Look for the welcome line and the
+  // "details on <lodge>" line that Perfectstay's templates use to name
+  // the actual property the guest is booked into.
+  var authoritativePatterns = [
+    /welcome\s+to\s+([^!.\n]{3,80})/i,
+    /details\s+on\s+([^!.\n]{3,80})\s*click\s*here/i,
+    /your\s+stay\s+at\s+([^!.\n]{3,80})/i,
+  ];
+
+  for (var ap = 0; ap < authoritativePatterns.length; ap++) {
+    var m = body.match(authoritativePatterns[ap]);
+    if (!m) continue;
+    var phrase = m[1].toLowerCase().trim();
+    // Find the longest known lodge name that appears within the matched phrase
+    var bestAuth = null;
+    for (var li = 0; li < lodges.length; li++) {
+      var lodge = lodges[li];
+      if (!lodge || !lodge.Name) continue;
+      var nameLower = lodge.Name.toLowerCase().trim();
+      if (nameLower.length < 4) continue;
+      if (phrase.indexOf(nameLower) > -1) {
+        if (!bestAuth || nameLower.length > bestAuth.nameLen) {
+          bestAuth = { lodge: lodge, nameLen: nameLower.length };
+        }
+      }
+    }
+    if (bestAuth) return bestAuth.lodge;
+  }
+
+  // Pass 2 — fall back to occurrence count across the whole body
   var candidates = [];
-
   for (var i = 0; i < lodges.length; i++) {
-    var lodge = lodges[i];
-    if (!lodge || !lodge.Name) continue;
-    var nameLower = lodge.Name.toLowerCase().trim();
-    if (nameLower.length < 4) continue; // too generic to be reliable
+    var lodge2 = lodges[i];
+    if (!lodge2 || !lodge2.Name) continue;
+    var n = lodge2.Name.toLowerCase().trim();
+    if (n.length < 4) continue;
 
-    // Count occurrences. Whole-word match where reasonable.
     var occurrences = 0;
     var idx = 0;
-    while ((idx = bodyLower.indexOf(nameLower, idx)) !== -1) {
+    while ((idx = bodyLower.indexOf(n, idx)) !== -1) {
       occurrences++;
-      idx += nameLower.length;
+      idx += n.length;
     }
-
     if (occurrences > 0) {
-      candidates.push({ lodge: lodge, occurrences: occurrences, nameLength: nameLower.length });
+      candidates.push({ lodge: lodge2, occurrences: occurrences, nameLength: n.length });
     }
   }
 
   if (candidates.length === 0) return null;
 
-  // Sort by occurrences desc, then by name length desc (more specific names win)
   candidates.sort(function(a, b) {
     if (b.occurrences !== a.occurrences) return b.occurrences - a.occurrences;
     return b.nameLength - a.nameLength;
