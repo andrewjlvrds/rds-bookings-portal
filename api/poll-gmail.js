@@ -353,6 +353,55 @@ export default async function(req, res) {
         if (!match) {
           match = matchEmailToBooking(subject, body, from, refMap, nameMap, emailMap);
         }
+
+        // Zoho fallback — when the in-memory matcher returns ambiguous
+        // because of a lodge-name match with conflicting dates, the
+        // most likely cause is that the right booking exists in Zoho
+        // but wasn't in our paginated allBookings snapshot (or had a
+        // slightly different Lodge_Name).
+        //
+        // Hit Zoho directly: search Lodge_Bookings at this lodge name
+        // and filter by date proximity. If exactly one booking falls
+        // within 60 days of an email-extracted date, route to it.
+        var ambiguousReasons = ['lodge_name_ambiguous_no_date_match', 'sender_email_unique_but_dates_conflict'];
+        if (!match.booking && match.lodge && ambiguousReasons.indexOf(match.reason) !== -1) {
+          try {
+            var emailDatesForLookup = extractIsoDates(subject + '\n' + (body || '').substring(0, 8000));
+            if (emailDatesForLookup && emailDatesForLookup.size > 0) {
+              // Search Zoho for bookings at this lodge name. The matcher
+              // already normalised the name (lowercased, split on " - ").
+              // Use Zoho's "starts_with" criteria to be tolerant of
+              // suffix variations like "Bahnhof Hotel - Aus" vs "Bahnhof Hotel".
+              var lodgeQuery = encodeURIComponent('(Lodge_Name:starts_with:' + match.lodge + ')');
+              var lookupRes = await zohoApi('GET',
+                'Lodge_Bookings/search?criteria=' + lodgeQuery +
+                '&fields=id,Lodge_Name,Check_in_Date,Check_out_Date,RDS_Reference,Status' +
+                '&per_page=50'
+              );
+              var found = (lookupRes && lookupRes.data) || [];
+              console.log('Zoho fallback for', match.lodge, '— found', found.length, 'bookings');
+
+              if (found.length > 0) {
+                // Score each by date proximity to extracted email dates.
+                var bestZ = null;
+                var bestZScore = 0;
+                for (var fi = 0; fi < found.length; fi++) {
+                  var fb = found[fi];
+                  var fScore = dateMatchScore(emailDatesForLookup, fb.Check_in_Date, fb.Check_out_Date);
+                  if (fScore > bestZScore) { bestZScore = fScore; bestZ = fb; }
+                }
+                if (bestZ && bestZScore > 0) {
+                  console.log('Zoho fallback resolved to', bestZ.id, 'score', bestZScore);
+                  match = { booking: bestZ, method: 'zoho_lookup_score_' + bestZScore };
+                }
+              }
+            }
+          } catch (lookupErr) {
+            console.error('Zoho fallback lookup failed:', lookupErr.message);
+            // Non-fatal — fall through to unmatched
+          }
+        }
+
         var matchedBooking = match.booking;
         var matchMethod = match.method;
 
