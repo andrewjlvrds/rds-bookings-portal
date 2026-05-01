@@ -37,8 +37,10 @@ export default function Inbox({
       const res = await fetch('/api/sync-gmail-read-state', { method: 'POST' })
       const d = await res.json()
       if (!d.success) throw new Error(d.error || 'Sync failed')
+      // Refresh data BEFORE showing the result toast so the count
+      // visible alongside the toast is the post-sync count, not stale.
+      if (onRefresh) await onRefresh()
       setSyncResult({ total: d.stats.total_marked_read })
-      if (onRefresh) onRefresh()
     } catch (err) {
       setSyncResult({ error: err.message })
     } finally {

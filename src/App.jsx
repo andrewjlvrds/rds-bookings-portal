@@ -81,10 +81,10 @@ export default function App() {
 
   const fetchInboxStats = (force) => {
     // Skip refetch if we already have fresh data, unless force=true
-    if (!force && inboxFetchedAt && Date.now() - inboxFetchedAt < 30000) return
+    if (!force && inboxFetchedAt && Date.now() - inboxFetchedAt < 30000) return Promise.resolve()
     setInboxLoading(true)
     setInboxError(null)
-    Promise.all([
+    return Promise.all([
       fetch(API + '/api/inbox').then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load inbox'))),
       fetch(API + '/api/activity-log?status=waiting').then(r => r.ok ? r.json() : { entries: [] }),
     ])
