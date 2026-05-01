@@ -26,6 +26,9 @@
     },
     "api/diag-reply-match-rate.js": {
       "maxDuration": 60
+    },
+    "api/sync-gmail-read-state.js": {
+      "maxDuration": 120
     }
   }
 }

@@ -22,6 +22,29 @@ export default function Inbox({
 }) {
   const [routingEmail, setRoutingEmail] = useState(null) // { email, sourcePath }
   const [activeTab, setActiveTab] = useState(null) // 'routing' | 'unread' | 'ready' | null (auto)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
+
+  const handleSyncFromGmail = async () => {
+    if (!confirm(
+      'This will mark portal emails as already-read if they have been read in Gmail (or are older than 30 days).\n\n' +
+      'It is safe to run multiple times but normally only needs to be run once at cutover.\n\n' +
+      'Continue?'
+    )) return
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/sync-gmail-read-state', { method: 'POST' })
+      const d = await res.json()
+      if (!d.success) throw new Error(d.error || 'Sync failed')
+      setSyncResult({ total: d.stats.total_marked_read })
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      setSyncResult({ error: err.message })
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   // On first mount of this view, ensure data is fresh (cached if <30s old).
   useEffect(() => { if (ensureFresh) ensureFresh() }, [])
@@ -176,14 +199,42 @@ export default function Inbox({
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 500 }}>Inbox</h1>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
             {total === 0 ? 'All caught up.' : total + ' item' + (total === 1 ? '' : 's') + ' need attention'}
           </div>
+          {syncResult && (
+            <div style={{
+              marginTop: 8, padding: '6px 10px', fontSize: 12,
+              background: syncResult.error ? 'var(--red-bg, #FEE)' : 'var(--green-bg, #E8F5E9)',
+              color: syncResult.error ? 'var(--red-text)' : 'var(--green-text)',
+              borderRadius: 4, display: 'inline-block',
+            }}>
+              {syncResult.error
+                ? 'Sync failed: ' + syncResult.error
+                : 'Synced — ' + syncResult.total + ' email' + (syncResult.total === 1 ? '' : 's') + ' marked read'}
+            </div>
+          )}
         </div>
-        <button onClick={onRefresh} className="btn btn-sm" style={{ fontSize: 12 }} disabled={loading}>{loading ? 'Refreshing...' : '↻ Refresh'}</button>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          {/* Show Sync from Gmail only when there's a meaningful backlog
+              and we haven't just successfully synced. Helen runs this
+              once at cutover; after that it should rarely be needed. */}
+          {(data?.stats?.unread || 0) > 30 && !syncResult && (
+            <button
+              onClick={handleSyncFromGmail}
+              className="btn btn-sm"
+              style={{ fontSize: 12 }}
+              disabled={syncing}
+              title="Mark emails as read in the portal if they have already been read in Gmail. Run this once at cutover."
+            >
+              {syncing ? 'Syncing...' : 'Sync from Gmail'}
+            </button>
+          )}
+          <button onClick={onRefresh} className="btn btn-sm" style={{ fontSize: 12 }} disabled={loading}>{loading ? 'Refreshing...' : '↻ Refresh'}</button>
+        </div>
       </div>
 
       {total === 0 && (
