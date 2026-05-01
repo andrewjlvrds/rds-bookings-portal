@@ -32,6 +32,9 @@
     },
     "api/inbox.js": {
       "maxDuration": 60
+    },
+    "api/reprocess-perfectstay.js": {
+      "maxDuration": 120
     }
   }
 }
