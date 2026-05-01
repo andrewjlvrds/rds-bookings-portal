@@ -276,6 +276,7 @@ export default function App() {
         <LodgeDetail
           booking={activeBooking}
           tour={activeTour}
+          tours={tours}
           lodges={lodges}
           onBack={() => { setActiveBooking(null); setActiveView('tour-panel') }}
           onRefresh={() => refreshData(activeTour ? activeTour.id : null)}

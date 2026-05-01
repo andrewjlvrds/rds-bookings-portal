@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, getStatus, daysBetween } from '../utils/helpers'
 import { BookingActivityLog } from './ActivityLog'
+import RoutingPicker from './RoutingPicker'
 
-export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead }) {
+export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead, tours }) {
   const [emails, setEmails] = useState([])
   const [loadingEmails, setLoadingEmails] = useState(true)
   const [editing, setEditing] = useState(null)
@@ -555,7 +556,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>No emails recorded for this booking yet.</div>
           ) : (
             <div>
-              {emails.map((em, i) => <EmailRow key={em.id || i} email={em} bookingId={bookingId} onDelete={fetchEmails} readState={readState} onMarkRead={onMarkRead} />)}
+              {emails.map((em, i) => <EmailRow key={em.id || i} email={em} bookingId={bookingId} onDelete={fetchEmails} readState={readState} onMarkRead={onMarkRead} tours={tours} onReassigned={() => { fetchEmails(); if (onRefresh) onRefresh() }} />)}
             </div>
           )}
 
@@ -706,10 +707,12 @@ function EditableCell({ value, display, field, type, onEdit }) {
   )
 }
 
-function EmailRow({ email, bookingId, onDelete, readState, onMarkRead }) {
+function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, onReassigned }) {
   const [expanded, setExpanded] = useState(false)
   const [showAttText, setShowAttText] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [reassigning, setReassigning] = useState(false)
+  const [reassignError, setReassignError] = useState(null)
   const isOutbound = email.direction === 'outbound'
   const isUnread = !isOutbound && email.id && readState && !readState[email.id]
   const date = email.date || email.email_date || ''
@@ -727,6 +730,34 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead }) {
     setExpanded(next)
     // Mark read the first time the row is expanded
     if (next && isUnread && onMarkRead) onMarkRead(email.id)
+  }
+
+  // Reassign — moves this email to a different booking. The
+  // email-route endpoint accepts emails/booking/{id}/ source paths
+  // for reassignment and updates the activity log accordingly.
+  const handleReassign = async (newBookingId) => {
+    setReassignError(null)
+    // Need the source path. We can construct it from the email's
+    // current booking_id and id, since both are in the record.
+    const safeId = email.id
+    if (!safeId) {
+      setReassignError('Cannot reassign — email has no id')
+      return
+    }
+    const sourcePath = 'emails/booking/' + bookingId + '/' + safeId + '.json'
+    try {
+      const res = await fetch('/api/email-route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_path: sourcePath, booking_id: newBookingId }),
+      })
+      const result = await res.json()
+      if (!result.success) throw new Error(result.error || 'Reassign failed')
+      setReassigning(false)
+      if (onReassigned) onReassigned()
+    } catch (err) {
+      setReassignError(err.message)
+    }
   }
 
   // Extract flags from ai_flags array
@@ -914,7 +945,23 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead }) {
               AI: {email.ai_summary}
             </div>
           )}
-          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+          {reassignError && (
+            <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--red-bg, #FEE)', color: 'var(--red-text)', fontSize: 11, borderRadius: 4 }}>
+              {reassignError}
+            </div>
+          )}
+          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+            {!isOutbound && tours && email.id && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setReassignError(null); setReassigning(true) }}
+                style={{
+                  fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--border-default)',
+                  borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                }}
+                title="Move this email to a different booking"
+              >Reassign to another booking</button>
+            )}
             <button
               onClick={async (e) => {
                 e.stopPropagation()
@@ -939,6 +986,15 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead }) {
             >{deleting ? 'Deleting...' : 'Delete email'}</button>
           </div>
         </div>
+      )}
+      {reassigning && (
+        <RoutingPicker
+          email={email}
+          tours={tours}
+          currentBookingId={bookingId}
+          onCancel={() => setReassigning(false)}
+          onRoute={(newBookingId) => handleReassign(newBookingId)}
+        />
       )}
     </div>
   )

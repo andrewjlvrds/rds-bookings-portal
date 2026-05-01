@@ -143,3 +143,37 @@ export async function tagReplyReceived(bookingId, emailId) {
   if (modified) await saveLog(log);
   return tagged;
 }
+
+// When an email is reassigned from one booking to another, any log
+// entries that reference the email_id must have their booking_ids
+// updated so the activity log doesn't lie about which booking the
+// outbound went to. Replaces the old booking_id with the new one
+// inside the booking_ids array; preserves any other linked bookings.
+export async function reassignEmailLinks(emailId, oldBookingId, newBookingId) {
+  if (!emailId || !newBookingId) return [];
+  const log = await loadLog();
+  const updated = [];
+  let modified = false;
+  for (let i = 0; i < log.length; i++) {
+    const e = log[i];
+    // Match either the entry that auto-logged the send OR the entry
+    // that recorded the reply
+    const matchesEmail = e.email_id === emailId || e.reply_email_id === emailId;
+    if (!matchesEmail) continue;
+    if (!Array.isArray(e.booking_ids)) continue;
+    // Replace old booking id with new one (or just add new if old not present)
+    const oldIdx = oldBookingId ? e.booking_ids.indexOf(oldBookingId) : -1;
+    if (oldIdx !== -1) {
+      log[i].booking_ids = e.booking_ids.slice();
+      log[i].booking_ids[oldIdx] = newBookingId;
+      updated.push(log[i]);
+      modified = true;
+    } else if (!e.booking_ids.includes(newBookingId)) {
+      log[i].booking_ids = e.booking_ids.concat([newBookingId]);
+      updated.push(log[i]);
+      modified = true;
+    }
+  }
+  if (modified) await saveLog(log);
+  return updated;
+}
