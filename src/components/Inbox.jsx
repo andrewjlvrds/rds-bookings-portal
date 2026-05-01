@@ -486,11 +486,15 @@ function UnreadRow({ email, tours, allBookings, onOpen, onDismiss, onReassign })
 }
 
 function UnmatchedRow({ email, sourcePath, onRoute, onDismiss }) {
+  const [expanded, setExpanded] = useState(false)
   const subject = email.subject || email.email_subject || '(no subject)'
   const from = email.from || email.email_from || ''
-  const snippet = (email.body || email.email_content || '').replace(/\s+/g, ' ').slice(0, 140)
+  const body = email.body || email.email_content || ''
+  const snippet = body.replace(/\s+/g, ' ').slice(0, 140)
   const dateStr = email.date || email.email_date
   const ago = dateStr ? timeAgo(new Date(dateStr)) : ''
+  const fullDate = dateStr ? new Date(dateStr).toLocaleString() : ''
+  const attachments = Array.isArray(email.attachments) ? email.attachments : []
 
   // Tour bucket emails encode the tour in the path:
   //   emails/tour-bucket/{safeTour}/{id}.json
@@ -502,29 +506,63 @@ function UnmatchedRow({ email, sourcePath, onRoute, onDismiss }) {
 
   return (
     <div style={{
-      padding: '12px 16px',
       borderBottom: '0.5px solid var(--border-subtle)',
-      background: 'var(--bg-primary)',
+      background: expanded ? 'var(--bg-secondary)' : 'var(--bg-primary)',
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {from || 'Unknown sender'}
-          {bucketHint && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>· tour: {bucketHint}</span>}
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{ padding: '12px 16px', cursor: 'pointer' }}
+        onMouseEnter={e => { if (!expanded) e.currentTarget.parentElement.style.background = 'var(--bg-secondary)' }}
+        onMouseLeave={e => { if (!expanded) e.currentTarget.parentElement.style.background = 'var(--bg-primary)' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {from || 'Unknown sender'}
+            {bucketHint && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>· tour: {bucketHint}</span>}
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{ago}</span>
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{ago}</span>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {subject}
+        </div>
+        {!expanded && snippet && (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {snippet}
+          </div>
+        )}
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {subject}
-      </div>
-      {snippet && (
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-          {snippet}
+
+      {expanded && (
+        <div style={{ padding: '0 16px 14px 16px' }}>
+          {fullDate && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Received: {fullDate}
+            </div>
+          )}
+          <div style={{
+            fontSize: 12, lineHeight: 1.7, color: 'var(--text-primary)',
+            whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto',
+            background: 'var(--bg-primary)', padding: '12px 14px',
+            borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-light)',
+          }}>
+            {body || '(no content)'}
+          </div>
+          {attachments.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+              Attachments: {attachments.map(a => a.filename || 'unnamed').join(', ')}
+            </div>
+          )}
         </div>
       )}
-      <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
-        <button onClick={onRoute} className="btn btn-sm" style={{ fontSize: 11 }}>Route to booking</button>
+
+      <div style={{ padding: '0 16px 12px 16px', display: 'flex', gap: 6 }}>
         <button
-          onClick={onDismiss}
+          onClick={(e) => { e.stopPropagation(); onRoute() }}
+          className="btn btn-sm"
+          style={{ fontSize: 11 }}
+        >Route to booking</button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDismiss() }}
           style={{
             background: 'none', border: 'none', fontSize: 11,
             color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 6px',

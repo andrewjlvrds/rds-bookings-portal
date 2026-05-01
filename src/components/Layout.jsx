@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-function categorizeTours(tours) {
+export function categorizeTours(tours) {
   const today = new Date().toISOString().split('T')[0]
   const newBuild = []
   const drafts = []
@@ -466,5 +466,3 @@ function TourItem({ tour, active, onClick, dimmed, isDraft }) {
     </button>
   )
 }
-
-export { categorizeTours }

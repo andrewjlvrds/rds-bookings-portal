@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { fmtDate } from '../utils/helpers'
+import { categorizeTours } from './Layout'
 
 /*
  * RoutingPicker — the modal Helen uses to assign or reassign an email
@@ -9,6 +10,11 @@ import { fmtDate } from '../utils/helpers'
  *   - Inbox: routing unmatched/tour-bucket emails to a booking
  *   - LodgeDetail email row: reassigning a misrouted email to a
  *     different booking
+ *
+ * Tour column is grouped by year (matches the sidebar) with the Past
+ * group collapsed by default — keeps the picker scannable when there
+ * are many historical tours and sandbox/test entries cluttering the
+ * full list.
  *
  * Props:
  *   email       — the email record (for displaying subject in header)
@@ -21,6 +27,7 @@ import { fmtDate } from '../utils/helpers'
 export default function RoutingPicker({ email, tours, currentBookingId, onCancel, onRoute }) {
   const [search, setSearch] = useState('')
   const [selectedTourId, setSelectedTourId] = useState(null)
+  const [collapsedGroups, setCollapsedGroups] = useState({ past: true }) // past collapsed by default
 
   // Pre-select the tour whose name appears in the subject (best-effort).
   useEffect(() => {
@@ -29,23 +36,25 @@ export default function RoutingPicker({ email, tours, currentBookingId, onCancel
     if (found) setSelectedTourId(found.id)
   }, [email, tours])
 
-  const committedTours = (tours || []).filter(t => {
-    if (typeof t.id === 'string' && t.id.startsWith('local_')) return false
-    if (t.tour_status === 'Draft') return false
-    return true
-  }).sort((a, b) => (a.start_date || a.departure_date || '').localeCompare(b.start_date || b.departure_date || ''))
+  const { yearGroups, years, past } = categorizeTours(tours)
 
-  const filteredTours = search
-    ? committedTours.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
-    : committedTours
+  // When searching: flatten back to a single list. Grouping only
+  // applies when browsing.
+  const isSearching = search.trim().length > 0
+  const matchesSearch = (t) => t.name.toLowerCase().includes(search.toLowerCase())
 
-  const selectedTour = committedTours.find(t => t.id === selectedTourId)
+  const allTours = [...years.flatMap(y => yearGroups[y]), ...past]
+  const flatFiltered = isSearching ? allTours.filter(matchesSearch) : null
+
+  const selectedTour = allTours.find(t => t.id === selectedTourId)
   const tourBookings = selectedTour
     ? (selectedTour.bookings || [])
         .filter(bk => bk.id !== currentBookingId) // hide current booking on reassign
         .slice()
         .sort((a, b) => (a.Check_in_Date || '').localeCompare(b.Check_in_Date || ''))
     : []
+
+  const toggleGroup = (key) => setCollapsedGroups(prev => ({ ...prev, [key]: !prev[key] }))
 
   return (
     <div
@@ -93,23 +102,67 @@ export default function RoutingPicker({ email, tours, currentBookingId, onCancel
             <div style={{ padding: '8px 12px', fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '0.5px solid var(--border-subtle)' }}>
               Tours
             </div>
-            {filteredTours.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setSelectedTourId(t.id)}
-                style={{
-                  display: 'block', width: '100%', textAlign: 'left',
-                  padding: '8px 12px', fontSize: 12,
-                  border: 'none', background: selectedTourId === t.id ? 'var(--blue-bg)' : 'transparent',
-                  color: selectedTourId === t.id ? 'var(--blue-text)' : 'var(--text-primary)',
-                  cursor: 'pointer',
-                }}
-              >
-                {t.name}
-              </button>
-            ))}
-            {filteredTours.length === 0 && (
-              <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>No tours found</div>
+            {isSearching ? (
+              <>
+                {flatFiltered.map(t => (
+                  <TourButton
+                    key={t.id}
+                    tour={t}
+                    selected={selectedTourId === t.id}
+                    onClick={() => setSelectedTourId(t.id)}
+                  />
+                ))}
+                {flatFiltered.length === 0 && (
+                  <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>No tours found</div>
+                )}
+              </>
+            ) : (
+              <>
+                {years.map(y => {
+                  const tours = yearGroups[y]
+                  if (!tours || tours.length === 0) return null
+                  const collapsed = !!collapsedGroups[y]
+                  return (
+                    <div key={y}>
+                      <GroupHeader
+                        label={y + ' tours'}
+                        count={tours.length}
+                        collapsed={collapsed}
+                        onToggle={() => toggleGroup(y)}
+                      />
+                      {!collapsed && tours.map(t => (
+                        <TourButton
+                          key={t.id}
+                          tour={t}
+                          selected={selectedTourId === t.id}
+                          onClick={() => setSelectedTourId(t.id)}
+                        />
+                      ))}
+                    </div>
+                  )
+                })}
+                {past.length > 0 && (
+                  <div>
+                    <GroupHeader
+                      label="Past"
+                      count={past.length}
+                      collapsed={!!collapsedGroups.past}
+                      onToggle={() => toggleGroup('past')}
+                    />
+                    {!collapsedGroups.past && past.map(t => (
+                      <TourButton
+                        key={t.id}
+                        tour={t}
+                        selected={selectedTourId === t.id}
+                        onClick={() => setSelectedTourId(t.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+                {years.length === 0 && past.length === 0 && (
+                  <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>No tours available</div>
+                )}
+              </>
             )}
           </div>
 
@@ -154,5 +207,42 @@ export default function RoutingPicker({ email, tours, currentBookingId, onCancel
         </div>
       </div>
     </div>
+  )
+}
+
+function GroupHeader({ label, count, collapsed, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        width: '100%', padding: '8px 12px', border: 'none',
+        background: 'var(--bg-secondary)', cursor: 'pointer',
+        fontSize: 11, fontWeight: 500, color: 'var(--text-muted)',
+        textTransform: 'uppercase', letterSpacing: 0.5,
+        borderBottom: '0.5px solid var(--border-subtle)',
+      }}
+    >
+      <span>{label} ({count})</span>
+      <span style={{ fontSize: 10 }}>{collapsed ? '▸' : '▾'}</span>
+    </button>
+  )
+}
+
+function TourButton({ tour, selected, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left',
+        padding: '8px 12px', fontSize: 12,
+        border: 'none', background: selected ? 'var(--blue-bg)' : 'transparent',
+        color: selected ? 'var(--blue-text)' : 'var(--text-primary)',
+        cursor: 'pointer',
+        borderBottom: '0.5px solid var(--border-subtle)',
+      }}
+    >
+      {tour.name}
+    </button>
   )
 }
