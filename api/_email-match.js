@@ -182,7 +182,35 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailM
     if (!candidates || candidates.length === 0) continue;
 
     if (candidates.length === 1) {
-      return { booking: candidates[0], method: 'lodge_name_unique' };
+      // Safety check: even with a unique lodge candidate, if the email
+      // mentions dates and those dates are far from the booking's
+      // check-in/check-out, this is likely the WRONG booking — most
+      // likely the correct booking doesn't exist in Zoho yet. Better to
+      // route to the Inbox unmatched queue than to misfile silently.
+      //
+      // Tolerance: if any extracted email date is within 60 days of
+      // either check-in or check-out, accept the unique match. If
+      // every extracted date is further away than that, flag as
+      // ambiguous so Helen can route it manually.
+      var unique = candidates[0];
+      if (emailDates && emailDates.size > 0) {
+        var withinTolerance = false;
+        var checkIn = unique.Check_in_Date ? new Date(unique.Check_in_Date) : null;
+        var checkOut = unique.Check_out_Date ? new Date(unique.Check_out_Date) : null;
+        emailDates.forEach(function(iso) {
+          var d = new Date(iso);
+          if (isNaN(d)) return;
+          if (checkIn && Math.abs(d - checkIn) / 86400000 <= 60) withinTolerance = true;
+          if (checkOut && Math.abs(d - checkOut) / 86400000 <= 60) withinTolerance = true;
+        });
+        if (!withinTolerance) {
+          // Don't return — record this lodge as ambiguous and let the
+          // outer logic fall through to unmatched (or Tier 4 sender).
+          ambiguousLodge = name;
+          continue;
+        }
+      }
+      return { booking: unique, method: 'lodge_name_unique' };
     }
 
     // Multiple candidates — Sep 26 Group A/B disambiguation
@@ -230,7 +258,30 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailM
 
       if (senderCandidates && senderCandidates.length > 0) {
         if (senderCandidates.length === 1) {
-          return { booking: senderCandidates[0], method: 'sender_email_unique' };
+          // Same safety check as lodge_name_unique — don't blindly
+          // route to the only known booking when the email mentions
+          // dates that are far from that booking's stay window.
+          var senderUnique = senderCandidates[0];
+          if (emailDates && emailDates.size > 0) {
+            var senderInTolerance = false;
+            var sCheckIn = senderUnique.Check_in_Date ? new Date(senderUnique.Check_in_Date) : null;
+            var sCheckOut = senderUnique.Check_out_Date ? new Date(senderUnique.Check_out_Date) : null;
+            emailDates.forEach(function(iso) {
+              var d = new Date(iso);
+              if (isNaN(d)) return;
+              if (sCheckIn && Math.abs(d - sCheckIn) / 86400000 <= 60) senderInTolerance = true;
+              if (sCheckOut && Math.abs(d - sCheckOut) / 86400000 <= 60) senderInTolerance = true;
+            });
+            if (!senderInTolerance) {
+              return {
+                booking: null,
+                method: 'unmatched',
+                reason: 'sender_email_unique_but_dates_conflict',
+                lodge: lodgeName,
+              };
+            }
+          }
+          return { booking: senderUnique, method: 'sender_email_unique' };
         }
 
         // Multiple bookings at this lodge — use date scoring
