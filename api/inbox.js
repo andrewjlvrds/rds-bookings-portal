@@ -23,7 +23,7 @@ import { loadReadState } from './_read-state.js';
  * problem to fix at the source, not by paging this endpoint.
  */
 
-const MAX_PER_BUCKET = 200;
+const MAX_PER_BUCKET = 500;
 const MAX_PAGES_PER_PREFIX = 10;
 
 async function listAll(prefix) {
@@ -99,12 +99,14 @@ export default async function handler(req, res) {
     unmatchedBlobs.sort(byUploadedDesc);
     tourBucketBlobs.sort(byUploadedDesc);
 
-    // For the booking bucket we need to fetch a wider window to find
-    // unread inbound — most recent uploads will have a mix of outbound
-    // sends and inbound replies. 500 newest covers 2-3 weeks at typical
-    // volume. If Helen ever has 500 unread, the pipeline is broken
-    // anyway and we'll see it.
-    const bookingsToFetch = bookingBlobs.slice(0, 500);
+    // For the booking bucket we need to fetch a wider window than the
+    // bucket cap so the unread total reflects reality even when there's
+    // a backlog. 1000 newest covers a comfortable working window without
+    // risking timeouts. If Helen has more than 1000 unread, the
+    // 'Mark all read everywhere' button is the answer (no fetching, just
+    // path-based bulk write).
+    const BOOKING_SCAN_LIMIT = 1000;
+    const bookingsToFetch = bookingBlobs.slice(0, BOOKING_SCAN_LIMIT);
     const unmatchedToFetch = unmatchedBlobs.slice(0, MAX_PER_BUCKET);
     const tourBucketToFetch = tourBucketBlobs.slice(0, MAX_PER_BUCKET);
 
@@ -133,12 +135,22 @@ export default async function handler(req, res) {
       unmatched: unmatchedFiltered.slice(0, MAX_PER_BUCKET),
       tour_bucket: tourBucketFiltered.slice(0, MAX_PER_BUCKET),
       stats: {
+        // Real totals (uncapped) — Helen needs to see real backlog.
         unread: unreadInbound.length,
         unmatched: unmatchedFiltered.length,
         tour_bucket: tourBucketFiltered.length,
+        // Diagnostic — was the booking scan window itself the limit?
         booking_blobs_total: bookingBlobs.length,
+        booking_blobs_scanned: bookingsToFetch.length,
         unmatched_blobs_total: unmatchedBlobs.length,
         tour_bucket_blobs_total: tourBucketBlobs.length,
+        // Whether the bucket arrays were truncated for display.
+        truncated: {
+          unread: unreadInbound.length > MAX_PER_BUCKET,
+          unmatched: unmatchedFiltered.length > MAX_PER_BUCKET,
+          tour_bucket: tourBucketFiltered.length > MAX_PER_BUCKET,
+          booking_scan: bookingBlobs.length > BOOKING_SCAN_LIMIT,
+        },
       },
     });
   } catch (err) {

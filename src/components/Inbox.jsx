@@ -48,6 +48,33 @@ export default function Inbox({
     }
   }
 
+  // Nuclear option for cutover: mark every booking email as read,
+  // regardless of Gmail state or age. Helen runs this when she wants
+  // a true clean slate. Goes through a dedicated endpoint that
+  // derives email IDs from blob paths (no fetching), so it's fast
+  // and doesn't time out on large backlogs.
+  const handleMarkAllReadEverywhere = async () => {
+    if (!confirm(
+      'This marks EVERY lodge email as read in the portal — including ones the Gmail sync did not catch.\n\n' +
+      'Use this when you want a completely clean inbox to start working from. Anything important will reappear when the lodge follows up.\n\n' +
+      'This cannot be undone for the bulk action — though you can still mark individual emails unread later.\n\n' +
+      'Continue?'
+    )) return
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/mark-all-booking-emails-read', { method: 'POST' })
+      const d = await res.json()
+      if (!d.success) throw new Error(d.error || 'Mark-all failed')
+      if (onRefresh) await onRefresh()
+      setSyncResult({ total: d.stats.newly_marked_read })
+    } catch (err) {
+      setSyncResult({ error: err.message })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   // On first mount of this view, ensure data is fresh (cached if <30s old).
   useEffect(() => { if (ensureFresh) ensureFresh() }, [])
 
@@ -221,19 +248,32 @@ export default function Inbox({
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          {/* Show Sync from Gmail only when there's a meaningful backlog
-              and we haven't just successfully synced. Helen runs this
-              once at cutover; after that it should rarely be needed. */}
+          {/* Show backlog-drain buttons only when there's a meaningful
+              backlog and we haven't just successfully synced. */}
           {(data?.stats?.unread || 0) > 30 && !syncResult && (
-            <button
-              onClick={handleSyncFromGmail}
-              className="btn btn-sm"
-              style={{ fontSize: 12 }}
-              disabled={syncing}
-              title="Mark emails as read in the portal if they have already been read in Gmail. Run this once at cutover."
-            >
-              {syncing ? 'Syncing...' : 'Sync from Gmail'}
-            </button>
+            <>
+              <button
+                onClick={handleSyncFromGmail}
+                className="btn btn-sm"
+                style={{ fontSize: 12 }}
+                disabled={syncing}
+                title="Mark emails as read if they have already been read in Gmail."
+              >
+                {syncing ? 'Working...' : 'Sync from Gmail'}
+              </button>
+              <button
+                onClick={handleMarkAllReadEverywhere}
+                style={{
+                  fontSize: 11, padding: '4px 10px',
+                  background: 'none', border: '0.5px solid var(--border-default)',
+                  borderRadius: 4, cursor: 'pointer', color: 'var(--text-muted)',
+                }}
+                disabled={syncing}
+                title="Nuclear option — mark every lodge email as read for a clean slate."
+              >
+                Mark all read
+              </button>
+            </>
           )}
           <button onClick={onRefresh} className="btn btn-sm" style={{ fontSize: 12 }} disabled={loading}>{loading ? 'Refreshing...' : '↻ Refresh'}</button>
         </div>

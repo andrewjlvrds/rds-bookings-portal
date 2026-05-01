@@ -29,6 +29,9 @@
     },
     "api/sync-gmail-read-state.js": {
       "maxDuration": 120
+    },
+    "api/inbox.js": {
+      "maxDuration": 60
     }
   }
 }
