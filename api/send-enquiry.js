@@ -1,6 +1,7 @@
 import { zohoApi } from './_zoho.js';
 import { storeEmail, storeSentIndex } from './_email-store.js';
 import { getGmailToken, getOrCreateLabel, labelMessage, tourLabelName } from './_gmail.js';
+import { appendEntry } from './_activity-log.js';
 
 // Build RFC 2822 email and base64url encode it.
 // Caller must provide messageId (RFC 5322 format, including angle brackets).
@@ -224,6 +225,27 @@ export default async function(req, res) {
         } catch(storeErr) {
           console.error('Failed to store email for booking', bookingIds[bi], storeErr.message);
         }
+      }
+
+      // Auto-log activity entry — the lodge action Helen would have
+      // manually written in her sheet ("Emailed Hohewarte re FoSA Apr 26").
+      // One entry per send, linked to all bookings included in that email.
+      try {
+        var actionText = isReply
+          ? ('Replied to ' + (lodgeName || 'lodge'))
+          : ('Emailed ' + (lodgeName || 'lodge') + (tourName ? ' re ' + tourName : ''));
+        await appendEntry({
+          action: actionText,
+          category: 'email',
+          status: 'waiting',
+          recipient: lodgeName || null,
+          booking_ids: bookingIds,
+          tour_name: tourName || null,
+          author: 'Helen', // sender hardcoded in From header; refine when toggle wired through
+        });
+      } catch (logErr) {
+        // Logging failure should not break the send — log it and move on.
+        console.error('activity-log auto-entry failed:', logErr.message);
       }
     }
 

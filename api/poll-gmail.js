@@ -2,6 +2,7 @@ import { getGmailToken, gmailApi, getOrCreateLabel, labelMessage, tourLabelName 
 import { storeEmail, isEmailStored, lookupSentIndex, normalizeMessageId } from './_email-store.js';
 import { zohoApi } from './_zoho.js';
 import { parseEmail, extractionToZohoFields } from './_ai-parse.js';
+import { tagReplyReceived } from './_activity-log.js';
 import {
   extractRdsRef,
   extractIsoDates,
@@ -449,7 +450,7 @@ export default async function(req, res) {
         }
 
         // Store to blob (with attachment extracted text)
-        await storeEmail({
+        var stored = await storeEmail({
           booking_id: bookingId,
           message_id: msgId,
           type: 'lodge_reply',
@@ -465,6 +466,14 @@ export default async function(req, res) {
           attachments: attachmentsWithText,
           match_method: matchMethod,
         });
+
+        // Tag any 'waiting' activity-log entries on this booking with
+        // reply_received_at — the Inbox prompts Helen to mark them done.
+        try {
+          await tagReplyReceived(bookingId, stored && stored.id);
+        } catch (tagErr) {
+          console.error('tagReplyReceived failed for', bookingId, tagErr.message);
+        }
 
         // Multi-booking fan-out: when Tier 0 matched a sent-index entry that
         // covered multiple bookings (one portal send → several bookings at the

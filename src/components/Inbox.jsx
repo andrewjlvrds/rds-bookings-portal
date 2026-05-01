@@ -18,16 +18,17 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [routingEmail, setRoutingEmail] = useState(null) // { email, sourcePath }
+  const [readyToMarkDone, setReadyToMarkDone] = useState([]) // log entries with replies received
 
   const fetchInbox = () => {
     setLoading(true)
-    fetch('/api/inbox')
-      .then(r => {
-        if (!r.ok) throw new Error('Failed to load inbox')
-        return r.json()
-      })
-      .then(d => {
-        setData(d)
+    Promise.all([
+      fetch('/api/inbox').then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load inbox'))),
+      fetch('/api/activity-log?status=waiting').then(r => r.ok ? r.json() : { entries: [] }),
+    ])
+      .then(([inboxData, logData]) => {
+        setData(inboxData)
+        setReadyToMarkDone((logData.entries || []).filter(e => e.reply_received_at))
         setLoading(false)
       })
       .catch(err => {
@@ -100,6 +101,21 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
     }
   }
 
+  const handleMarkLogEntryDone = async (entryId) => {
+    try {
+      const res = await fetch('/api/activity-log', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: entryId, status: 'done' }),
+      })
+      const d = await res.json()
+      if (!d.success) throw new Error(d.error || 'Update failed')
+      setReadyToMarkDone(prev => prev.filter(e => e.id !== entryId))
+    } catch (err) {
+      alert('Could not update entry: ' + err.message)
+    }
+  }
+
   if (loading) {
     return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading inbox...</div>
   }
@@ -116,7 +132,7 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
   const unread = data?.unread || []
   const unmatched = data?.unmatched || []
   const tourBucket = data?.tour_bucket || []
-  const total = unread.length + unmatched.length + tourBucket.length
+  const total = unread.length + unmatched.length + tourBucket.length + readyToMarkDone.length
 
   return (
     <div>
@@ -124,7 +140,7 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 500 }}>Inbox</h1>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
-            {total === 0 ? 'All caught up.' : total + ' email' + (total === 1 ? '' : 's') + ' need attention'}
+            {total === 0 ? 'All caught up.' : total + ' item' + (total === 1 ? '' : 's') + ' need attention'}
           </div>
         </div>
         <button onClick={fetchInbox} className="btn btn-sm" style={{ fontSize: 12 }}>↻ Refresh</button>
@@ -134,6 +150,22 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
         <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)' }}>
           Nothing new to look at. New replies will appear here as they arrive.
         </div>
+      )}
+
+      {readyToMarkDone.length > 0 && (
+        <Section
+          title="Replies received — ready to mark done"
+          subtitle="Log entries that were waiting for a response. The lodge has replied — mark each one done when you're satisfied."
+          accent="#2E7D32"
+        >
+          {readyToMarkDone.map(entry => (
+            <ReadyDoneRow
+              key={entry.id}
+              entry={entry}
+              onMarkDone={() => handleMarkLogEntryDone(entry.id)}
+            />
+          ))}
+        </Section>
       )}
 
       {unread.length > 0 && (
@@ -477,6 +509,37 @@ function RoutingPicker({ email, tours, allBookings, lodges, onCancel, onRoute })
           <button onClick={onCancel} className="btn btn-sm">Cancel</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ReadyDoneRow({ entry, onMarkDone }) {
+  const replyAt = entry.reply_received_at ? new Date(entry.reply_received_at) : null
+  const ago = replyAt ? timeAgo(replyAt) : ''
+  return (
+    <div style={{
+      padding: '10px 14px',
+      borderBottom: '0.5px solid var(--border-subtle)',
+      background: 'var(--bg-primary)',
+      display: 'flex', alignItems: 'flex-start', gap: 12,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {entry.action}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+          {entry.recipient && <>→ {entry.recipient}</>}
+          {entry.tour_name && <> · {entry.tour_name}</>}
+          {ago && <> · reply received {ago}</>}
+        </div>
+      </div>
+      <button
+        onClick={onMarkDone}
+        className="btn btn-primary btn-sm"
+        style={{ fontSize: 11, flexShrink: 0 }}
+      >
+        Mark done
+      </button>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, getStatus, daysBetween } from '../utils/helpers'
+import { BookingActivityLog } from './ActivityLog'
 
 export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead }) {
   const [emails, setEmails] = useState([])
@@ -285,7 +286,27 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C62828' }} />
           )}
         </button>
+        <button
+          onClick={() => setActiveDetailTab('activity')}
+          style={{
+            padding: '8px 16px', fontSize: 13, fontWeight: 500,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: activeDetailTab === 'activity' ? 'var(--blue-text)' : 'var(--text-muted)',
+            borderBottom: activeDetailTab === 'activity' ? '2px solid var(--blue-mid)' : '2px solid transparent',
+            marginBottom: -0.5,
+          }}
+        >
+          Activity log
+        </button>
       </div>
+
+      {activeDetailTab === 'activity' && (
+        <BookingActivityLog
+          bookingId={bookingId}
+          tourName={tour ? tour.name : ''}
+          booking={booking}
+        />
+      )}
 
       {activeDetailTab === 'details' && (<>
       {/* Discrepancy warning banner */}

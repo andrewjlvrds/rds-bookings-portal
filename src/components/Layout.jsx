@@ -37,7 +37,7 @@ function categorizeTours(tours) {
 }
 
 const PLANNER_VIEWS = ['dashboard', 'itinerary', 'edit-itinerary', 'enquiry-preview']
-const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'correspondence', 'lodges', 'tour-panel', 'inbox']
+const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'correspondence', 'lodges', 'tour-panel', 'inbox', 'activity-log']
 const GUEST_VIEWS = ['guest-dashboard', 'guest-tour', 'guest-detail', 'transfers', 'guest-excursions', 'guest-accommodation', 'guest-payments', 'guest-bikes']
 
 function getSection(activeView) {
@@ -168,6 +168,11 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
             active={activeView === 'inbox'}
             onClick={() => { onSelectTour(null); onSelectView('inbox') }}
             badge={inboxTotal > 0 ? inboxTotal : null}
+          />
+          <NavItem
+            label="Activity log"
+            active={activeView === 'activity-log'}
+            onClick={() => { onSelectTour(null); onSelectView('activity-log') }}
           />
           <NavItem label="Payments" active={activeView === 'payments'} onClick={() => { onSelectTour(null); onSelectView('payments') }} />
           <NavItem label="Correspondence" active={activeView === 'correspondence'} onClick={() => { onSelectTour(null); onSelectView('correspondence') }} />

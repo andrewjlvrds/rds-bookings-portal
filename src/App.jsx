@@ -16,6 +16,7 @@ import GuestTourPanel from './components/GuestTourPanel'
 import PlannerDashboard from './components/PlannerDashboard'
 import NewTour from './components/NewTour'
 import Inbox from './components/Inbox'
+import ActivityLog from './components/ActivityLog'
 import './styles/global.css'
 
 const API = ''
@@ -293,6 +294,16 @@ export default function App() {
           onSelectBooking={(bk) => handleSelectBooking(bk, 'correspondence')}
           onMarkRead={markRead}
           onMarkManyRead={markManyRead}
+        />
+      )
+    }
+
+    if (activeView === 'activity-log') {
+      return (
+        <ActivityLog
+          tours={tours}
+          allBookings={allBookings}
+          onSelectBooking={(bk) => handleSelectBooking(bk, 'correspondence')}
         />
       )
     }

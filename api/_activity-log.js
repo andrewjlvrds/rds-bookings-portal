@@ -119,3 +119,27 @@ export async function findWaitingForBooking(bookingId) {
     e.booking_ids.includes(bookingId)
   );
 }
+
+// Tag waiting entries with reply_received_at when an inbound reply
+// matches their booking. Status stays 'waiting' until Helen confirms;
+// the Inbox surfaces these as "reply received — mark done?" prompts.
+export async function tagReplyReceived(bookingId, emailId) {
+  if (!bookingId) return [];
+  const log = await loadLog();
+  const stamp = new Date().toISOString();
+  const tagged = [];
+  let modified = false;
+  for (let i = 0; i < log.length; i++) {
+    const e = log[i];
+    if (e.status !== 'waiting') continue;
+    if (!Array.isArray(e.booking_ids) || !e.booking_ids.includes(bookingId)) continue;
+    // Don't re-tag entries that already have a reply tagged
+    if (e.reply_received_at) continue;
+    log[i].reply_received_at = stamp;
+    if (emailId && !e.reply_email_id) log[i].reply_email_id = emailId;
+    tagged.push(log[i]);
+    modified = true;
+  }
+  if (modified) await saveLog(log);
+  return tagged;
+}
