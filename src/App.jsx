@@ -73,11 +73,15 @@ export default function App() {
   // any mark-read action so the sidebar badge stays accurate.
   // Also fetches activity-log waiting entries (for Replies received tab).
   const [inboxData, setInboxData] = useState(null)
-  const [inboxStats, setInboxStats] = useState({ unread: 0, unmatched: 0, tour_bucket: 0 })
   const [inboxReadyToMarkDone, setInboxReadyToMarkDone] = useState([])
   const [inboxFetchedAt, setInboxFetchedAt] = useState(0)
   const [inboxLoading, setInboxLoading] = useState(false)
   const [inboxError, setInboxError] = useState(null)
+
+  // Sidebar badge reads directly from inboxData.stats — that way
+  // optimistic updates in the Inbox component (e.g. dismiss) propagate
+  // to the badge without an extra refetch.
+  const inboxStats = inboxData?.stats || { unread: 0, unmatched: 0, tour_bucket: 0 }
 
   const fetchInboxStats = (force) => {
     // Skip refetch if we already have fresh data, unless force=true
@@ -90,7 +94,6 @@ export default function App() {
     ])
       .then(([inboxResp, logResp]) => {
         setInboxData(inboxResp)
-        setInboxStats(inboxResp.stats || { unread: 0, unmatched: 0, tour_bucket: 0 })
         setInboxReadyToMarkDone((logResp.entries || []).filter(e => e.reply_received_at))
         setInboxFetchedAt(Date.now())
         setInboxLoading(false)
@@ -104,13 +107,19 @@ export default function App() {
   const markRead = (emailId) => {
     if (!emailId) return
     setReadState(prev => ({ ...prev, [emailId]: new Date().toISOString() }))
+    // Optimistically update inbox stats too — the badge in the sidebar
+    // and the count in the Inbox header reflect this immediately.
+    // The Inbox component handles row removal via onLocalUpdate.
     fetch('/api/email-read-state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email_id: emailId, read: true }),
     })
-      .then(() => fetchInboxStats(true))
       .catch(err => console.error('markRead failed:', err))
+    // No force-refetch here — the optimistic local update is the source
+    // of truth until the next natural inbox load. Re-fetching here can
+    // race with the optimistic update and re-introduce just-dismissed
+    // emails because of blob CDN propagation delay.
   }
 
   const markManyRead = (emailIds) => {
@@ -126,8 +135,8 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email_ids: emailIds }),
     })
-      .then(() => fetchInboxStats(true))
       .catch(err => console.error('markManyRead failed:', err))
+    // Same reasoning as markRead — no force-refetch.
   }
 
   // Refresh data from API without losing current view
