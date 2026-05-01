@@ -8,6 +8,12 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
   const [excluded, setExcluded] = useState({})
   const [sender, setSender] = useState('Andrew')
 
+  // Per-card edits, keyed by group index. If a key isn't set, the
+  // generated default is used (so changing sender still flows
+  // through to untouched cards).
+  const [editedSubjects, setEditedSubjects] = useState({})
+  const [editedBodies, setEditedBodies] = useState({})
+
   // Build lodge lookup from directory
   const lodgeList = (lodges || []).filter(l => l.name).map(l => ({
     ...l,
@@ -81,11 +87,15 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
       if (excluded[i]) continue
       const group = lodgeGroups[i]
 
-      const subject = generateSubject(group.bookings[0], tour.name, group.lodge)
-      const body = generateEnquiryEmail(
+      const generatedSubject = generateSubject(group.bookings[0], tour.name, group.lodge)
+      const generatedBody = generateEnquiryEmail(
         group.bookings, tour.name, group.lodge,
         { contactName: group.contactName, isReturning: group.isReturning, sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
       )
+      // Use edited values if Helen tweaked them, otherwise the freshly
+      // generated defaults (so toggling sender flows through).
+      const subject = editedSubjects[i] !== undefined ? editedSubjects[i] : generatedSubject
+      const body = editedBodies[i] !== undefined ? editedBodies[i] : generatedBody
 
       try {
         const res = await fetch('/api/send-enquiry', {
@@ -195,13 +205,22 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
       )}
 
       {lodgeGroups.map((group, i) => {
-        const subject = generateSubject(group.bookings[0], tour.name, group.lodge)
-        const body = generateEnquiryEmail(
+        const generatedSubject = generateSubject(group.bookings[0], tour.name, group.lodge)
+        const generatedBody = generateEnquiryEmail(
           group.bookings, tour.name, group.lodge,
           { contactName: group.contactName, isReturning: group.isReturning, sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
         )
+        const subject = editedSubjects[i] !== undefined ? editedSubjects[i] : generatedSubject
+        const body = editedBodies[i] !== undefined ? editedBodies[i] : generatedBody
+        const isEdited = editedSubjects[i] !== undefined || editedBodies[i] !== undefined
         const isExcluded = excluded[i]
         const status = sent[i]
+        const isSent = status === 'sent' || status === 'sent-warn'
+
+        const resetEdits = () => {
+          setEditedSubjects(prev => { const n = { ...prev }; delete n[i]; return n })
+          setEditedBodies(prev => { const n = { ...prev }; delete n[i]; return n })
+        }
 
         return (
           <div
@@ -221,7 +240,12 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
               borderBottom: '0.5px solid var(--border-default)',
             }}>
               <div>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>{group.lodge}</div>
+                <div style={{ fontWeight: 500, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {group.lodge}
+                  {isEdited && !isSent && (
+                    <span style={{ fontSize: 10, color: 'var(--amber-text)', fontWeight: 500, padding: '1px 6px', background: 'var(--amber-bg, #FFF4E5)', borderRadius: 3 }}>edited</span>
+                  )}
+                </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                   To: {group.email || 'No email on file'}
                   {' · '}{group.bookings.length} night{group.bookings.length > 1 ? 's' : ''}
@@ -238,6 +262,18 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
                 {status && status.startsWith('error') && (
                   <span style={{ fontSize: 12, color: 'var(--red-text)' }}>{status}</span>
                 )}
+                {!status && isEdited && (
+                  <button
+                    onClick={resetEdits}
+                    style={{
+                      background: 'none', border: 'none', fontSize: 12,
+                      color: 'var(--text-muted)', cursor: 'pointer',
+                    }}
+                    title="Discard your edits and use the generated default"
+                  >
+                    Reset
+                  </button>
+                )}
                 {!status && (
                   <button
                     onClick={() => toggleExclude(i)}
@@ -252,8 +288,41 @@ export default function EnquiryPreview({ tour, lodges, onBack, onRefresh }) {
               </div>
             </div>
 
-            {/* Email preview */}
-            {!isExcluded && (
+            {/* Email editor — editable subject and body before send */}
+            {!isExcluded && !isSent && (
+              <div style={{ padding: '12px 16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', gap: '6px 8px', alignItems: 'start' }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: 6 }}>Subject:</label>
+                  <input
+                    type="text"
+                    value={subject}
+                    onChange={e => setEditedSubjects(prev => ({ ...prev, [i]: e.target.value }))}
+                    style={{
+                      fontSize: 13, padding: '6px 8px',
+                      border: '0.5px solid var(--border-default)', borderRadius: 4,
+                      outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                      fontFamily: 'var(--font-sans)',
+                    }}
+                  />
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: 6 }}>Body:</label>
+                  <textarea
+                    value={body}
+                    onChange={e => setEditedBodies(prev => ({ ...prev, [i]: e.target.value }))}
+                    rows={Math.min(20, Math.max(8, body.split('\n').length + 1))}
+                    style={{
+                      width: '100%', fontSize: 12, lineHeight: 1.6, padding: '8px 10px',
+                      border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)',
+                      outline: 'none', resize: 'vertical', fontFamily: 'var(--font-sans)',
+                      background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Read-only preview after send */}
+            {!isExcluded && isSent && (
               <div style={{ padding: '12px 16px' }}>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
                   Subject: {subject}

@@ -98,6 +98,8 @@ Room requirements:
     })
   }
 
+  body += '\n\nCould you also confirm your STO (Special Tour Operator) rates for these dates?'
+
   body += refRequest + '\n\n\n\nThanks,\n\n' + sender + '\nRide Down South\nbookings@ridedownsouth.com'
 
   return body

@@ -575,6 +575,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             lodgeEmail={lodgeEmail}
             lodgeName={lodgeName}
             rdsRef={rdsRef}
+            lodgeRef={lodgeRef}
             tourName={tour ? tour.name : ''}
             lastSubject={emails.length > 0 ? (emails[0].subject || emails[0].email_subject || '') : ''}
             lastInboundMessageId={(() => {
@@ -984,12 +985,23 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
   )
 }
 
-function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, tourName, lastSubject, lastInboundMessageId, onSent }) {
+function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, lodgeRef, tourName, lastSubject, lastInboundMessageId, onSent }) {
   const [open, setOpen] = useState(false)
   const [sent, setSent] = useState(false)
-  const defaultSubject = lastSubject && lastSubject.startsWith('Re:')
-    ? lastSubject
-    : 'Re: ' + (lastSubject || 'Booking enquiry - ' + tourName + (rdsRef ? ' [' + rdsRef + ']' : ''))
+
+  // Build the default subject. If the lodge has provided their own
+  // booking reference, append it (unless it's already in lastSubject)
+  // so Helen sees both refs in one glance and threading stays clean.
+  const buildDefaultSubject = () => {
+    let base = lastSubject && lastSubject.startsWith('Re:')
+      ? lastSubject
+      : 'Re: ' + (lastSubject || 'Booking enquiry - ' + tourName + (rdsRef ? ' [' + rdsRef + ']' : ''))
+    if (lodgeRef && !base.includes(lodgeRef)) {
+      base += ' / Lodge ref: ' + lodgeRef
+    }
+    return base
+  }
+  const defaultSubject = buildDefaultSubject()
   const defaultSignature = '\n\nTake care,\nHelen Baker\nLodge Bookings | Ride Down South\nbookings@ridedownsouth.com'
 
   const [toAddr, setToAddr] = useState(lodgeEmail || '')
