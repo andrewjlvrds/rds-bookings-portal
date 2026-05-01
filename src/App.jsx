@@ -8,7 +8,6 @@ import LodgeDetail from './components/LodgeDetail'
 import TourPanel from './components/TourPanel'
 import GettingStarted from './components/GettingStarted'
 import Lodges from './components/Lodges'
-import Correspondence from './components/Correspondence'
 import Transfers from './components/Transfers'
 import Guests from './components/Guests'
 import GuestDashboard from './components/GuestDashboard'
@@ -69,18 +68,37 @@ export default function App() {
   // server but optimistically update local state first.
   const [readState, setReadState] = useState({})
 
-  // Inbox unread totals — fetched separately so the sidebar badge stays
-  // accurate without forcing the user to enter the Inbox view first.
-  // Refreshed on load and again whenever read-state changes.
+  // Inbox data — held at App level so navigating away and back
+  // doesn't refetch every time. Also refreshed proactively after
+  // any mark-read action so the sidebar badge stays accurate.
+  // Also fetches activity-log waiting entries (for Replies received tab).
+  const [inboxData, setInboxData] = useState(null)
   const [inboxStats, setInboxStats] = useState({ unread: 0, unmatched: 0, tour_bucket: 0 })
+  const [inboxReadyToMarkDone, setInboxReadyToMarkDone] = useState([])
+  const [inboxFetchedAt, setInboxFetchedAt] = useState(0)
+  const [inboxLoading, setInboxLoading] = useState(false)
+  const [inboxError, setInboxError] = useState(null)
 
-  const fetchInboxStats = () => {
-    fetch(API + '/api/inbox')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d && d.stats) setInboxStats(d.stats)
+  const fetchInboxStats = (force) => {
+    // Skip refetch if we already have fresh data, unless force=true
+    if (!force && inboxFetchedAt && Date.now() - inboxFetchedAt < 30000) return
+    setInboxLoading(true)
+    setInboxError(null)
+    Promise.all([
+      fetch(API + '/api/inbox').then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load inbox'))),
+      fetch(API + '/api/activity-log?status=waiting').then(r => r.ok ? r.json() : { entries: [] }),
+    ])
+      .then(([inboxResp, logResp]) => {
+        setInboxData(inboxResp)
+        setInboxStats(inboxResp.stats || { unread: 0, unmatched: 0, tour_bucket: 0 })
+        setInboxReadyToMarkDone((logResp.entries || []).filter(e => e.reply_received_at))
+        setInboxFetchedAt(Date.now())
+        setInboxLoading(false)
       })
-      .catch(err => console.error('inbox stats failed:', err))
+      .catch(err => {
+        setInboxError(err.message)
+        setInboxLoading(false)
+      })
   }
 
   const markRead = (emailId) => {
@@ -91,7 +109,7 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email_id: emailId, read: true }),
     })
-      .then(() => fetchInboxStats())
+      .then(() => fetchInboxStats(true))
       .catch(err => console.error('markRead failed:', err))
   }
 
@@ -108,7 +126,7 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email_ids: emailIds }),
     })
-      .then(() => fetchInboxStats())
+      .then(() => fetchInboxStats(true))
       .catch(err => console.error('markManyRead failed:', err))
   }
 
@@ -292,6 +310,14 @@ export default function App() {
           tours={tours}
           allBookings={allBookings}
           lodges={lodges}
+          data={inboxData}
+          readyToMarkDone={inboxReadyToMarkDone}
+          loading={inboxLoading}
+          error={inboxError}
+          onRefresh={() => fetchInboxStats(true)}
+          ensureFresh={() => fetchInboxStats(false)}
+          onLocalUpdate={(updater) => setInboxData(prev => prev ? updater(prev) : prev)}
+          onLocalReadyDoneUpdate={(updater) => setInboxReadyToMarkDone(updater)}
           onSelectBooking={(bk) => handleSelectBooking(bk, 'correspondence')}
           onMarkRead={markRead}
           onMarkManyRead={markManyRead}
@@ -331,10 +357,6 @@ export default function App() {
 
     if (activeView === 'lodges') {
       return <Lodges lodges={lodges} onRefresh={() => refreshData()} />
-    }
-
-    if (activeView === 'correspondence') {
-      return <Correspondence tours={tours} allBookings={allBookings} onSelectBooking={handleSelectBooking} />
     }
 
     if (activeView === 'transfers') {

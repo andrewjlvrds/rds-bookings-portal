@@ -14,59 +14,44 @@ import RoutingPicker from './RoutingPicker'
  * Sections 2 & 3 have a "Route to booking" picker that calls
  *   /api/email-route, which moves the blob to emails/booking/{id}/.
  */
-export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onMarkRead, onMarkManyRead }) {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+export default function Inbox({
+  tours, allBookings, lodges,
+  data, readyToMarkDone, loading, error,
+  onRefresh, ensureFresh, onLocalUpdate, onLocalReadyDoneUpdate,
+  onSelectBooking, onMarkRead, onMarkManyRead,
+}) {
   const [routingEmail, setRoutingEmail] = useState(null) // { email, sourcePath }
-  const [readyToMarkDone, setReadyToMarkDone] = useState([]) // log entries with replies received
+  const [activeTab, setActiveTab] = useState(null) // 'routing' | 'unread' | 'ready' | null (auto)
 
-  const fetchInbox = () => {
-    setLoading(true)
-    Promise.all([
-      fetch('/api/inbox').then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load inbox'))),
-      fetch('/api/activity-log?status=waiting').then(r => r.ok ? r.json() : { entries: [] }),
-    ])
-      .then(([inboxData, logData]) => {
-        setData(inboxData)
-        setReadyToMarkDone((logData.entries || []).filter(e => e.reply_received_at))
-        setLoading(false)
-      })
-      .catch(err => {
-        setError(err.message)
-        setLoading(false)
-      })
-  }
-
-  useEffect(() => { fetchInbox() }, [])
+  // On first mount of this view, ensure data is fresh (cached if <30s old).
+  useEffect(() => { if (ensureFresh) ensureFresh() }, [])
 
   const handleOpenEmail = (email) => {
     if (!email.booking_id) return
     const bk = allBookings.find(b => b.id === email.booking_id)
     if (!bk) {
       alert('Could not find booking for this email — refreshing.')
-      fetchInbox()
+      if (onRefresh) onRefresh()
       return
     }
-    // Mark this single email read before navigating away
     if (onMarkRead && email.id) onMarkRead(email.id)
     onSelectBooking(bk)
   }
 
   const handleDismiss = (email) => {
     if (onMarkRead && email.id) onMarkRead(email.id)
-    setData(prev => prev ? {
+    if (onLocalUpdate) onLocalUpdate(prev => ({
       ...prev,
-      unread: prev.unread.filter(e => e.id !== email.id),
-      unmatched: prev.unmatched.filter(e => e.id !== email.id),
-      tour_bucket: prev.tour_bucket.filter(e => e.id !== email.id),
+      unread: (prev.unread || []).filter(e => e.id !== email.id),
+      unmatched: (prev.unmatched || []).filter(e => e.id !== email.id),
+      tour_bucket: (prev.tour_bucket || []).filter(e => e.id !== email.id),
       stats: {
         ...prev.stats,
-        unread: prev.unread.filter(e => e.id !== email.id).length,
-        unmatched: prev.unmatched.filter(e => e.id !== email.id).length,
-        tour_bucket: prev.tour_bucket.filter(e => e.id !== email.id).length,
+        unread: (prev.unread || []).filter(e => e.id !== email.id).length,
+        unmatched: (prev.unmatched || []).filter(e => e.id !== email.id).length,
+        tour_bucket: (prev.tour_bucket || []).filter(e => e.id !== email.id).length,
       },
-    } : prev)
+    }))
   }
 
   const handleMarkAllRead = (bucket) => {
@@ -74,7 +59,7 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
     if (!confirm('Mark all ' + data[bucket].length + ' emails in this section as read?')) return
     const ids = data[bucket].map(e => e.id).filter(Boolean)
     if (onMarkManyRead) onMarkManyRead(ids)
-    setData(prev => ({
+    if (onLocalUpdate) onLocalUpdate(prev => ({
       ...prev,
       [bucket]: [],
       stats: { ...prev.stats, [bucket]: 0 },
@@ -91,9 +76,7 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
       const result = await res.json()
       if (!result.success) throw new Error(result.error || 'Routing failed')
 
-      // For reassignments — log a correction so we can spot matcher
-      // patterns over time. Fire-and-forget; failure here must not
-      // block the actual reassign.
+      // Telemetry — log this as a match correction
       if (isReassign) {
         try {
           let newLodge = '', newCheckIn = ''
@@ -128,23 +111,18 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
         } catch (_) { /* swallow */ }
       }
 
-      // Remove from local state — drop from whichever bucket it was in.
-      setData(prev => prev ? {
+      if (onLocalUpdate) onLocalUpdate(prev => ({
         ...prev,
-        unread: prev.unread.filter(e => e.id !== email.id),
-        unmatched: prev.unmatched.filter(e => e.id !== email.id),
-        tour_bucket: prev.tour_bucket.filter(e => e.id !== email.id),
-      } : prev)
+        unread: (prev.unread || []).filter(e => e.id !== email.id),
+        unmatched: (prev.unmatched || []).filter(e => e.id !== email.id),
+        tour_bucket: (prev.tour_bucket || []).filter(e => e.id !== email.id),
+      }))
       setRoutingEmail(null)
     } catch (err) {
       alert('Could not route email: ' + err.message)
     }
   }
 
-  // Triggered when Helen clicks "Reassign" on an unread row — the
-  // email was matched but to the wrong booking. Source path is the
-  // current emails/booking/{id}/ location. handleRoute treats this
-  // as a reassignment and logs a correction.
   const handleReassignUnread = (email) => {
     if (!email.id || !email.booking_id) {
       alert('Cannot reassign — missing email or booking id')
@@ -163,21 +141,21 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
       })
       const d = await res.json()
       if (!d.success) throw new Error(d.error || 'Update failed')
-      setReadyToMarkDone(prev => prev.filter(e => e.id !== entryId))
+      if (onLocalReadyDoneUpdate) onLocalReadyDoneUpdate(prev => prev.filter(e => e.id !== entryId))
     } catch (err) {
       alert('Could not update entry: ' + err.message)
     }
   }
 
-  if (loading) {
+  if (loading && !data) {
     return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading inbox...</div>
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
         <div style={{ color: 'var(--red-text)', marginBottom: 8 }}>Error: {error}</div>
-        <button className="btn" onClick={fetchInbox}>Retry</button>
+        <button className="btn" onClick={onRefresh}>Retry</button>
       </div>
     )
   }
@@ -185,18 +163,27 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
   const unread = data?.unread || []
   const unmatched = data?.unmatched || []
   const tourBucket = data?.tour_bucket || []
-  const total = unread.length + unmatched.length + tourBucket.length + readyToMarkDone.length
+  const needsRouting = [...unmatched, ...tourBucket]
+  const total = unread.length + needsRouting.length + readyToMarkDone.length
+
+  // Default-tab logic: Helen's most-urgent decision-needing bucket
+  // first. Needs routing > Replies received > Unread. If everything
+  // is empty, default to Unread.
+  const defaultTab = needsRouting.length > 0
+    ? 'routing'
+    : (readyToMarkDone.length > 0 ? 'ready' : 'unread')
+  const tab = activeTab || defaultTab
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 500 }}>Inbox</h1>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
             {total === 0 ? 'All caught up.' : total + ' item' + (total === 1 ? '' : 's') + ' need attention'}
           </div>
         </div>
-        <button onClick={fetchInbox} className="btn btn-sm" style={{ fontSize: 12 }}>↻ Refresh</button>
+        <button onClick={onRefresh} className="btn btn-sm" style={{ fontSize: 12 }} disabled={loading}>{loading ? 'Refreshing...' : '↻ Refresh'}</button>
       </div>
 
       {total === 0 && (
@@ -205,12 +192,80 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
         </div>
       )}
 
-      {readyToMarkDone.length > 0 && (
-        <Section
-          title="Replies received — ready to mark done"
-          subtitle="Log entries that were waiting for a response. The lodge has replied — mark each one done when you're satisfied."
-          accent="#2E7D32"
-        >
+      {total > 0 && (
+        <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '0.5px solid var(--border-default)' }}>
+          <TabButton
+            active={tab === 'routing'}
+            onClick={() => setActiveTab('routing')}
+            label="Needs routing"
+            count={needsRouting.length}
+            urgentColour="#E65100"
+          />
+          <TabButton
+            active={tab === 'unread'}
+            onClick={() => setActiveTab('unread')}
+            label="Unread"
+            count={unread.length}
+            urgentColour="#C62828"
+          />
+          <TabButton
+            active={tab === 'ready'}
+            onClick={() => setActiveTab('ready')}
+            label="Replies received"
+            count={readyToMarkDone.length}
+            urgentColour="#2E7D32"
+          />
+        </div>
+      )}
+
+      {tab === 'routing' && needsRouting.length > 0 && (
+        <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+          {needsRouting.map(email => (
+            <UnmatchedRow
+              key={email.id}
+              email={email}
+              sourcePath={email._blob_path}
+              onRoute={() => setRoutingEmail({ email, sourcePath: email._blob_path })}
+              onDismiss={() => handleDismiss(email)}
+            />
+          ))}
+        </div>
+      )}
+      {tab === 'routing' && needsRouting.length === 0 && total > 0 && (
+        <EmptyTab message="No emails need routing right now." />
+      )}
+
+      {tab === 'unread' && unread.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button
+              onClick={() => handleMarkAllRead('unread')}
+              style={{ background: 'none', border: 'none', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}
+            >
+              Mark all read
+            </button>
+          </div>
+          <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+            {unread.map(email => (
+              <UnreadRow
+                key={email.id}
+                email={email}
+                tours={tours}
+                allBookings={allBookings}
+                onOpen={() => handleOpenEmail(email)}
+                onDismiss={() => handleDismiss(email)}
+                onReassign={() => handleReassignUnread(email)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {tab === 'unread' && unread.length === 0 && total > 0 && (
+        <EmptyTab message="No unread replies." />
+      )}
+
+      {tab === 'ready' && readyToMarkDone.length > 0 && (
+        <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
           {readyToMarkDone.map(entry => (
             <ReadyDoneRow
               key={entry.id}
@@ -218,66 +273,10 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
               onMarkDone={() => handleMarkLogEntryDone(entry.id)}
             />
           ))}
-        </Section>
+        </div>
       )}
-
-      {unread.length > 0 && (
-        <Section
-          title="Unread replies"
-          subtitle={unread.length + ' new ' + (unread.length === 1 ? 'reply' : 'replies') + ' from lodges'}
-          accent="#C62828"
-          onMarkAllRead={() => handleMarkAllRead('unread')}
-        >
-          {unread.map(email => (
-            <UnreadRow
-              key={email.id}
-              email={email}
-              tours={tours}
-              allBookings={allBookings}
-              onOpen={() => handleOpenEmail(email)}
-              onDismiss={() => handleDismiss(email)}
-              onReassign={() => handleReassignUnread(email)}
-            />
-          ))}
-        </Section>
-      )}
-
-      {unmatched.length > 0 && (
-        <Section
-          title="Unmatched — needs routing"
-          subtitle="The matcher could not find a booking for these. Route them to the right lodge booking."
-          accent="#E65100"
-          onMarkAllRead={() => handleMarkAllRead('unmatched')}
-        >
-          {unmatched.map(email => (
-            <UnmatchedRow
-              key={email.id}
-              email={email}
-              sourcePath={email._blob_path}
-              onRoute={() => setRoutingEmail({ email, sourcePath: email._blob_path })}
-              onDismiss={() => handleDismiss(email)}
-            />
-          ))}
-        </Section>
-      )}
-
-      {tourBucket.length > 0 && (
-        <Section
-          title="Tour known, booking unclear"
-          subtitle="Tour matched but specific lodge booking ambiguous. Route to the right one."
-          accent="#E65100"
-          onMarkAllRead={() => handleMarkAllRead('tour_bucket')}
-        >
-          {tourBucket.map(email => (
-            <UnmatchedRow
-              key={email.id}
-              email={email}
-              sourcePath={email._blob_path}
-              onRoute={() => setRoutingEmail({ email, sourcePath: email._blob_path })}
-              onDismiss={() => handleDismiss(email)}
-            />
-          ))}
-        </Section>
+      {tab === 'ready' && readyToMarkDone.length === 0 && total > 0 && (
+        <EmptyTab message="No replies waiting on your sign-off." />
       )}
 
       {routingEmail && (
@@ -289,6 +288,46 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
           onRoute={(bookingId) => handleRoute(routingEmail.email, routingEmail.sourcePath, bookingId, !!routingEmail.isReassign)}
         />
       )}
+    </div>
+  )
+}
+
+function TabButton({ active, onClick, label, count, urgentColour }) {
+  const showColour = count > 0
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '10px 18px', fontSize: 13, fontWeight: 500,
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+        borderBottom: active ? '2px solid var(--blue-mid)' : '2px solid transparent',
+        marginBottom: -0.5,
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}
+    >
+      {label}
+      {count > 0 && (
+        <span style={{
+          fontSize: 10, fontWeight: 600,
+          background: showColour ? urgentColour : 'var(--bg-secondary)',
+          color: showColour ? '#fff' : 'var(--text-muted)',
+          padding: '1px 7px', borderRadius: 9, minWidth: 18, textAlign: 'center', lineHeight: 1.5,
+        }}>
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
+function EmptyTab({ message }) {
+  return (
+    <div style={{
+      padding: 40, textAlign: 'center', color: 'var(--text-muted)',
+      background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', fontSize: 13,
+    }}>
+      {message}
     </div>
   )
 }

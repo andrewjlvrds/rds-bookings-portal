@@ -17,8 +17,6 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [confirmId, setConfirmId] = useState(null) // booking id showing confirm preview
   const [showTourPayments, setShowTourPayments] = useState(false)
   const [sender, setSender] = useState('Helen')
-  const [polling, setPolling] = useState(false)
-  const [pollResult, setPollResult] = useState(null)
   const [narrativeState, setNarrativeState] = useState({}) // { [bookingId]: { loading, text, confidence, saved, error, editing } }
   const [showCancelled, setShowCancelled] = useState(false) // toggle cancelled rows in the list
 
@@ -559,67 +557,6 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {sorted.length > 0 && (
-            <>
-              <button className="btn" onClick={() => {
-                const headers = ['Day', 'Date', 'Route', 'Km', 'Lodge', 'Meals', 'Amount', 'Status']
-                const rows = merged.map((bk, i) => {
-                  const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
-                  const dayDesc = bk.Day_Description || bk['Day Description'] || ''
-                  const routeMatch = dayDesc.match(/Day\s*\d+:\s*(.+)/)
-                  const route = routeMatch ? routeMatch[1] : dayDesc
-                  const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
-                  const amount = bk.Total_Amount || bk['Total Amount'] || ''
-                  const currency = bk.Currency || bk.Lodge_Currency || ''
-                  const status = getStatus(bk)
-                  return [i + 1, checkIn, route, bk._km || '', lodge, bk.Meals || '', amount ? currency + ' ' + amount : '', status]
-                })
-                const csv = [headers, ...rows].map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n')
-                const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = (tour.name || 'itinerary').replace(/\s+/g, '_') + '.csv'
-                a.click()
-                URL.revokeObjectURL(url)
-              }} title="Download as CSV (Excel)">↓ Excel</button>
-              <button className="btn" onClick={() => {
-                const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>${tour.name} — Itinerary</title>
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#222; padding:20px; }
-h1 { font-size:16px; font-weight:600; margin-bottom:2px; }
-.sub { font-size:11px; color:#666; margin-bottom:14px; }
-table { width:100%; border-collapse:collapse; margin-top:8px; }
-th { text-align:left; font-size:10px; font-weight:600; color:#666; text-transform:uppercase; letter-spacing:0.5px; padding:6px 8px; border-bottom:1.5px solid #333; }
-td { padding:7px 8px; border-bottom:0.5px solid #ddd; vertical-align:top; }
-tr:last-child td { border-bottom:1.5px solid #333; }
-.lodge { font-weight:500; }
-.footer { margin-top:14px; font-size:9px; color:#999; }
-@media print { body { padding:0; } }
-</style></head><body>
-<h1>${tour.name}</h1>
-<div class="sub">${tour.departure_date ? 'Departure: ' + fmtDateFull(tour.departure_date) : ''}</div>
-<table><thead><tr><th>Day</th><th>Date</th><th>Route</th><th>Km</th><th>Lodge</th><th>Meals</th></tr></thead><tbody>
-${merged.map((bk, i) => {
-  const lodge = (bk.Lodge_Name || bk.Name || '').split(' - ')[0]
-  const dayDesc = bk.Day_Description || bk['Day Description'] || ''
-  const routeMatch = dayDesc.match(/Day\s*\d+:\s*(.+)/)
-  const route = routeMatch ? routeMatch[1] : dayDesc
-  const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
-  return '<tr><td>' + (i+1) + '</td><td>' + fmtDate(checkIn) + '</td><td>' + route + '</td><td>' + (bk._km || '') + '</td><td class="lodge">' + lodge + '</td><td>' + (bk.Meals || '') + '</td></tr>'
-}).join('')}
-</tbody></table>
-<div class="footer">Ride Down South · ${tour.name} · Generated ${new Date().toLocaleDateString()}</div>
-</body></html>`
-                const win = window.open('', '_blank')
-                win.document.write(html)
-                win.document.close()
-                setTimeout(() => win.print(), 300)
-              }} title="Print / Save as PDF">↓ PDF</button>
-            </>
-          )}
           <button className="btn" onClick={onEditItinerary}>
             {hasContent ? 'Edit itinerary' : 'Create itinerary'}
           </button>
@@ -633,46 +570,6 @@ ${merged.map((bk, i) => {
               Enquire all ready ({readyToSend})
             </button>
           )}
-          <button
-            className="btn"
-            onClick={async () => {
-              setPolling(true)
-              setPollResult(null)
-              try {
-                const res = await fetch('/api/poll-gmail')
-                const data = await res.json()
-                setPollResult(data)
-                if (data.stored > 0 && onRefresh) onRefresh()
-              } catch (err) {
-                setPollResult({ error: err.message })
-              } finally {
-                setPolling(false)
-              }
-            }}
-            disabled={polling}
-            style={{ fontSize: 12, padding: '4px 8px' }}
-            title="Check Gmail for lodge replies"
-          >{polling ? 'Checking...' : '↓ Check replies'}</button>
-          <button
-            className="btn"
-            onClick={async () => {
-              setPolling(true)
-              setPollResult(null)
-              try {
-                const res = await fetch('/api/poll-gmail?refetch=true')
-                const data = await res.json()
-                setPollResult(data)
-                if (data.stored > 0 && onRefresh) onRefresh()
-              } catch (err) {
-                setPollResult({ error: err.message })
-              } finally {
-                setPolling(false)
-              }
-            }}
-            disabled={polling}
-            style={{ fontSize: 11, padding: '3px 6px', color: 'var(--text-muted)' }}
-            title="Re-fetch all recent emails from Gmail (fixes missing content)"
-          >↓ Re-fetch</button>
           {onRefresh && (
             <button
               className="btn"
@@ -681,39 +578,8 @@ ${merged.map((bk, i) => {
               title="Refresh data from Zoho"
             >↻</button>
           )}
-          {onDeleteTour && (
-            <button
-              onClick={onDeleteTour}
-              style={{
-                background: 'none', border: 'none', fontSize: 12,
-                color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 8px',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'var(--red-text)' }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
-            >
-              Delete tour
-            </button>
-          )}
         </div>
       </div>
-
-      {/* Poll result notification */}
-      {pollResult && (
-        <div style={{
-          padding: '8px 16px', marginBottom: 12,
-          borderRadius: 'var(--radius-md)', fontSize: 12,
-          background: pollResult.error ? 'var(--red-bg)' : pollResult.stored > 0 ? 'var(--green-bg)' : 'var(--bg-secondary)',
-          color: pollResult.error ? 'var(--red-text)' : pollResult.stored > 0 ? 'var(--green-text)' : 'var(--text-muted)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <span>
-            {pollResult.error ? 'Error: ' + pollResult.error
-              : pollResult.stored > 0 ? pollResult.stored + ' new repl' + (pollResult.stored === 1 ? 'y' : 'ies') + ' processed — statuses updated'
-              : 'No new replies found'}
-          </span>
-          <button onClick={() => setPollResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 14 }}>×</button>
-        </div>
-      )}
 
       {/* Tab switcher */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '0.5px solid var(--border-default)' }}>
