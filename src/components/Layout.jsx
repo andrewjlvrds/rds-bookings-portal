@@ -37,7 +37,7 @@ function categorizeTours(tours) {
 }
 
 const PLANNER_VIEWS = ['dashboard', 'itinerary', 'edit-itinerary', 'enquiry-preview']
-const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'correspondence', 'lodges', 'tour-panel']
+const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'correspondence', 'lodges', 'tour-panel', 'inbox']
 const GUEST_VIEWS = ['guest-dashboard', 'guest-tour', 'guest-detail', 'transfers', 'guest-excursions', 'guest-accommodation', 'guest-payments', 'guest-bikes']
 
 function getSection(activeView) {
@@ -50,7 +50,7 @@ const TABS = [
   { id: 'guests', label: 'Guest bookings', defaultView: 'guest-dashboard' },
 ]
 
-export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, children }) {
+export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats, children }) {
   const currentSection = getSection(activeView)
 
   const handleTabClick = (tab) => {
@@ -125,6 +125,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
           activeView={activeView}
           onSelectView={onSelectView}
           onCreateTour={onCreateTour}
+          inboxStats={inboxStats}
         />
         <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', minWidth: 0 }}>
           {children}
@@ -135,7 +136,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
 }
 
 
-function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour }) {
+function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats }) {
   // Filter tours for committed-only sections
   const committedTours = (tours || []).filter(t => {
     if (typeof t.id === 'string' && t.id.startsWith('local_')) return false
@@ -149,6 +150,10 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
     onSelectView(tourClickView)
   }
 
+  const inboxTotal = inboxStats
+    ? (inboxStats.unread || 0) + (inboxStats.unmatched || 0) + (inboxStats.tour_bucket || 0)
+    : 0
+
   return (
     <nav style={{
       width: 240, flexShrink: 0, background: 'var(--bg-primary)',
@@ -158,6 +163,12 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
       {/* Section-specific sub-nav */}
       {section === 'lodges' && (
         <div style={{ padding: '8px 0', borderBottom: '0.5px solid var(--border-default)' }}>
+          <NavItem
+            label="Inbox"
+            active={activeView === 'inbox'}
+            onClick={() => { onSelectTour(null); onSelectView('inbox') }}
+            badge={inboxTotal > 0 ? inboxTotal : null}
+          />
           <NavItem label="Payments" active={activeView === 'payments'} onClick={() => { onSelectTour(null); onSelectView('payments') }} />
           <NavItem label="Correspondence" active={activeView === 'correspondence'} onClick={() => { onSelectTour(null); onSelectView('correspondence') }} />
           <NavItem label="Lodges" active={activeView === 'lodges'} onClick={() => { onSelectTour(null); onSelectView('lodges') }} />
@@ -266,7 +277,7 @@ function TourList({ tours, activeTour, onTourClick, onCreateTour, mode }) {
 }
 
 
-function NavItem({ label, active, onClick }) {
+function NavItem({ label, active, onClick, badge }) {
   return (
     <button
       onClick={onClick}
@@ -276,12 +287,25 @@ function NavItem({ label, active, onClick }) {
         background: active ? 'var(--blue-bg)' : 'transparent',
         border: 'none', fontSize: 13, fontWeight: 500,
         color: active ? 'var(--blue-text)' : 'var(--text-secondary)',
-        alignItems: 'center', transition: 'background 0.1s', borderRadius: 0,
+        alignItems: 'center', justifyContent: 'space-between',
+        transition: 'background 0.1s', borderRadius: 0,
       }}
       onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg-secondary)' }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
     >
       <span>{label}</span>
+      {badge != null && (
+        <span
+          style={{
+            fontSize: 10, fontWeight: 600,
+            background: '#C62828', color: '#fff',
+            padding: '1px 6px', borderRadius: 9, lineHeight: 1.3,
+            minWidth: 16, textAlign: 'center',
+          }}
+        >
+          {badge}
+        </span>
+      )}
     </button>
   )
 }

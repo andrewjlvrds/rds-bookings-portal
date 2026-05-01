@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, getStatus, daysBetween } from '../utils/helpers'
 
-export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }) {
+export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead }) {
   const [emails, setEmails] = useState([])
   const [loadingEmails, setLoadingEmails] = useState(true)
   const [editing, setEditing] = useState(null)
@@ -534,7 +534,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh }
             <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '14px' }}>No emails recorded for this booking yet.</div>
           ) : (
             <div>
-              {emails.map((em, i) => <EmailRow key={em.id || i} email={em} bookingId={bookingId} onDelete={fetchEmails} />)}
+              {emails.map((em, i) => <EmailRow key={em.id || i} email={em} bookingId={bookingId} onDelete={fetchEmails} readState={readState} onMarkRead={onMarkRead} />)}
             </div>
           )}
 
@@ -685,11 +685,12 @@ function EditableCell({ value, display, field, type, onEdit }) {
   )
 }
 
-function EmailRow({ email, bookingId, onDelete }) {
+function EmailRow({ email, bookingId, onDelete, readState, onMarkRead }) {
   const [expanded, setExpanded] = useState(false)
   const [showAttText, setShowAttText] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const isOutbound = email.direction === 'outbound'
+  const isUnread = !isOutbound && email.id && readState && !readState[email.id]
   const date = email.date || email.email_date || ''
   const from = email.from || email.email_from || ''
   const subject = email.subject || email.email_subject || ''
@@ -699,6 +700,13 @@ function EmailRow({ email, bookingId, onDelete }) {
   const hasExtracted = attachments.some(a => a && a.extractedText)
   const firstLine = body.split('\n').filter(l => l.trim())[0] || ''
   const preview = firstLine.length > 120 ? firstLine.substring(0, 120) + '...' : firstLine
+
+  const handleToggle = () => {
+    const next = !expanded
+    setExpanded(next)
+    // Mark read the first time the row is expanded
+    if (next && isUnread && onMarkRead) onMarkRead(email.id)
+  }
 
   // Extract flags from ai_flags array
   const flags = Array.isArray(email.ai_flags) ? email.ai_flags : []
@@ -724,23 +732,35 @@ function EmailRow({ email, bookingId, onDelete }) {
   return (
     <div style={{ borderBottom: '0.5px solid var(--border-light)' }}>
       <div
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleToggle}
         style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
           cursor: 'pointer', fontSize: 12,
-          background: expanded ? 'var(--bg-secondary)' : 'transparent',
+          background: expanded ? 'var(--bg-secondary)' : (isUnread ? 'var(--bg-primary)' : 'transparent'),
         }}
       >
         <span style={{ fontSize: 9, color: 'var(--text-muted)', width: 12, flexShrink: 0 }}>
           {expanded ? '▾' : '▸'}
         </span>
+        {isUnread ? (
+          <span
+            style={{ width: 6, height: 6, borderRadius: '50%', background: '#C62828', flexShrink: 0 }}
+            title="Unread"
+          />
+        ) : (
+          <span style={{ width: 6, flexShrink: 0 }} />
+        )}
         <span style={{ fontWeight: 500, fontSize: 11, width: 52, flexShrink: 0, color: isOutbound ? 'var(--blue-text)' : 'var(--green-text)' }}>
           {isOutbound ? 'Sent' : 'Received'}
         </span>
         <span style={{ color: 'var(--text-muted)', width: 180, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {isOutbound ? 'to lodge' : from.split('<')[0].trim() || from}
         </span>
-        <span style={{ color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{
+          color: isUnread ? 'var(--text-primary)' : 'var(--text-secondary)',
+          fontWeight: isUnread ? 600 : 400,
+          flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
           {expanded ? subject : (preview || subject)}
         </span>
         {swapFlag && (

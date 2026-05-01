@@ -15,6 +15,7 @@ import GuestDashboard from './components/GuestDashboard'
 import GuestTourPanel from './components/GuestTourPanel'
 import PlannerDashboard from './components/PlannerDashboard'
 import NewTour from './components/NewTour'
+import Inbox from './components/Inbox'
 import './styles/global.css'
 
 const API = ''
@@ -61,6 +62,54 @@ export default function App() {
   // When a user opens LodgeDetail from inside the TourPanel, remember which
   // tab they came from so the Back button returns them there.
   const [returnToTourTab, setReturnToTourTab] = useState('itinerary')
+
+  // Shared (Helen + Andrew) email read-state. Loaded from /api/email-read-state
+  // on mount. Map of { emailId: readAtISO }. Mutations write through to the
+  // server but optimistically update local state first.
+  const [readState, setReadState] = useState({})
+
+  // Inbox unread totals — fetched separately so the sidebar badge stays
+  // accurate without forcing the user to enter the Inbox view first.
+  // Refreshed on load and again whenever read-state changes.
+  const [inboxStats, setInboxStats] = useState({ unread: 0, unmatched: 0, tour_bucket: 0 })
+
+  const fetchInboxStats = () => {
+    fetch(API + '/api/inbox')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && d.stats) setInboxStats(d.stats)
+      })
+      .catch(err => console.error('inbox stats failed:', err))
+  }
+
+  const markRead = (emailId) => {
+    if (!emailId) return
+    setReadState(prev => ({ ...prev, [emailId]: new Date().toISOString() }))
+    fetch('/api/email-read-state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email_id: emailId, read: true }),
+    })
+      .then(() => fetchInboxStats())
+      .catch(err => console.error('markRead failed:', err))
+  }
+
+  const markManyRead = (emailIds) => {
+    if (!Array.isArray(emailIds) || emailIds.length === 0) return
+    const stamp = new Date().toISOString()
+    setReadState(prev => {
+      const next = { ...prev }
+      emailIds.forEach(id => { if (id) next[id] = stamp })
+      return next
+    })
+    fetch('/api/email-read-state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email_ids: emailIds }),
+    })
+      .then(() => fetchInboxStats())
+      .catch(err => console.error('markManyRead failed:', err))
+  }
 
   // Refresh data from API without losing current view
   const refreshData = (keepTourId, retriesLeft = 3) => {
@@ -128,6 +177,16 @@ export default function App() {
         setError(err.message)
         setLoading(false)
       })
+
+    // Read-state runs in parallel — don't gate the rest of the UI on it.
+    fetch(API + '/api/email-read-state')
+      .then(r => r.ok ? r.json() : { state: {} })
+      .then(d => setReadState(d.state || {}))
+      .catch(err => console.error('Read-state load failed:', err))
+
+    // Inbox stats — small payload, refreshed on portal open and after
+    // any mark-read action.
+    fetchInboxStats()
   }, [])
 
   const handleSelectTour = (tour) => {
@@ -219,6 +278,21 @@ export default function App() {
           lodges={lodges}
           onBack={() => { setActiveBooking(null); setActiveView('tour-panel') }}
           onRefresh={() => refreshData(activeTour ? activeTour.id : null)}
+          readState={readState}
+          onMarkRead={markRead}
+        />
+      )
+    }
+
+    if (activeView === 'inbox') {
+      return (
+        <Inbox
+          tours={tours}
+          allBookings={allBookings}
+          lodges={lodges}
+          onSelectBooking={(bk) => handleSelectBooking(bk, 'correspondence')}
+          onMarkRead={markRead}
+          onMarkManyRead={markManyRead}
         />
       )
     }
@@ -372,6 +446,7 @@ export default function App() {
         activeView={activeView}
         onSelectView={setActiveView}
         onCreateTour={handleCreateTour}
+        inboxStats={inboxStats}
       >
         {renderContent()}
       </Layout>
