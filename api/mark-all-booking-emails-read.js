@@ -4,30 +4,55 @@ import { loadReadState, markManyRead } from './_read-state.js';
 /*
  * /api/mark-all-booking-emails-read
  *
- * Nuclear-option backlog drain. Marks every email under emails/booking/
- * as read in the portal — no fetching, just path-based writes.
+ * Bulk mark-as-read for backlog drainage.
  *
- * Use case: Helen at cutover has hundreds of historical inbound emails
- * piled up in the portal that she's already dealt with in Gmail. The
- * Sync from Gmail endpoint covers the recent + Gmail-checkable subset
- * but anything older or with no gmail_message_id stays unread. This
- * endpoint nukes the rest in one shot.
+ * Modes:
+ *   POST                          → marks everything under emails/booking/
+ *   POST ?older_than_days=3       → marks only blobs uploadedAt > N days ago
+ *   POST ?include_unmatched=1     → also clear unmatched + tour-bucket
+ *   POST ?dry_run=1               → reports counts, writes nothing
+ *
+ * Use case: Helen at cutover wants new mail from the past few days to
+ * surface and everything older nuked. Pass older_than_days=3 +
+ * include_unmatched=1 to clear the historical backlog across all
+ * three buckets (booking, unmatched, tour-bucket).
  *
  * How it works:
- *   1. List every blob under emails/booking/{bookingId}/{safeId}.json
- *   2. Derive the safeId (== email.id) from the basename
- *   3. Bulk-write all those IDs into the read-state blob
+ *   1. List relevant blobs (paths only, fast)
+ *   2. Filter by uploadedAt if older_than_days is set
+ *   3. Derive email IDs from filenames (== safeId == record.id)
+ *   4. Bulk-write to read-state in one operation
  *
- * Crucially we DON'T fetch the blob contents — that would be thousands
- * of fetches. Path-based works because the email's id field IS the
- * filename's safeId. This is fast (a few seconds) regardless of volume.
+ * No blob fetching — path + uploadedAt is enough. Fast (a few seconds)
+ * regardless of volume.
  *
- * Side effect: outbound emails also get their IDs added to the read
- * state. Harmless — outbound is filtered out by direction earlier
- * in the inbox endpoint, so the read flag on outbound is never read.
- *
- * POST-only. ?dry_run=1 reports what would be written without writing.
+ * uploadedAt vs email-received-date: uploadedAt is when the matcher
+ * stored the email, not when the lodge sent it. For backfilled
+ * historical emails these can differ. Acceptable tradeoff — anything
+ * a lodge cares about will follow up and re-surface as a new email.
  */
+async function listPrefix(prefix) {
+  const all = [];
+  let cursor;
+  for (let i = 0; i < 50; i++) {
+    const opts = { prefix };
+    if (cursor) opts.cursor = cursor;
+    const r = await list(opts);
+    if (r.blobs) all.push(...r.blobs);
+    if (!r.hasMore) break;
+    cursor = r.cursor;
+  }
+  return all;
+}
+
+function extractId(pathname) {
+  // emails/booking/{bookingId}/{safeId}.json
+  // emails/unmatched/{safeId}.json
+  // emails/tour-bucket/{tourKey}/{safeId}.json
+  const m = pathname.match(/\/([^/]+)\.json$/);
+  return m ? m[1] : null;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -37,28 +62,33 @@ export default async function handler(req, res) {
 
   try {
     const dryRun = req.query.dry_run === '1' || req.query.dry_run === 'true';
+    const includeUnmatched = req.query.include_unmatched === '1' || req.query.include_unmatched === 'true';
+    const olderThanDays = req.query.older_than_days ? parseFloat(req.query.older_than_days) : null;
+    const cutoffMs = (olderThanDays && !isNaN(olderThanDays))
+      ? Date.now() - (olderThanDays * 86400_000)
+      : null;
 
-    // 1. List all booking emails (paths only, fast)
-    const all = [];
-    let cursor;
-    for (let i = 0; i < 50; i++) { // generous page cap
-      const opts = { prefix: 'emails/booking/' };
-      if (cursor) opts.cursor = cursor;
-      const r = await list(opts);
-      if (r.blobs) all.push(...r.blobs);
-      if (!r.hasMore) break;
-      cursor = r.cursor;
+    const prefixes = ['emails/booking/'];
+    if (includeUnmatched) {
+      prefixes.push('emails/unmatched/');
+      prefixes.push('emails/tour-bucket/');
     }
+    const blobLists = await Promise.all(prefixes.map(p => listPrefix(p)));
+    const all = blobLists.flat();
 
-    // 2. Derive email IDs from filenames
+    const eligible = cutoffMs !== null
+      ? all.filter(b => {
+          if (!b.uploadedAt) return true;
+          return new Date(b.uploadedAt).getTime() < cutoffMs;
+        })
+      : all;
+
     const ids = [];
-    for (const b of all) {
-      // pathname: emails/booking/{bookingId}/{safeId}.json
-      const match = b.pathname.match(/emails\/booking\/[^/]+\/([^/]+)\.json$/);
-      if (match) ids.push(match[1]);
+    for (const b of eligible) {
+      const id = extractId(b.pathname);
+      if (id) ids.push(id);
     }
 
-    // 3. Skip already-read for cleaner stats
     const existing = await loadReadState();
     const newIds = ids.filter(id => !existing[id]);
 
@@ -69,8 +99,14 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       dry_run: dryRun,
+      cutoff_days: olderThanDays,
+      cutoff_iso: cutoffMs !== null ? new Date(cutoffMs).toISOString() : null,
+      include_unmatched: includeUnmatched,
+      prefixes_scanned: prefixes,
       stats: {
         blobs_listed: all.length,
+        eligible_after_cutoff: eligible.length,
+        kept_recent: all.length - eligible.length,
         ids_extracted: ids.length,
         already_read_skipped: ids.length - newIds.length,
         newly_marked_read: newIds.length,
