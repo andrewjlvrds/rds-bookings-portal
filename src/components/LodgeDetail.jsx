@@ -735,10 +735,11 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
   // Reassign — moves this email to a different booking. The
   // email-route endpoint accepts emails/booking/{id}/ source paths
   // for reassignment and updates the activity log accordingly.
+  // Also writes a match-correction log entry — every reassignment
+  // is signal that the matcher got it wrong, useful for diagnosis
+  // and eventual matcher improvements.
   const handleReassign = async (newBookingId) => {
     setReassignError(null)
-    // Need the source path. We can construct it from the email's
-    // current booking_id and id, since both are in the record.
     const safeId = email.id
     if (!safeId) {
       setReassignError('Cannot reassign — email has no id')
@@ -753,6 +754,46 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
       })
       const result = await res.json()
       if (!result.success) throw new Error(result.error || 'Reassign failed')
+
+      // Log the correction. Fire-and-forget — failing to log must
+      // not block the reassign.
+      try {
+        // Find the new booking in the tours array so we can
+        // denormalise its lodge name + check-in date for the log.
+        let newLodge = '', newCheckIn = ''
+        if (tours) {
+          for (const t of tours) {
+            const found = (t.bookings || []).find(b => b.id === newBookingId)
+            if (found) {
+              newLodge = (typeof found.Lodge_Name === 'object' ? found.Lodge_Name?.name : found.Lodge_Name) || found.Name || ''
+              newCheckIn = found.Check_in_Date || ''
+              break
+            }
+          }
+        }
+        const matchedAtStr = email.created_at || email._uploaded_at || email.email_date || email.date
+        const timeSinceMatchMs = matchedAtStr ? (Date.now() - new Date(matchedAtStr).getTime()) : null
+        fetch('/api/match-correction-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email_id: safeId,
+            gmail_message_id: email.gmail_message_id || email.message_id || null,
+            subject: email.subject || email.email_subject || '',
+            from: email.from || email.email_from || '',
+            email_date: email.date || email.email_date || null,
+            original_booking_id: bookingId,
+            original_match_method: email.match_method || null,
+            new_booking_id: newBookingId,
+            new_booking_lodge: newLodge,
+            new_booking_check_in: newCheckIn,
+            surface: 'lodge_detail',
+            time_since_match_ms: timeSinceMatchMs,
+            author: 'Helen',
+          }),
+        }).catch(() => {})
+      } catch (_) { /* swallow */ }
+
       setReassigning(false)
       if (onReassigned) onReassigned()
     } catch (err) {

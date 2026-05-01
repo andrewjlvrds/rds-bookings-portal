@@ -81,7 +81,7 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
     }))
   }
 
-  const handleRoute = async (email, sourcePath, bookingId) => {
+  const handleRoute = async (email, sourcePath, bookingId, isReassign) => {
     try {
       const res = await fetch('/api/email-route', {
         method: 'POST',
@@ -90,9 +90,48 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
       })
       const result = await res.json()
       if (!result.success) throw new Error(result.error || 'Routing failed')
-      // Remove from local state
+
+      // For reassignments — log a correction so we can spot matcher
+      // patterns over time. Fire-and-forget; failure here must not
+      // block the actual reassign.
+      if (isReassign) {
+        try {
+          let newLodge = '', newCheckIn = ''
+          if (tours) {
+            for (const t of tours) {
+              const found = (t.bookings || []).find(b => b.id === bookingId)
+              if (found) {
+                newLodge = (typeof found.Lodge_Name === 'object' ? found.Lodge_Name?.name : found.Lodge_Name) || found.Name || ''
+                newCheckIn = found.Check_in_Date || ''
+                break
+              }
+            }
+          }
+          fetch('/api/match-correction-log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email_id: email.id,
+              gmail_message_id: email.gmail_message_id || email.message_id || null,
+              subject: email.subject || email.email_subject || '',
+              from: email.from || email.email_from || '',
+              email_date: email.date || email.email_date || null,
+              original_booking_id: email.booking_id || null,
+              original_match_method: email.match_method || null,
+              new_booking_id: bookingId,
+              new_booking_lodge: newLodge,
+              new_booking_check_in: newCheckIn,
+              surface: 'inbox',
+              author: 'Helen',
+            }),
+          }).catch(() => {})
+        } catch (_) { /* swallow */ }
+      }
+
+      // Remove from local state — drop from whichever bucket it was in.
       setData(prev => prev ? {
         ...prev,
+        unread: prev.unread.filter(e => e.id !== email.id),
         unmatched: prev.unmatched.filter(e => e.id !== email.id),
         tour_bucket: prev.tour_bucket.filter(e => e.id !== email.id),
       } : prev)
@@ -100,6 +139,19 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
     } catch (err) {
       alert('Could not route email: ' + err.message)
     }
+  }
+
+  // Triggered when Helen clicks "Reassign" on an unread row — the
+  // email was matched but to the wrong booking. Source path is the
+  // current emails/booking/{id}/ location. handleRoute treats this
+  // as a reassignment and logs a correction.
+  const handleReassignUnread = (email) => {
+    if (!email.id || !email.booking_id) {
+      alert('Cannot reassign — missing email or booking id')
+      return
+    }
+    const sourcePath = 'emails/booking/' + email.booking_id + '/' + email.id + '.json'
+    setRoutingEmail({ email, sourcePath, isReassign: true })
   }
 
   const handleMarkLogEntryDone = async (entryId) => {
@@ -184,6 +236,7 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
               allBookings={allBookings}
               onOpen={() => handleOpenEmail(email)}
               onDismiss={() => handleDismiss(email)}
+              onReassign={() => handleReassignUnread(email)}
             />
           ))}
         </Section>
@@ -230,12 +283,10 @@ export default function Inbox({ tours, allBookings, lodges, onSelectBooking, onM
       {routingEmail && (
         <RoutingPicker
           email={routingEmail.email}
-          sourcePath={routingEmail.sourcePath}
           tours={tours}
-          allBookings={allBookings}
-          lodges={lodges}
+          currentBookingId={routingEmail.isReassign ? routingEmail.email.booking_id : null}
           onCancel={() => setRoutingEmail(null)}
-          onRoute={(bookingId) => handleRoute(routingEmail.email, routingEmail.sourcePath, bookingId)}
+          onRoute={(bookingId) => handleRoute(routingEmail.email, routingEmail.sourcePath, bookingId, !!routingEmail.isReassign)}
         />
       )}
     </div>
@@ -272,7 +323,7 @@ function Section({ title, subtitle, accent, onMarkAllRead, children }) {
   )
 }
 
-function UnreadRow({ email, tours, allBookings, onOpen, onDismiss }) {
+function UnreadRow({ email, tours, allBookings, onOpen, onDismiss, onReassign }) {
   const bk = allBookings.find(b => b.id === email.booking_id)
   const lodgeName = bk ? (typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name?.name : bk.Lodge_Name) || bk.Name || '' : ''
   const tour = bk && tours ? tours.find(t => (t.bookings || []).some(b => b.id === bk.id)) : null
@@ -314,17 +365,30 @@ function UnreadRow({ email, tours, allBookings, onOpen, onDismiss }) {
           </div>
         )}
       </div>
-      <button
-        onClick={e => { e.stopPropagation(); onDismiss() }}
-        style={{
-          background: 'none', border: 'none', fontSize: 11,
-          color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 6px',
-          flexShrink: 0,
-        }}
-        title="Mark read without opening"
-      >
-        Dismiss
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+        {bk && onReassign && (
+          <button
+            onClick={e => { e.stopPropagation(); onReassign() }}
+            style={{
+              background: 'none', border: 'none', fontSize: 11,
+              color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 6px',
+            }}
+            title="This is the wrong booking — pick a different one"
+          >
+            Reassign
+          </button>
+        )}
+        <button
+          onClick={e => { e.stopPropagation(); onDismiss() }}
+          style={{
+            background: 'none', border: 'none', fontSize: 11,
+            color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 6px',
+          }}
+          title="Mark read without opening"
+        >
+          Dismiss
+        </button>
+      </div>
     </div>
   )
 }
