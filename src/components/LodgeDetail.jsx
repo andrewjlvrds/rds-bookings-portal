@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, getStatus, daysBetween } from '../utils/helpers'
+import { cleanEmailBody } from '../utils/emailBody'
 import { BookingActivityLog } from './ActivityLog'
 import RoutingPicker from './RoutingPicker'
 
@@ -720,7 +721,7 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
   const date = email.date || email.email_date || ''
   const from = email.from || email.email_from || ''
   const subject = email.subject || email.email_subject || ''
-  const body = email.body || email.email_content || ''
+  const body = cleanEmailBody(email.body || email.email_content || '')
   const attachments = email.attachments || []
   const gmailMsgId = email.gmail_message_id || email.message_id || ''
   const hasExtracted = attachments.some(a => a && a.extractedText)
@@ -1067,7 +1068,7 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
   const [importing, setImporting] = useState(false)
   const from = email.from || ''
   const subject = email.subject || ''
-  const body = email.body || ''
+  const body = cleanEmailBody(email.body || '')
   const date = email.date || ''
   const isFromUs = from.indexOf('bookings@ridedownsouth.com') > -1 || from.indexOf('ridedownsouth.com') > -1
 

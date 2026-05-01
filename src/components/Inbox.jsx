@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { fmtDate } from '../utils/helpers'
+import { cleanEmailBody } from '../utils/emailBody'
 import RoutingPicker from './RoutingPicker'
 
 /*
@@ -462,7 +463,7 @@ function UnreadRow({ email, tours, allBookings, onOpen, onDismiss, onReassign })
   const tourName = tour ? tour.name : ''
   const checkIn = bk?.Check_in_Date || ''
   const subject = email.subject || email.email_subject || '(no subject)'
-  const snippet = (email.body || email.email_content || '').replace(/\s+/g, ' ').slice(0, 140)
+  const snippet = cleanEmailBody(email.body || email.email_content || '').replace(/\s+/g, ' ').slice(0, 140)
   const dateStr = email.date || email.email_date
   const ago = dateStr ? timeAgo(new Date(dateStr)) : ''
 
@@ -529,7 +530,8 @@ function UnmatchedRow({ email, sourcePath, onRoute, onDismiss }) {
   const [expanded, setExpanded] = useState(false)
   const subject = email.subject || email.email_subject || '(no subject)'
   const from = email.from || email.email_from || ''
-  const body = email.body || email.email_content || ''
+  const rawBody = email.body || email.email_content || ''
+  const body = cleanEmailBody(rawBody)
   const snippet = body.replace(/\s+/g, ' ').slice(0, 140)
   const dateStr = email.date || email.email_date
   const ago = dateStr ? timeAgo(new Date(dateStr)) : ''

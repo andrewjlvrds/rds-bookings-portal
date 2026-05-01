@@ -3,6 +3,7 @@ import { storeEmail, isEmailStored, lookupSentIndex, normalizeMessageId } from '
 import { zohoApi } from './_zoho.js';
 import { parseEmail, extractionToZohoFields } from './_ai-parse.js';
 import { tagReplyReceived } from './_activity-log.js';
+import { markRead } from './_read-state.js';
 import {
   extractRdsRef,
   extractIsoDates,
@@ -13,6 +14,27 @@ import {
 } from './_email-match.js';
 
 // (extractRdsRef, extractIsoDates, dateMatchScore imported from _email-match.js)
+
+// Auto-dismiss filter: certain inbound emails are confirmed templated noise
+// (e.g. PerfectStay's automated "Your Check in details" templates that come
+// to bookings@ridedownsouth.com because the address was used to make the
+// guest reservation). They are stored normally so they're searchable in
+// the lodge thread, but auto-marked as read at intake so they don't clutter
+// the Inbox unread / needs-routing buckets.
+//
+// Conservative — narrow patterns only, both sender + subject must match.
+// Returns a reason string when matched, null otherwise.
+function isAutoNoise(from, subject) {
+  if (!from || !subject) return null;
+  var fromLower = from.toLowerCase();
+  var subjLower = subject.toLowerCase();
+  // PerfectStay check-in templates
+  if (fromLower.indexOf('bookings@perfectstay.org') > -1 &&
+      subjLower.indexOf('your check in details') > -1) {
+    return 'perfectstay_checkin_template';
+  }
+  return null;
+}
 
 // Decode base64url string
 function decodeBase64Url(str) {
@@ -409,8 +431,9 @@ export default async function(req, res) {
           // Store in unmatched bucket so Helen/Andrew can route it manually.
           // storeEmail() routes to emails/unmatched/ automatically when no
           // booking_id or lodge_id is provided.
+          var unmatchedNoiseReason = isAutoNoise(from, subject);
           try {
-            await storeEmail({
+            var storedUnmatched = await storeEmail({
               gmail_message_id: msgId,
               message_id: msgId,
               rfc_message_id: rfcMessageId,
@@ -422,8 +445,16 @@ export default async function(req, res) {
               email_content: body,
               email_date: date,
               attachments: extractAttachments(msg.payload),
-              ai_flags: [{ unmatched_reason: match.reason || 'no_match', ambiguous_lodge: match.lodge || null }],
+              ai_flags: [
+                { unmatched_reason: match.reason || 'no_match', ambiguous_lodge: match.lodge || null },
+                ...(unmatchedNoiseReason ? [{ auto_noise: unmatchedNoiseReason }] : []),
+              ],
             });
+            // Auto-mark templated noise as read so it doesn't clutter Inbox.
+            if (unmatchedNoiseReason && storedUnmatched && storedUnmatched.id) {
+              try { await markRead(storedUnmatched.id); }
+              catch (e) { console.error('auto-mark-read failed:', storedUnmatched.id, e.message); }
+            }
           } catch (e) {
             console.error('Failed to store unmatched email:', msgId, e.message);
           }
@@ -499,6 +530,7 @@ export default async function(req, res) {
         }
 
         // Store to blob (with attachment extracted text)
+        var matchedNoiseReason = isAutoNoise(from, subject);
         var stored = await storeEmail({
           booking_id: bookingId,
           message_id: msgId,
@@ -514,14 +546,25 @@ export default async function(req, res) {
           rfc_message_id: rfcMessageId,
           attachments: attachmentsWithText,
           match_method: matchMethod,
+          ai_flags: matchedNoiseReason ? [{ auto_noise: matchedNoiseReason }] : undefined,
         });
+
+        // Auto-mark templated noise as read so it doesn't clutter Inbox.
+        // Skipped for genuine lodge replies — Helen needs to see those.
+        if (matchedNoiseReason && stored && stored.id) {
+          try { await markRead(stored.id); }
+          catch (e) { console.error('auto-mark-read failed:', stored.id, e.message); }
+        }
 
         // Tag any 'waiting' activity-log entries on this booking with
         // reply_received_at — the Inbox prompts Helen to mark them done.
-        try {
-          await tagReplyReceived(bookingId, stored && stored.id);
-        } catch (tagErr) {
-          console.error('tagReplyReceived failed for', bookingId, tagErr.message);
+        // Skipped for auto-noise emails (they're not real replies).
+        if (!matchedNoiseReason) {
+          try {
+            await tagReplyReceived(bookingId, stored && stored.id);
+          } catch (tagErr) {
+            console.error('tagReplyReceived failed for', bookingId, tagErr.message);
+          }
         }
 
         // Multi-booking fan-out: when Tier 0 matched a sent-index entry that
