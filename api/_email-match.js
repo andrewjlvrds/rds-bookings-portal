@@ -113,9 +113,37 @@ export function buildMatchMaps(allBookings) {
   return { refMap: refMap, nameMap: nameMap };
 }
 
+// Build an email→lodge lookup map from Zoho lodge records.
+// Each lodge can have up to 3 email addresses. The map keys are
+// lowercase email addresses, values are the lodge Name string.
+export function buildEmailMap(lodgeRecords) {
+  var map = {};
+  (lodgeRecords || []).forEach(function(lodge) {
+    var name = lodge.Name || '';
+    var emails = [lodge.Email, lodge.Preferred_Email, lodge.Email_Reservations_2];
+    emails.forEach(function(e) {
+      if (e && typeof e === 'string') {
+        map[e.toLowerCase().trim()] = name;
+      }
+    });
+  });
+  return map;
+}
+
+// Extract just the email address from a From header like "Jane <jane@lodge.com>"
+function extractEmailAddress(from) {
+  if (!from) return '';
+  var m = from.match(/<([^>]+)>/);
+  if (m) return m[1].toLowerCase().trim();
+  // No angle brackets — assume the whole thing is an address
+  if (from.indexOf('@') !== -1) return from.toLowerCase().trim();
+  return '';
+}
+
 // Match a single email (subject + body + from) against the build maps.
 // Returns { booking, method, reason }. booking is null on no match.
-export function matchEmailToBooking(subject, body, from, refMap, nameMap) {
+// emailMap is optional — if provided, enables Tier 4 sender-email matching.
+export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailMap) {
   var subj = subject || '';
   var bod = body || '';
   var frm = from || '';
@@ -188,6 +216,52 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap) {
     }
 
     ambiguousLodge = name;
+  }
+
+  // 4. Sender email → lodge lookup + date scoring
+  // This catches emails where the lodge name doesn't appear in the subject
+  // (e.g. generic subjects like "Re: Booking") but the sender email is known.
+  if (emailMap) {
+    var senderAddr = extractEmailAddress(frm);
+    if (senderAddr && emailMap[senderAddr]) {
+      var lodgeName = emailMap[senderAddr];
+      var lodgeKey = lodgeName.split(' - ')[0].toLowerCase().trim();
+      var senderCandidates = nameMap[lodgeKey];
+
+      if (senderCandidates && senderCandidates.length > 0) {
+        if (senderCandidates.length === 1) {
+          return { booking: senderCandidates[0], method: 'sender_email_unique' };
+        }
+
+        // Multiple bookings at this lodge — use date scoring
+        var senderBest = null;
+        var senderBestScore = 0;
+        for (var si = 0; si < senderCandidates.length; si++) {
+          var sc = senderCandidates[si];
+          var sScore = dateMatchScore(emailDates, sc.Check_in_Date, sc.Check_out_Date);
+          if (sScore > senderBestScore) { senderBestScore = sScore; senderBest = sc; }
+        }
+        if (senderBest && senderBestScore > 0) {
+          return { booking: senderBest, method: 'sender_email_date_score_' + senderBestScore };
+        }
+
+        // Date scoring failed — if there's only one future booking, use that
+        var now = new Date().toISOString().split('T')[0];
+        var futureCandidates = senderCandidates.filter(function(c) {
+          return (c.Check_in_Date || '') >= now;
+        });
+        if (futureCandidates.length === 1) {
+          return { booking: futureCandidates[0], method: 'sender_email_single_future' };
+        }
+
+        return {
+          booking: null,
+          method: 'unmatched',
+          reason: 'sender_email_matched_lodge_but_ambiguous_date',
+          lodge: lodgeName,
+        };
+      }
+    }
   }
 
   if (ambiguousLodge) {

@@ -7,6 +7,7 @@ import {
   extractIsoDates,
   dateMatchScore,
   buildMatchMaps,
+  buildEmailMap,
   matchEmailToBooking,
 } from './_email-match.js';
 
@@ -263,6 +264,16 @@ export default async function(req, res) {
     var refMap = maps.refMap;
     var nameMap = maps.nameMap;
 
+    // Fetch lodges for sender-email matching (Tier 4)
+    var emailMap = {};
+    try {
+      var lodgeResult = await zohoApi('GET', 'Lodges?fields=Name,Email,Preferred_Email,Email_Reservations_2&per_page=200');
+      emailMap = buildEmailMap((lodgeResult && lodgeResult.data) || []);
+      console.log('Built emailMap with', Object.keys(emailMap).length, 'email addresses');
+    } catch (lodgeErr) {
+      console.error('Failed to fetch lodges for email matching:', lodgeErr.message);
+    }
+
     // Booking-by-id map, for Tier 0 (Message-ID header → booking)
     var bookingsById = {};
     for (var bid = 0; bid < allBookings.length; bid++) {
@@ -339,7 +350,7 @@ export default async function(req, res) {
 
         // Fall back to the existing matcher (subject RDS ref, label, date...)
         if (!match) {
-          match = matchEmailToBooking(subject, body, from, refMap, nameMap);
+          match = matchEmailToBooking(subject, body, from, refMap, nameMap, emailMap);
         }
         var matchedBooking = match.booking;
         var matchMethod = match.method;
