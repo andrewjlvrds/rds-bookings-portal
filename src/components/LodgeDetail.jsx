@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, getStatus, daysBetween } from '../utils/helpers'
-import { cleanEmailBody } from '../utils/emailBody'
+import { cleanEmailBody, looksLikeRawHtml } from '../utils/emailBody'
 import { BookingActivityLog } from './ActivityLog'
 import RoutingPicker from './RoutingPicker'
 
@@ -919,11 +919,26 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
           )}
           <div style={{
             fontSize: 12, lineHeight: 1.7, color: 'var(--text-primary)',
-            whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto',
-            background: 'var(--bg-primary)', padding: '12px 14px',
+            background: 'var(--bg-primary)',
             borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-light)',
+            overflow: 'hidden',
           }}>
-            {body || '(no content)'}
+            {body
+              ? looksLikeRawHtml(email.body || email.email_content || '')
+                ? <iframe
+                    srcDoc={email.body || email.email_content || ''}
+                    sandbox="allow-same-origin"
+                    style={{ width: '100%', border: 'none', display: 'block', minHeight: 200, maxHeight: 500 }}
+                    onLoad={e => {
+                      try {
+                        const h = e.target.contentDocument?.documentElement?.scrollHeight
+                        if (h) e.target.style.height = Math.min(h + 16, 500) + 'px'
+                      } catch {}
+                    }}
+                  />
+                : <div style={{ whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto', padding: '12px 14px' }}>{body}</div>
+              : <div style={{ padding: '12px 14px', color: 'var(--text-muted)' }}>(no content)</div>
+            }
           </div>
           {attachments.length > 0 && (
             <div style={{
@@ -1136,8 +1151,21 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
       {expanded && (
         <div style={{ padding: '0 14px 12px 76px' }}>
           {subject && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{subject}</div>}
-          <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto' }}>
-            {body}
+          <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)', border: '0.5px solid var(--border-light)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+            {looksLikeRawHtml(email.body || '')
+              ? <iframe
+                  srcDoc={email.body || ''}
+                  sandbox="allow-same-origin"
+                  style={{ width: '100%', border: 'none', display: 'block', minHeight: 150, maxHeight: 400 }}
+                  onLoad={e => {
+                    try {
+                      const h = e.target.contentDocument?.documentElement?.scrollHeight
+                      if (h) e.target.style.height = Math.min(h + 16, 400) + 'px'
+                    } catch {}
+                  }}
+                />
+              : <div style={{ whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto', padding: '8px 10px' }}>{body}</div>
+            }
           </div>
         </div>
       )}
