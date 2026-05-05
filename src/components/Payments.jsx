@@ -28,7 +28,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const now = today()
   const allPayments = extractPayments(allBookings, now)
 
-  // Future tours (for upcoming/paid filtering) — past tours still shown if they have overdue
+  // Future tours (for upcoming/paid filtering)
   const futureTourNames = new Set(
     (tours || []).filter(t => {
       if (!t.departure_date) return true
@@ -37,10 +37,14 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       return endDate >= now
     }).map(t => t.name)
   )
-  // Include all payments from future tours PLUS any overdue payments from past tours
-  const payments = allPayments.filter(p =>
-    futureTourNames.has(p.tour) || p.statusKey === 'overdue'
-  )
+  // Cutoff: only surface overdue from past tours if due date is within last 180 days
+  const overdueFromDate = new Date(Date.now() - 180 * 86400000).toISOString().split('T')[0]
+  const payments = allPayments.filter(p => {
+    if (futureTourNames.has(p.tour)) return true
+    // Past tour — only include if overdue AND due date is recent enough to be actionable
+    if (p.statusKey === 'overdue' && p.dueDate && p.dueDate >= overdueFromDate) return true
+    return false
+  })
   const [showDismissed, setShowDismissed] = useState(false)
   const dismissedCount = payments.filter(p => dismissed.has(p.key)).length
   const activePayments = payments.filter(p => !dismissed.has(p.key))
@@ -499,7 +503,23 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
                 </td>
                 <td style={{ fontSize: 12 }}>{p.currency}</td>
                 <td>
-                  <span className={'badge badge-' + p.statusKey}>{p.statusLabel}</span>
+                  {p.statusKey === 'paid' ? (
+                    <span
+                      className={'badge badge-' + p.statusKey}
+                      style={{ cursor: 'pointer', borderBottom: '1px dashed var(--border-color)' }}
+                      title="Click to edit paid date or notes"
+                      onClick={() => setPayModal({
+                        payment: p,
+                        date: p.paidDate || new Date().toISOString().split('T')[0],
+                        note: p.paymentNote || '',
+                        editing: true,
+                      })}
+                    >
+                      {p.statusLabel}
+                    </span>
+                  ) : (
+                    <span className={'badge badge-' + p.statusKey}>{p.statusLabel}</span>
+                  )}
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
@@ -566,7 +586,9 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
               border: '0.5px solid var(--border-color)', padding: '20px 24px',
               width: 340, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
             }}>
-              <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4 }}>Record payment</div>
+              <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4 }}>
+                {payModal.editing ? 'Edit payment record' : 'Record payment'}
+              </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
                 {p.label} — {p.lodge} ({p.currency} {finalAmount ? finalAmount.toLocaleString() : '—'})
               </div>
@@ -602,7 +624,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
                   onClick={handlePayModalConfirm}
                   disabled={!payModal.date}
                 >
-                  Confirm paid
+                  {payModal.editing ? 'Update' : 'Confirm paid'}
                 </button>
               </div>
             </div>
@@ -621,7 +643,7 @@ function extractPayments(bookings, now) {
     const status = getStatus(bk)
     const lodge = (bk['Lodge Booking Name'] || bk.Lodge_Booking_Name || bk.Name || '').split(' - ')[0]
     const tour = getTourName(bk)
-    const currency = bk['Currency'] || bk.Lodge_Currency || ''
+    const currency = bk.Lodge_Currency || bk['Currency'] || ''
     const ref = bk['Booking Reference'] || bk.Booking_Reference || ''
     const dayDesc = bk['Day Description'] || bk.Day_Description || ''
     const bookingId = bk['Record Id'] || bk.id || ''
