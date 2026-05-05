@@ -49,7 +49,16 @@ export default function RoutingPicker({ email, tours, currentBookingId, onCancel
   const selectedTour = allTours.find(t => t.id === selectedTourId)
   const tourBookings = selectedTour
     ? (selectedTour.bookings || [])
-        .filter(bk => bk.id !== currentBookingId) // hide current booking on reassign
+        .filter(bk => {
+          if (bk.id === currentBookingId) return false
+          // Exclude Z-prefixed (cancelled/fallback) bookings
+          const dayDesc = bk.Day_Description || ''
+          if (dayDesc.startsWith('Z ') || dayDesc.startsWith('z ')) return false
+          // Exclude cancelled/unsuitable statuses
+          const s = bk.Status || ''
+          if (['Cancelled', 'Not suitable', 'Closed for Renovations', 'Not Available', 'Unavailable', 'Waitlisted'].includes(s)) return false
+          return true
+        })
         .slice()
         .sort((a, b) => (a.Check_in_Date || '').localeCompare(b.Check_in_Date || ''))
     : []
@@ -172,7 +181,11 @@ export default function RoutingPicker({ email, tours, currentBookingId, onCancel
               {selectedTour ? 'Lodge bookings' : 'Pick a tour first'}
             </div>
             {tourBookings.map(bk => {
-              const ln = (typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name?.name : bk.Lodge_Name) || bk.Name || '(unnamed)'
+              // Lodge_Name may be a lookup object or a string
+              const lodgeName = (typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name?.name : bk.Lodge_Name)
+                || bk.Name?.split(' - ')[0]  // strip date suffix from record name
+                || '(unnamed)'
+              const dayDesc = bk.Day_Description || ''
               return (
                 <button
                   key={bk.id}
@@ -187,9 +200,9 @@ export default function RoutingPicker({ email, tours, currentBookingId, onCancel
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <div style={{ fontWeight: 500 }}>{ln}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {fmtDate(bk.Check_in_Date)} → {fmtDate(bk.Check_out_Date)}
+                  <div style={{ fontWeight: 500 }}>{lodgeName}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                    {dayDesc ? dayDesc.replace(/^Day \d+[^:]*: /, '') + ' · ' : ''}{fmtDate(bk.Check_in_Date)} → {fmtDate(bk.Check_out_Date)}
                   </div>
                 </button>
               )
