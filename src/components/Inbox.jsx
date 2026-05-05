@@ -297,6 +297,7 @@ export default function Inbox({
             label="Needs routing"
             count={needsRouting.length}
             urgentColour="#E65100"
+            info="Emails the system couldn't automatically match to a booking. Route each one manually, or dismiss if not relevant."
           />
         </div>
       )}
@@ -375,7 +376,7 @@ export default function Inbox({
   )
 }
 
-function TabButton({ active, onClick, label, count, urgentColour }) {
+function TabButton({ active, onClick, label, count, urgentColour, info }) {
   const showColour = count > 0
   return (
     <button
@@ -390,6 +391,19 @@ function TabButton({ active, onClick, label, count, urgentColour }) {
       }}
     >
       {label}
+      {info && (
+        <span
+          title={info}
+          onClick={e => e.stopPropagation()}
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 15, height: 15, borderRadius: '50%',
+            fontSize: 9, fontWeight: 700, lineHeight: 1,
+            background: 'var(--text-hint)', color: '#fff',
+            cursor: 'help', flexShrink: 0,
+          }}
+        >i</span>
+      )}
       {count > 0 && (
         <span style={{
           fontSize: 10, fontWeight: 600,
