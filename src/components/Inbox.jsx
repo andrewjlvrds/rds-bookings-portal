@@ -219,12 +219,8 @@ export default function Inbox({
   const needsRouting = [...unmatched, ...tourBucket]
   const total = unread.length + needsRouting.length + readyToMarkDone.length
 
-  // Default-tab logic: Helen's most-urgent decision-needing bucket
-  // first. Needs routing > Replies received > Unread. If everything
-  // is empty, default to Unread.
-  const defaultTab = needsRouting.length > 0
-    ? 'routing'
-    : (readyToMarkDone.length > 0 ? 'ready' : 'unread')
+  // Default-tab logic: Unread first, then Needs routing if unread is clear.
+  const defaultTab = unread.length > 0 ? 'unread' : 'routing'
   const tab = activeTab || defaultTab
 
   return (
@@ -289,13 +285,6 @@ export default function Inbox({
       {total > 0 && (
         <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '0.5px solid var(--border-default)' }}>
           <TabButton
-            active={tab === 'routing'}
-            onClick={() => setActiveTab('routing')}
-            label="Needs routing"
-            count={needsRouting.length}
-            urgentColour="#E65100"
-          />
-          <TabButton
             active={tab === 'unread'}
             onClick={() => setActiveTab('unread')}
             label="Unread"
@@ -303,11 +292,11 @@ export default function Inbox({
             urgentColour="#C62828"
           />
           <TabButton
-            active={tab === 'ready'}
-            onClick={() => setActiveTab('ready')}
-            label="Replies received"
-            count={readyToMarkDone.length}
-            urgentColour="#2E7D32"
+            active={tab === 'routing'}
+            onClick={() => setActiveTab('routing')}
+            label="Needs routing"
+            count={needsRouting.length}
+            urgentColour="#E65100"
           />
         </div>
       )}

@@ -757,8 +757,7 @@ function extractPayments(bookings, now) {
     ]
 
     paymentSlots.forEach((ps) => {
-      if (!ps.dueDate && !ps.paidDate) return  // no date at all — not actionable
-      if (!ps.dueDate && !ps.amount) return
+      if (!ps.dueDate && !ps.paidDate && !ps.amount) return  // nothing at all — skip
       const amt = parseFloat(ps.amount) || 0
 
       let statusKey, statusLabel
