@@ -51,15 +51,18 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
 
   // Apply filters
   let filtered = showDismissed ? payments.filter(p => dismissed.has(p.key)) : activePayments
-  if (!showDismissed && filter !== 'all') {
-    if (filter === 'upcoming') {
-      filtered = filtered.filter(p => p.statusKey === 'upcoming' || p.statusKey === 'due-soon')
-    } else {
-      filtered = filtered.filter(p => p.statusKey === filter)
+  if (!showDismissed) {
+    if (tourFilter !== 'all') {
+      // Tour tab selected — show all status for that tour
+      filtered = filtered.filter(p => p.tour === tourFilter)
+    } else if (filter !== 'all') {
+      // Status tab selected
+      if (filter === 'upcoming') {
+        filtered = filtered.filter(p => p.statusKey === 'upcoming' || p.statusKey === 'due-soon')
+      } else {
+        filtered = filtered.filter(p => p.statusKey === filter)
+      }
     }
-  }
-  if (tourFilter !== 'all') {
-    filtered = filtered.filter(p => p.tour === tourFilter)
   }
 
   // Metrics (exclude dismissed)
@@ -262,39 +265,46 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-        {['all', 'overdue', 'upcoming', 'paid'].map(f => (
+      {/* Filters — single unified tab bar */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Status tabs */}
+        {[
+          { key: 'all', label: 'All' },
+          { key: 'overdue', label: 'Overdue' },
+          { key: 'upcoming', label: 'Upcoming' },
+          { key: 'paid', label: 'Paid' },
+          ...(dismissedCount > 0 ? [{ key: 'dismissed', label: `Dismissed (${dismissedCount})` }] : []),
+        ].map(f => (
           <button
-            key={f}
-            className={'filter-btn' + (!showDismissed && filter === f ? ' active' : '')}
-            onClick={() => { setShowDismissed(false); setFilter(f) }}
+            key={f.key}
+            className={'filter-btn' + (
+              f.key === 'dismissed'
+                ? (showDismissed ? ' active' : '')
+                : (!showDismissed && filter === f.key && tourFilter === 'all' ? ' active' : '')
+            )}
+            style={f.key === 'dismissed' && showDismissed ? { background: '#F3E5F5', color: '#7B1FA2', borderColor: '#CE93D8' } : {}}
+            onClick={() => {
+              if (f.key === 'dismissed') {
+                setShowDismissed(true); setFilter('all'); setTourFilter('all')
+              } else {
+                setShowDismissed(false); setFilter(f.key); setTourFilter('all')
+              }
+            }}
           >
-            {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+            {f.label}
           </button>
         ))}
-        {dismissedCount > 0 && (
-          <button
-            className={'filter-btn' + (showDismissed ? ' active' : '')}
-            onClick={() => setShowDismissed(!showDismissed)}
-            style={showDismissed ? { background: '#F3E5F5', color: '#7B1FA2', borderColor: '#CE93D8' } : { color: 'var(--text-muted)' }}
-          >
-            Dismissed ({dismissedCount})
-          </button>
-        )}
-        <span style={{ fontSize: 12, color: 'var(--text-hint)', padding: '5px 4px' }}>|</span>
-        <button
-          className={'filter-btn' + (tourFilter === 'all' ? ' active' : '')}
-          onClick={() => setTourFilter('all')}
-        >All tours</button>
+
+        {/* Divider */}
+        <span style={{ fontSize: 12, color: 'var(--text-hint)', padding: '5px 2px' }}>|</span>
+
+        {/* Tour tabs */}
         {(() => {
-          // Only show future Zoho tours, grouped by year
-          const todayStr = now
           const futureTours = (tours || []).filter(t => {
             if (!t.departure_date) return false
             if (typeof t.id === 'string' && t.id.startsWith('local_')) return false
             const endDate = t.end_date || t.departure_date
-            return endDate >= todayStr
+            return endDate >= now
           })
           const byYear = {}
           futureTours.forEach(t => {
@@ -302,15 +312,18 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
             if (!byYear[year]) byYear[year] = []
             byYear[year].push(t)
           })
-          const years = Object.keys(byYear).sort()
-          return years.map(year => (
+          return Object.keys(byYear).sort().map(year => (
             <React.Fragment key={year}>
               <span style={{ fontSize: 10, color: 'var(--text-hint)', padding: '5px 2px', fontWeight: 500 }}>{year}:</span>
               {byYear[year].sort((a, b) => (a.departure_date || '').localeCompare(b.departure_date || '')).map(t => (
                 <button
                   key={t.id}
-                  className={'filter-btn' + (tourFilter === t.name ? ' active' : '')}
-                  onClick={() => handleTourFilter(t.name)}
+                  className={'filter-btn' + (!showDismissed && tourFilter === t.name ? ' active' : '')}
+                  onClick={() => {
+                    setShowDismissed(false)
+                    setFilter('all')
+                    setTourFilter(tourFilter === t.name ? 'all' : t.name)
+                  }}
                 >
                   {t.name}
                 </button>
