@@ -13,6 +13,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const [lastPaidKeys, setLastPaidKeys] = useState([]) // for undo
   const [amountOverrides, setAmountOverrides] = useState({}) // key -> overridden amount
   const [editingAmount, setEditingAmount] = useState(null) // key of row being edited
+  const [editingDueDate, setEditingDueDate] = useState(null) // key of row with due date being edited
   const [payModal, setPayModal] = useState(null) // { payment, date, note } — open pay dialog
   const [dismissed, setDismissed] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('rds_dismissed_payments') || '[]')) }
@@ -112,7 +113,30 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
     return null
   }
 
-  // Open the pay modal for a single payment
+  const getSlotDueDateField = (slot) => {
+    if (slot === 'Deposit') return 'Deposit_Due_Date'
+    if (slot === '2nd payment') return 'Second_Payment_Due_Date'
+    if (slot === '3rd payment') return 'Third_Payment_Due_Date'
+    if (slot === '4th payment') return 'Fourth_Payment_Due_Date'
+    return null
+  }
+
+  const saveDueDate = async (p, newDate) => {
+    setEditingDueDate(null)
+    if (!newDate || newDate === p.dueDate) return
+    const field = getSlotDueDateField(p.slot)
+    if (!field) return
+    try {
+      await fetch(API + '/api/zoho-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: 'Lodge_Bookings', data: [{ id: p.bookingId, [field]: newDate }] }),
+      })
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      console.error('Save due date error:', err)
+    }
+  }
   const handleMarkPaid = (p) => {
     setPayModal({ payment: p, date: new Date().toISOString().split('T')[0], note: p.paymentNote || '' })
   }
@@ -462,7 +486,35 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
                   color: p.statusKey === 'overdue' ? 'var(--red-text)' :
                          p.statusKey === 'due-soon' ? 'var(--amber-text)' : 'var(--text-primary)'
                 }}>
-                  {fmtDate(p.dueDate)}
+                  {p.statusKey !== 'paid' && editingDueDate === p.key ? (
+                    <input
+                      type="date"
+                      autoFocus
+                      defaultValue={p.dueDate || ''}
+                      onBlur={e => saveDueDate(p, e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') e.target.blur()
+                        if (e.key === 'Escape') setEditingDueDate(null)
+                      }}
+                      style={{
+                        width: 120, fontSize: 12, padding: '2px 4px',
+                        border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)',
+                        background: 'var(--bg-secondary)', fontFamily: 'inherit',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      onClick={p.statusKey !== 'paid' ? () => setEditingDueDate(p.key) : undefined}
+                      style={{
+                        cursor: p.statusKey !== 'paid' ? 'pointer' : 'default',
+                        borderBottom: p.statusKey !== 'paid' ? '1px dashed var(--border-color)' : undefined,
+                        color: !p.dueDate && p.statusKey !== 'paid' ? 'var(--text-hint)' : undefined,
+                      }}
+                      title={p.statusKey !== 'paid' ? 'Click to set due date' : undefined}
+                    >
+                      {p.dueDate ? fmtDate(p.dueDate) : '—'}
+                    </span>
+                  )}
                 </td>
                 <td style={{ fontSize: 12 }}>{p.tour}</td>
                 <td>
@@ -695,6 +747,7 @@ function extractPayments(bookings, now) {
     ]
 
     paymentSlots.forEach((ps) => {
+      if (!ps.dueDate && !ps.paidDate) return  // no date at all — not actionable
       if (!ps.dueDate && !ps.amount) return
       const amt = parseFloat(ps.amount) || 0
 
