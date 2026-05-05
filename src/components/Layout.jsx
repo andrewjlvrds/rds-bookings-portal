@@ -301,7 +301,7 @@ function NavItem({ label, active, onClick, badge }) {
         <span
           style={{
             fontSize: 10, fontWeight: 600,
-            background: 'var(--text-muted)', color: '#fff',
+            background: '#5C8DB8', color: '#fff',
             padding: '1px 6px', borderRadius: 9, lineHeight: 1.3,
             minWidth: 16, textAlign: 'center',
           }}
@@ -440,7 +440,7 @@ function TourItem({ tour, active, onClick, dimmed, isDraft }) {
             title={newReplies + ' new ' + (newReplies === 1 ? 'reply' : 'replies') + ' from lodges'}
             style={{
               fontSize: 10, fontWeight: 600,
-              background: 'var(--text-muted)', color: '#fff',
+              background: '#5C8DB8', color: '#fff',
               padding: '1px 6px', borderRadius: 9, lineHeight: 1.3,
               minWidth: 16, textAlign: 'center',
             }}
@@ -453,7 +453,7 @@ function TourItem({ tour, active, onClick, dimmed, isDraft }) {
             title={overdueCount + ' overdue payment' + (overdueCount !== 1 ? 's' : '')}
             style={{
               fontSize: 10, fontWeight: 600,
-              background: 'var(--amber-text)', color: '#fff',
+              background: '#C07A2A', color: '#fff',
               padding: '1px 6px', borderRadius: 9, lineHeight: 1.3,
               minWidth: 16, textAlign: 'center',
             }}

@@ -116,8 +116,17 @@ export default async function handler(req, res) {
       fetchBlobs(tourBucketToFetch),
     ]);
 
-    // 4. Filter to inbound, exclude already-read
-    const unreadInbound = inboundOnly(bookingEmails).filter(e => !readState[e.id]);
+    // Booking IDs to suppress — cancelled/test records whose emails
+    // should not surface in the inbox even though blobs exist.
+    const SUPPRESSED_BOOKING_IDS = new Set(['6543704000007958002']);
+
+    // 4. Filter to inbound, exclude already-read, exclude suppressed bookings
+    const unreadInbound = inboundOnly(bookingEmails)
+      .filter(e => !readState[e.id])
+      .filter(e => {
+        const match = (e._blob_path || '').match(/emails\/booking\/(\d+)\//);
+        return !match || !SUPPRESSED_BOOKING_IDS.has(match[1]);
+      });
     unreadInbound.sort((a, b) => new Date(emailDate(b)) - new Date(emailDate(a)));
 
     // 5. Unmatched and tour-bucket: surface everything inbound regardless
