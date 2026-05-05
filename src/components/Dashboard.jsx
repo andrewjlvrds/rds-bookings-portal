@@ -77,7 +77,7 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
           detail="View and manage all lodge communications"
           color="#6A1B9A"
           bg="#F3E5F5"
-          onClick={() => onSelectView('correspondence')}
+          onClick={() => onSelectView('inbox')}
         />
         <NavPanel
           title="Lodges"
