@@ -57,7 +57,7 @@ export default async function(req, res) {
       'Deposit_Paid_Date','nd_Payment_Paid_Date','rd_Payment_Paid_Date','th_Payment_Paid_Date',
       'Deposit_Paid_Amount','nd_Payment_Paid_Amount','rd_Payment_Paid_Amount','th_Payment_Paid_Amount',
       'Fourth_Payment_Amount','Fourth_Payment_Due_Date',
-      'Email','Contact_Name','Currency',
+      'Email','Contact_Name','Payment_Note',
       'Day_Description','Booking_Type','New_Reply','id'
     ].join(',');
 

@@ -13,6 +13,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const [lastPaidKeys, setLastPaidKeys] = useState([]) // for undo
   const [amountOverrides, setAmountOverrides] = useState({}) // key -> overridden amount
   const [editingAmount, setEditingAmount] = useState(null) // key of row being edited
+  const [payModal, setPayModal] = useState(null) // { payment, date, note } — open pay dialog
   const [dismissed, setDismissed] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('rds_dismissed_payments') || '[]')) }
     catch { return new Set() }
@@ -27,7 +28,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
   const now = today()
   const allPayments = extractPayments(allBookings, now)
 
-  // Only include payments from tours with end/departure date >= today (or no date)
+  // Future tours (for upcoming/paid filtering) — past tours still shown if they have overdue
   const futureTourNames = new Set(
     (tours || []).filter(t => {
       if (!t.departure_date) return true
@@ -36,7 +37,10 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       return endDate >= now
     }).map(t => t.name)
   )
-  const payments = allPayments.filter(p => futureTourNames.has(p.tour))
+  // Include all payments from future tours PLUS any overdue payments from past tours
+  const payments = allPayments.filter(p =>
+    futureTourNames.has(p.tour) || p.statusKey === 'overdue'
+  )
   const [showDismissed, setShowDismissed] = useState(false)
   const dismissedCount = payments.filter(p => dismissed.has(p.key)).length
   const activePayments = payments.filter(p => !dismissed.has(p.key))
@@ -101,11 +105,17 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
     return null
   }
 
-  // Mark single payment as paid
-  const handleMarkPaid = async (p) => {
-    const finalAmount = amountOverrides[p.key] !== undefined ? amountOverrides[p.key] : p.amount
-    if (!confirm(`Mark ${p.label} for ${p.lodge} as paid (${p.currency} ${finalAmount ? finalAmount.toLocaleString() : '—'})?`)) return
-    await markPaid([p])
+  // Open the pay modal for a single payment
+  const handleMarkPaid = (p) => {
+    setPayModal({ payment: p, date: new Date().toISOString().split('T')[0], note: p.paymentNote || '' })
+  }
+
+  // Confirm pay from modal
+  const handlePayModalConfirm = async () => {
+    if (!payModal) return
+    const { payment: p, date, note } = payModal
+    setPayModal(null)
+    await markPaid([p], date, note)
   }
 
   // Mark multiple payments as paid
@@ -117,10 +127,10 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
     await markPaid(toPay)
   }
 
-  const markPaid = async (paymentsList) => {
+  const markPaid = async (paymentsList, paidDate, note) => {
     setBulkPaying(true)
     setPayError(null)
-    const paidDate = new Date().toISOString().split('T')[0]
+    const resolvedDate = paidDate || new Date().toISOString().split('T')[0]
     const paidKeys = []
 
     // Group by bookingId to batch updates
@@ -130,8 +140,11 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       const fields = getSlotFields(p.slot)
       if (fields) {
         const finalAmount = amountOverrides[p.key] !== undefined ? amountOverrides[p.key] : p.amount
-        byBooking[p.bookingId].updates[fields.date] = paidDate
+        byBooking[p.bookingId].updates[fields.date] = resolvedDate
         byBooking[p.bookingId].updates[fields.amount] = Math.round((finalAmount || 0) * 100) / 100
+      }
+      if (note !== undefined && note !== '') {
+        byBooking[p.bookingId].updates.Payment_Note = note
       }
       byBooking[p.bookingId].payments.push(p)
       paidKeys.push(p.key)
@@ -222,16 +235,16 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
         <div className="metric-card">
           <div className="metric-label">Overdue</div>
           <div className="metric-value" style={{ color: overdue.length > 0 ? 'var(--red-text)' : 'var(--green-text)' }}>
-            {overdue.length > 0 ? 'R ' + overdueTotal.toLocaleString() : 'None'}
+            {overdue.length > 0 ? overdue.length + ' payment' + (overdue.length !== 1 ? 's' : '') : 'None'}
           </div>
-          <div className="metric-sub">{overdue.length} payment{overdue.length !== 1 ? 's' : ''}</div>
+          <div className="metric-sub">{overdue.length > 0 ? 'across ' + new Set(overdue.map(p => p.tour)).size + ' tour(s)' : 'all clear'}</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Due this week</div>
           <div className="metric-value" style={{ color: dueThisWeek.length > 0 ? 'var(--amber-text)' : 'var(--text-primary)' }}>
-            {dueThisWeek.length > 0 ? 'R ' + weekTotal.toLocaleString() : 'None'}
+            {dueThisWeek.length > 0 ? dueThisWeek.length + ' payment' + (dueThisWeek.length !== 1 ? 's' : '') : 'None'}
           </div>
-          <div className="metric-sub">{dueThisWeek.length} payment{dueThisWeek.length !== 1 ? 's' : ''}</div>
+          <div className="metric-sub">{dueThisWeek.length > 0 ? 'due within 7 days' : 'nothing due soon'}</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Upcoming</div>
@@ -438,6 +451,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
                 <td>
                   <div style={{ fontWeight: 500 }}>{p.lodge}</div>
                   {p.ref && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.ref}</div>}
+                  {p.paymentNote && <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 1 }}>{p.paymentNote}</div>}
                 </td>
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.label}</td>
                 <td style={{ textAlign: 'right', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
@@ -537,6 +551,64 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
           </tbody>
         </table>
       </div>
+
+      {/* Pay modal */}
+      {payModal && (() => {
+        const p = payModal.payment
+        const finalAmount = amountOverrides[p.key] !== undefined ? amountOverrides[p.key] : p.amount
+        return (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}>
+            <div style={{
+              background: 'var(--bg-primary)', borderRadius: 'var(--radius)',
+              border: '0.5px solid var(--border-color)', padding: '20px 24px',
+              width: 340, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            }}>
+              <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4 }}>Record payment</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                {p.label} — {p.lodge} ({p.currency} {finalAmount ? finalAmount.toLocaleString() : '—'})
+              </div>
+              <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>Date paid</label>
+              <input
+                type="date"
+                value={payModal.date}
+                onChange={e => setPayModal(m => ({ ...m, date: e.target.value }))}
+                style={{
+                  width: '100%', padding: '6px 8px', fontSize: 13,
+                  border: '0.5px solid var(--border-color)', borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-secondary)', marginBottom: 12, boxSizing: 'border-box',
+                }}
+              />
+              <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>Notes (optional)</label>
+              <textarea
+                value={payModal.note}
+                onChange={e => setPayModal(m => ({ ...m, note: e.target.value }))}
+                placeholder="e.g. POP sent, ref 12345"
+                rows={2}
+                style={{
+                  width: '100%', padding: '6px 8px', fontSize: 13,
+                  border: '0.5px solid var(--border-color)', borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-secondary)', resize: 'vertical', marginBottom: 16,
+                  boxSizing: 'border-box', fontFamily: 'inherit',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn-sm" onClick={() => setPayModal(null)}>Cancel</button>
+                <button
+                  className="btn btn-sm"
+                  style={{ background: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7' }}
+                  onClick={handlePayModalConfirm}
+                  disabled={!payModal.date}
+                >
+                  Confirm paid
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -618,6 +690,7 @@ function extractPayments(bookings, now) {
         label: ps.label, slot: ps.slot,
         dueDate: ps.dueDate, amount: amt,
         paidDate: ps.paidDate, paidAmount: ps.paidAmount,
+        paymentNote: bk.Payment_Note || '',
         statusKey, statusLabel,
       })
     })
