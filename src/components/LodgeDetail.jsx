@@ -721,7 +721,9 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
   const date = email.date || email.email_date || ''
   const from = email.from || email.email_from || ''
   const subject = email.subject || email.email_subject || ''
-  const body = cleanEmailBody(email.body || email.email_content || '')
+  const rawBody = email.body || email.email_content || ''
+  const isHtml = looksLikeRawHtml(rawBody)
+  const body = isHtml ? cleanEmailBody(rawBody) : rawBody
   const attachments = email.attachments || []
   const gmailMsgId = email.gmail_message_id || email.message_id || ''
   const hasExtracted = attachments.some(a => a && a.extractedText)
@@ -924,9 +926,9 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
             overflow: 'hidden',
           }}>
             {body
-              ? looksLikeRawHtml(email.body || email.email_content || '')
+              ? isHtml
                 ? <iframe
-                    srcDoc={email.body || email.email_content || ''}
+                    srcDoc={rawBody}
                     sandbox="allow-same-origin"
                     style={{ width: '100%', border: 'none', display: 'block', minHeight: 200, maxHeight: 500 }}
                     onLoad={e => {
@@ -1083,7 +1085,9 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
   const [importing, setImporting] = useState(false)
   const from = email.from || ''
   const subject = email.subject || ''
-  const body = cleanEmailBody(email.body || '')
+  const rawBody = email.body || ''
+  const isHtml = looksLikeRawHtml(rawBody)
+  const body = isHtml ? cleanEmailBody(rawBody) : rawBody
   const date = email.date || ''
   const isFromUs = from.indexOf('bookings@ridedownsouth.com') > -1 || from.indexOf('ridedownsouth.com') > -1
 
@@ -1152,9 +1156,9 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
         <div style={{ padding: '0 14px 12px 76px' }}>
           {subject && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{subject}</div>}
           <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)', border: '0.5px solid var(--border-light)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-            {looksLikeRawHtml(email.body || '')
+            {isHtml
               ? <iframe
-                  srcDoc={email.body || ''}
+                  srcDoc={rawBody}
                   sandbox="allow-same-origin"
                   style={{ width: '100%', border: 'none', display: 'block', minHeight: 150, maxHeight: 400 }}
                   onLoad={e => {
