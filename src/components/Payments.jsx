@@ -63,13 +63,13 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       } else {
         filtered = filtered.filter(p => p.statusKey === filter)
       }
-    }
-  }
+    }  }
 
   // Metrics (exclude dismissed)
   const overdue = activePayments.filter(p => p.statusKey === 'overdue')
   const dueThisWeek = activePayments.filter(p => p.statusKey === 'due-soon')
   const upcoming = activePayments.filter(p => p.statusKey === 'upcoming')
+  const noDate = activePayments.filter(p => p.statusKey === 'no-date')
   const paid = activePayments.filter(p => p.statusKey === 'paid')
 
   const overdueTotal = overdue.reduce((s, p) => s + (p.amount || 0), 0)
@@ -262,7 +262,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
       </p>
 
       {/* Metrics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
         <div className="metric-card">
           <div className="metric-label">Overdue</div>
           <div className="metric-value" style={{ color: overdue.length > 0 ? 'var(--red-text)' : 'var(--green-text)' }}>
@@ -287,6 +287,14 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
           <div className="metric-value" style={{ color: 'var(--green-text)' }}>{paid.length}</div>
           <div className="metric-sub">of {activePayments.length} total</div>
         </div>
+        <div className="metric-card" style={{ cursor: noDate.length ? 'pointer' : 'default' }}
+          onClick={() => noDate.length && setFilter('no-date')}>
+          <div className="metric-label">No due date</div>
+          <div className="metric-value" style={{ color: noDate.length > 0 ? 'var(--amber-text)' : 'var(--text-primary)' }}>
+            {noDate.length || '—'}
+          </div>
+          <div className="metric-sub">{noDate.length > 0 ? 'need dates set' : 'all dated'}</div>
+        </div>
       </div>
 
       {/* Filters — single unified tab bar */}
@@ -296,6 +304,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
           { key: 'all', label: 'All' },
           { key: 'overdue', label: 'Overdue' },
           { key: 'upcoming', label: 'Upcoming' },
+          { key: 'no-date', label: `No date${noDate.length ? ' (' + noDate.length + ')' : ''}` },
           { key: 'paid', label: 'Paid' },
           ...(dismissedCount > 0 ? [{ key: 'dismissed', label: `Dismissed (${dismissedCount})` }] : []),
         ].map(f => (
@@ -471,7 +480,8 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
             {filtered.map((p, idx) => (
               <tr key={p.key} style={{
                 background: selected.has(p.key) ? 'var(--blue-bg)' :
-                  p.statusKey === 'overdue' ? '#FEF5F5' : undefined,
+                  p.statusKey === 'overdue' ? '#FEF5F5' :
+                  p.statusKey === 'no-date' ? '#FFFBF0' : undefined,
               }}>
                 <td style={{ textAlign: 'center' }}>
                   <input
@@ -758,11 +768,14 @@ function extractPayments(bookings, now) {
       } else if (status === 'Balance Paid') {
         statusKey = 'paid'
         statusLabel = 'Paid'
-      } else if (ps.dueDate && ps.dueDate < now) {
+      } else if (!ps.dueDate) {
+        statusKey = 'no-date'
+        statusLabel = 'No date'
+      } else if (ps.dueDate < now) {
         statusKey = 'overdue'
         const days = daysBetween(ps.dueDate, now)
         statusLabel = days + 'd overdue'
-      } else if (ps.dueDate && ps.dueDate <= sevenDays) {
+      } else if (ps.dueDate <= sevenDays) {
         statusKey = 'due-soon'
         const days = daysBetween(now, ps.dueDate)
         statusLabel = days === 0 ? 'Due today' : days + 'd'
@@ -785,7 +798,7 @@ function extractPayments(bookings, now) {
   })
 
   payments.sort((a, b) => {
-    const order = { overdue: 0, 'due-soon': 1, upcoming: 2, paid: 3 }
+    const order = { overdue: 0, 'due-soon': 1, upcoming: 2, 'no-date': 3, paid: 4 }
     const oa = order[a.statusKey] ?? 2
     const ob = order[b.statusKey] ?? 2
     if (oa !== ob) return oa - ob

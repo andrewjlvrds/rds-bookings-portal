@@ -93,6 +93,8 @@ a {
 .badge-overdue { background: var(--red-bg); color: var(--red-text); }
 .badge-paid { background: var(--green-bg); color: var(--green-text); }
 .badge-upcoming { background: var(--blue-bg); color: var(--blue-text); }
+.badge-due-soon { background: var(--amber-bg); color: var(--amber-text); }
+.badge-no-date { background: var(--amber-bg); color: var(--amber-text); }
 
 .btn {
   padding: 7px 14px;
