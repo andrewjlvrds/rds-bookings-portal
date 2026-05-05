@@ -331,38 +331,41 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
         {/* Divider */}
         <span style={{ fontSize: 12, color: 'var(--text-hint)', padding: '5px 2px' }}>|</span>
 
-        {/* Tour tabs */}
+        {/* Tour dropdown */}
         {(() => {
           const futureTours = (tours || []).filter(t => {
             if (!t.departure_date) return false
             if (typeof t.id === 'string' && t.id.startsWith('local_')) return false
             const endDate = t.end_date || t.departure_date
             return endDate >= now
-          })
-          const byYear = {}
-          futureTours.forEach(t => {
-            const year = (t.departure_date || '').substring(0, 4)
-            if (!byYear[year]) byYear[year] = []
-            byYear[year].push(t)
-          })
-          return Object.keys(byYear).sort().map(year => (
-            <React.Fragment key={year}>
-              <span style={{ fontSize: 10, color: 'var(--text-hint)', padding: '5px 2px', fontWeight: 500 }}>{year}:</span>
-              {byYear[year].sort((a, b) => (a.departure_date || '').localeCompare(b.departure_date || '')).map(t => (
-                <button
-                  key={t.id}
-                  className={'filter-btn' + (!showDismissed && tourFilter === t.name ? ' active' : '')}
-                  onClick={() => {
-                    setShowDismissed(false)
-                    setFilter('all')
-                    setTourFilter(tourFilter === t.name ? 'all' : t.name)
-                  }}
-                >
-                  {t.name}
-                </button>
+          }).sort((a, b) => (a.departure_date || '').localeCompare(b.departure_date || ''))
+
+          const selectedTour = futureTours.find(t => t.name === tourFilter)
+          const isActive = !showDismissed && tourFilter !== 'all'
+
+          return (
+            <select
+              value={tourFilter}
+              onChange={e => {
+                setShowDismissed(false)
+                setFilter('all')
+                setTourFilter(e.target.value)
+              }}
+              style={{
+                fontSize: 12, padding: '4px 8px', height: 28,
+                border: isActive ? '1.5px solid var(--blue-text)' : '0.5px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                background: isActive ? 'var(--blue-bg)' : 'var(--bg-primary)',
+                color: isActive ? 'var(--blue-text)' : 'var(--text-primary)',
+                cursor: 'pointer', fontFamily: 'inherit', fontWeight: isActive ? 500 : 400,
+              }}
+            >
+              <option value="all">All tours</option>
+              {futureTours.map(t => (
+                <option key={t.id} value={t.name}>{t.name}</option>
               ))}
-            </React.Fragment>
-          ))
+            </select>
+          )
         })()}
       </div>
 
