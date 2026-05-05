@@ -107,6 +107,24 @@ export default function Inbox({
     }))
   }
 
+  const handleDismissAll = (filterFn) => {
+    const toRemove = filterFn ? needsRouting.filter(filterFn) : needsRouting
+    if (toRemove.length === 0) return
+    const ids = toRemove.map(e => e.id).filter(Boolean)
+    if (onMarkManyRead) onMarkManyRead(ids)
+    if (onLocalUpdate) onLocalUpdate(prev => {
+      const removeSet = new Set(ids)
+      const nextUnmatched = (prev.unmatched || []).filter(e => !removeSet.has(e.id))
+      const nextTourBucket = (prev.tour_bucket || []).filter(e => !removeSet.has(e.id))
+      return {
+        ...prev,
+        unmatched: nextUnmatched,
+        tour_bucket: nextTourBucket,
+        stats: { ...prev.stats, unmatched: nextUnmatched.length, tour_bucket: nextTourBucket.length },
+      }
+    })
+  }
+
   const handleMarkAllRead = (bucket) => {
     if (!data || !data[bucket] || data[bucket].length === 0) return
     if (!confirm('Mark all ' + data[bucket].length + ' emails in this section as read?')) return
@@ -303,17 +321,38 @@ export default function Inbox({
       )}
 
       {tab === 'routing' && needsRouting.length > 0 && (
-        <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-          {needsRouting.map(email => (
-            <UnmatchedRow
-              key={email.id}
-              email={email}
-              sourcePath={email._blob_path}
-              onRoute={() => setRoutingEmail({ email, sourcePath: email._blob_path })}
-              onDismiss={() => handleDismiss(email)}
-            />
-          ))}
-        </div>
+        <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+            {needsRouting.some(e => (e.subject || '').toLowerCase().includes('perfectstay') || (e.from || '').toLowerCase().includes('perfectstay')) && (
+              <button
+                onClick={() => handleDismissAll(e =>
+                  (e.subject || '').toLowerCase().includes('perfectstay') ||
+                  (e.from || '').toLowerCase().includes('perfectstay')
+                )}
+                style={{ background: 'none', border: 'none', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                Dismiss all Perfectstay
+              </button>
+            )}
+            <button
+              onClick={() => handleDismissAll(null)}
+              style={{ background: 'none', border: 'none', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}
+            >
+              Dismiss all
+            </button>
+          </div>
+          <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+            {needsRouting.map(email => (
+              <UnmatchedRow
+                key={email.id}
+                email={email}
+                sourcePath={email._blob_path}
+                onRoute={() => setRoutingEmail({ email, sourcePath: email._blob_path })}
+                onDismiss={() => handleDismiss(email)}
+              />
+            ))}
+          </div>
+        </>
       )}
       {tab === 'routing' && needsRouting.length === 0 && total > 0 && (
         <EmptyTab message="No emails need routing right now." />
