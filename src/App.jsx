@@ -459,6 +459,7 @@ export default function App() {
           onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}
           onEnquireReady={() => setActiveView('enquiry-preview')}
           onRefresh={() => refreshData(activeTour.id)}
+          onBack={() => { setActiveTour(null); setActiveView('dashboard') }}
         />
       )
     }
@@ -473,6 +474,7 @@ export default function App() {
           onSelectBooking={handleSelectBooking}
           onEditItinerary={() => setActiveView('edit-itinerary')}
           onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}
+          onBack={() => { setActiveTour(null); setActiveView('dashboard') }}
           onEnquireReady={() => setActiveView('enquiry-preview')}
           onRefresh={() => refreshData(activeTour.id)}
         />

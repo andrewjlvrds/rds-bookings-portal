@@ -21,6 +21,7 @@ export default function TourPanel({
   onDeleteTour,
   onEnquireReady,
   onRefresh,
+  onBack,
 }) {
   const VALID_TABS = ['itinerary', 'payments']
   const safeInitial = VALID_TABS.indexOf(initialTab) >= 0 ? initialTab : 'itinerary'
@@ -50,6 +51,24 @@ export default function TourPanel({
 
   return (
     <div>
+      {/* Breadcrumb */}
+      {onBack && (
+        <div style={{ marginBottom: 14 }}>
+          <button
+            onClick={onBack}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 13, color: 'var(--text-muted)' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>&#8592;</span>
+            Tour Planner
+          </button>
+          <span style={{ margin: '0 6px', color: 'var(--border-strong)', fontSize: 13 }}>/</span>
+          <span style={{ fontSize: 13, color: 'var(--text)' }}>{tour.name}</span>
+        </div>
+      )}
       {/* Tour header strip */}
       <div style={{ marginBottom: 12 }}>
         <h1 style={{ fontSize: 18, fontWeight: 500, letterSpacing: -0.2 }}>{tour.name}</h1>
