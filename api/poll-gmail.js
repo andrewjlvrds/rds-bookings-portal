@@ -678,7 +678,18 @@ export default async function(req, res) {
             aiResult = await parseEmail(contentForParsing, bookingContext);
             console.log('AI parse result for', matchedBooking.Name || bookingId, ':', JSON.stringify(aiResult).substring(0, 500));
 
-            var fieldResult = extractionToZohoFields(aiResult);
+            var existingAmounts = {
+              Total_Amount: matchedBooking.Total_Amount,
+              Deposit_Amount: matchedBooking.Deposit_Amount,
+              Second_Payment_Amount: matchedBooking.Second_Payment_Amount,
+              Third_Payment_Amount: matchedBooking.Third_Payment_Amount,
+              Fourth_Payment_Amount: matchedBooking.Fourth_Payment_Amount,
+              Deposit_Due_Date: matchedBooking.Deposit_Due_Date,
+              Second_Payment_Due_Date: matchedBooking.Second_Payment_Due_Date,
+              Third_Payment_Due_Date: matchedBooking.Third_Payment_Due_Date,
+              Fourth_Payment_Due_Date: matchedBooking.Fourth_Payment_Due_Date,
+            };
+            var fieldResult = extractionToZohoFields(aiResult, existingAmounts);
             // Merge AI-extracted fields into Zoho updates
             var fieldKeys = Object.keys(fieldResult.updates);
             for (var fk = 0; fk < fieldKeys.length; fk++) {
@@ -687,6 +698,29 @@ export default async function(req, res) {
 
             if (fieldResult.has_flags) {
               console.log('AI flagged fields for review:', JSON.stringify(fieldResult.flagged));
+              // Store flags on the email blob so the UI can surface them to Helen.
+              // Re-store with the same message_id — storeEmail overwrites the blob.
+              try {
+                await storeEmail({
+                  booking_id: bookingId,
+                  message_id: msgId,
+                  type: 'lodge_reply',
+                  direction: 'inbound',
+                  email_from: from,
+                  email_to: to,
+                  email_subject: subject,
+                  email_content: body,
+                  email_date: date ? new Date(date).toISOString() : new Date().toISOString(),
+                  gmail_thread_id: threadId,
+                  gmail_message_id: msgId,
+                  rfc_message_id: rfcMessageId,
+                  attachments: attachmentsWithText,
+                  match_method: matchMethod,
+                  ai_parsed_flags: fieldResult.flagged,
+                });
+              } catch (flagStoreErr) {
+                console.error('Failed to store AI flags on blob:', flagStoreErr.message);
+              }
             }
             if (fieldResult.discrepancies && fieldResult.discrepancies.length > 0) {
               console.log('⚠ DISCREPANCIES detected for', matchedBooking.Name || bookingId, ':', JSON.stringify(fieldResult.discrepancies));

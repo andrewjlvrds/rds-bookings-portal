@@ -1025,6 +1025,26 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
               AI: {email.ai_summary}
             </div>
           )}
+          {email.ai_parsed_flags && Object.keys(email.ai_parsed_flags).length > 0 && (
+            <div style={{ marginTop: 6, padding: '8px 10px', background: 'var(--amber-bg, #FFFBEB)', border: '0.5px solid var(--amber-border, #F59E0B)', borderRadius: 'var(--radius-sm)', fontSize: 11 }}>
+              <div style={{ fontWeight: 600, color: 'var(--amber-text, #92400E)', marginBottom: 4 }}>
+                ⚠ Parsed but not saved — review needed
+              </div>
+              {Object.entries(email.ai_parsed_flags).map(([key, f]) => (
+                <div key={key} style={{ color: 'var(--text-primary)', marginTop: 2 }}>
+                  <span style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.zoho_field}</span>
+                  {' → '}
+                  <strong>{String(f.value)}</strong>
+                  {f.existing_value != null && (
+                    <span style={{ color: 'var(--text-secondary)' }}> (existing: {String(f.existing_value)})</span>
+                  )}
+                  <span style={{ color: 'var(--text-muted, #9CA3AF)', marginLeft: 4 }}>
+                    {f.reason === 'total_amount_always_manual' ? '— update total manually' : '— field already set'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {reassignError && (
             <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--red-bg, #FEE)', color: 'var(--red-text)', fontSize: 11, borderRadius: 4 }}>
               {reassignError}

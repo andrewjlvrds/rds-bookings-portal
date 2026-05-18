@@ -224,10 +224,30 @@ export async function parseEmail(emailBody, bookingContext) {
 }
 
 // Convert AI extraction to Zoho field updates
-// Only includes fields with high or medium confidence
-export function extractionToZohoFields(extraction) {
+// Financial amount fields that must NEVER be silently overwritten.
+// If a value already exists in Zoho, the parsed value is demoted to flagged
+// (shown in the UI for Helen to act on) rather than written automatically.
+// Total_Amount is always flagged regardless — a second invoice may be additive,
+// a correction, or wrong; Helen must decide.
+var PROTECTED_AMOUNT_FIELDS = new Set([
+  'Total_Amount',
+  'Deposit_Amount',
+  'Second_Payment_Amount',
+  'Third_Payment_Amount',
+  'Fourth_Payment_Amount',
+  'Deposit_Due_Date',
+  'Second_Payment_Due_Date',
+  'Third_Payment_Due_Date',
+  'Fourth_Payment_Due_Date',
+]);
+
+// Only includes fields with medium+ confidence.
+// Pass existingZohoValues (object keyed by Zoho field name) to protect
+// financial fields from silent overwrites.
+export function extractionToZohoFields(extraction, existingZohoValues) {
   var confidenceLevels = { high: 3, medium: 2, low: 1 };
   var minLevel = 2; // medium or higher
+  var existing = existingZohoValues || {};
 
   var extracted = extraction.extracted || {};
   var updates = {};
@@ -279,11 +299,31 @@ export function extractionToZohoFields(extraction) {
     if (level >= minLevel) {
       var value = field.value;
       if (mapping.transform) value = mapping.transform(value);
+
+      // Protected financial fields: never auto-write if Zoho already has a value,
+      // or if the field is Total_Amount (always requires human review).
+      var zohoField = mapping.zoho;
+      var isProtected = PROTECTED_AMOUNT_FIELDS.has(zohoField);
+      var existingVal = existing[zohoField];
+      var existingIsSet = existingVal !== null && existingVal !== undefined && existingVal !== '' && existingVal !== 0;
+      if (isProtected && (zohoField === 'Total_Amount' || existingIsSet)) {
+        // Demote to flagged — Helen will see the parsed value but it won't be written
+        flagged[key] = {
+          value: value,
+          confidence: field.confidence,
+          zoho_field: zohoField,
+          existing_value: existingIsSet ? existingVal : null,
+          reason: zohoField === 'Total_Amount' ? 'total_amount_always_manual' : 'field_already_set',
+        };
+        continue;
+      }
+
       // For fields that can come from multiple sources, append rather than overwrite
-      if ((mapping.zoho === 'Payment_Note' || mapping.zoho === 'Reservation_Comments') && updates[mapping.zoho]) {
-        updates[mapping.zoho] += '\n' + value;
+      if ((zohoField === 'Payment_Note' || zohoField === 'Reservation_Comments') && updates[zohoField]) {
+        updates[zohoField] += '
+' + value;
       } else {
-        updates[mapping.zoho] = value;
+        updates[zohoField] = value;
       }
     } else {
       flagged[key] = { value: field.value, confidence: field.confidence, zoho_field: mapping.zoho };

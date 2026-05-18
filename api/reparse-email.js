@@ -297,7 +297,18 @@ export default async function(req, res) {
           aiResult = await parseEmail(fullContent, bookingContext);
           console.log('Reparse result for', bookingId, ':', JSON.stringify(aiResult).substring(0, 500));
 
-          var fieldResult = extractionToZohoFields(aiResult);
+          var existingAmounts = {
+            Total_Amount: booking.Total_Amount,
+            Deposit_Amount: booking.Deposit_Amount,
+            Second_Payment_Amount: booking.Second_Payment_Amount,
+            Third_Payment_Amount: booking.Third_Payment_Amount,
+            Fourth_Payment_Amount: booking.Fourth_Payment_Amount,
+            Deposit_Due_Date: booking.Deposit_Due_Date,
+            Second_Payment_Due_Date: booking.Second_Payment_Due_Date,
+            Third_Payment_Due_Date: booking.Third_Payment_Due_Date,
+            Fourth_Payment_Due_Date: booking.Fourth_Payment_Due_Date,
+          };
+          var fieldResult = extractionToZohoFields(aiResult, existingAmounts);
           zohoUpdates = fieldResult.updates;
         }
 
