@@ -939,7 +939,10 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
                     }}
                   />
                 : <div style={{ whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto', padding: '12px 14px' }}>{body}</div>
-              : <div style={{ padding: '12px 14px', color: 'var(--text-muted)' }}>(no content)</div>
+              : <div style={{ padding: '12px 14px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 13 }}>
+                  No content stored — this may be a stale entry from an older index run.
+                  Try <strong>Re-parse</strong> above to re-fetch from Gmail, or delete if the email no longer exists.
+                </div>
             }
           </div>
           {attachments.length > 0 && (

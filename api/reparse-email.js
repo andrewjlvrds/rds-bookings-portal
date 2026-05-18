@@ -155,9 +155,10 @@ export default async function(req, res) {
         var body = email.body || '';
         var attachments = email.attachments || [];
 
-        // If stored attachments lack attachmentId (old format), re-fetch from Gmail
+        // Re-fetch from Gmail if body is empty OR attachments lack attachmentId (old format)
         var hasAttWithoutId = attachments.some(function(a) { return a.filename && !a.attachmentId; });
-        if (gmailMsgId && (hasAttWithoutId || attachments.length === 0)) {
+        var bodyIsEmpty = !body || body.trim() === '';
+        if (gmailMsgId && (hasAttWithoutId || attachments.length === 0 || bodyIsEmpty)) {
           try {
             var fullMsg = await gmailApi(token, 'messages/' + gmailMsgId + '?format=full');
             if (fullMsg && fullMsg.payload) {
