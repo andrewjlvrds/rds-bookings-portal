@@ -13,6 +13,17 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
   const [gmailResults, setGmailResults] = useState([])
   const [searchingGmail, setSearchingGmail] = useState(false)
   const [lastDismissed, setLastDismissed] = useState(null)
+
+  // Invoice line items
+  const [invoiceItems, setInvoiceItems] = useState(null) // null = not yet loaded
+  const [invoiceLoading, setInvoiceLoading] = useState(false)
+  const [invoiceSaving, setInvoiceSaving] = useState(false)
+  const [showAddInvoice, setShowAddInvoice] = useState(false)
+  const [newInvoice, setNewInvoice] = useState({ date: '', description: '', amount: '', currency: '', type: 'invoice' })
+  const [editingInvoiceId, setEditingInvoiceId] = useState(null)
+
+  // AI parsed fields — collected from all emails that have ai_parsed_flags
+  const [aiParsedFields, setAiParsedFields] = useState({})
   // If the booking arrives with a pending new-reply flag, OR if Helen
   // navigated here by clicking a specific email, land on the
   // Correspondence tab so she sees the thread first.
@@ -68,6 +79,31 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
   }
 
   useEffect(() => { fetchEmails() }, [bookingId])
+
+  // Fetch invoice line items when Details tab is active
+  useEffect(() => {
+    if (activeDetailTab !== 'details' || invoiceItems !== null) return
+    setInvoiceLoading(true)
+    fetch('/api/invoices?booking_id=' + bookingId)
+      .then(r => r.json())
+      .then(d => { setInvoiceItems(d.items || []); setInvoiceLoading(false) })
+      .catch(() => { setInvoiceItems([]); setInvoiceLoading(false) })
+  }, [activeDetailTab, bookingId])
+
+  // Collect AI parsed flags from emails — merge all flags, newest email wins per field
+  useEffect(() => {
+    if (emails.length === 0) return
+    const merged = {}
+    const sorted = [...emails].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
+    sorted.forEach(em => {
+      if (em.ai_parsed_flags && typeof em.ai_parsed_flags === 'object') {
+        Object.entries(em.ai_parsed_flags).forEach(([key, f]) => {
+          merged[key] = { ...f, email_date: em.date, email_subject: em.subject }
+        })
+      }
+    })
+    setAiParsedFields(merged)
+  }, [emails])
 
   const handleCheckReplies = async () => {
     setPolling(true)
@@ -134,6 +170,66 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
   const followUp = booking.Follow_up_Date || ''
   const dayDesc = booking.Day_Description || booking['Day Description'] || ''
   const balanceDue = booking.Balance_Due_calculated
+
+  const handleCopyAiField = async (zohoField, value) => {
+    try {
+      await handleSave(zohoField, value)
+      // Remove from aiParsedFields once copied
+      setAiParsedFields(prev => {
+        const next = { ...prev }
+        Object.keys(next).forEach(k => { if (next[k].zoho_field === zohoField) delete next[k] })
+        return next
+      })
+    } catch (e) { /* handleSave already alerts */ }
+  }
+
+  const handleAddInvoiceItem = async () => {
+    if (!newInvoice.amount || !newInvoice.date) return
+    setInvoiceSaving(true)
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_id: bookingId, item: { ...newInvoice }, currency }),
+      })
+      const d = await res.json()
+      setInvoiceItems(d.items || [])
+      setNewInvoice({ date: '', description: '', amount: '', currency: '', type: 'invoice' })
+      setShowAddInvoice(false)
+    } catch (e) { alert('Error saving invoice: ' + e.message) }
+    finally { setInvoiceSaving(false) }
+  }
+
+  const handleDeleteInvoiceItem = async (id) => {
+    if (!confirm('Delete this line item?')) return
+    setInvoiceSaving(true)
+    try {
+      const res = await fetch('/api/invoices?booking_id=' + bookingId + '&id=' + id + '&currency=' + encodeURIComponent(currency), { method: 'DELETE' })
+      const d = await res.json()
+      setInvoiceItems(d.items || [])
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setInvoiceSaving(false) }
+  }
+
+  const handleSyncTotal = async () => {
+    if (!invoiceItems || invoiceItems.length === 0) return
+    const derived = invoiceItems.reduce((sum, i) => sum + (i.type === 'credit' ? -(parseFloat(i.amount)||0) : (parseFloat(i.amount)||0)), 0)
+    if (!confirm('Set Total_Amount to ' + fmtCurrency(Math.round(derived*100)/100, currency) + '?')) return
+    setInvoiceSaving(true)
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_id: bookingId, currency, sync_total: true }),
+      })
+      const d = await res.json()
+      setInvoiceItems(d.items || [])
+      if (onRefresh) onRefresh()
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setInvoiceSaving(false) }
+  }
+
+  const invoiceDerivedTotal = (invoiceItems || []).reduce((sum, i) => sum + (i.type === 'credit' ? -(parseFloat(i.amount)||0) : (parseFloat(i.amount)||0)), 0)
 
   const STATUS_OPTIONS = [
     'Not Started', 'Ready to Send', 'Enquiry Sent', 'Availability Confirmed',
@@ -387,12 +483,145 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
         </div>
       </div>
 
+      {/* Invoice line items panel — full width */}
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Invoices & charges</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {invoiceItems && invoiceItems.length > 0 && (
+              <button
+                onClick={handleSyncTotal}
+                disabled={invoiceSaving}
+                title="Set Total_Amount to sum of line items"
+                style={{ fontSize: 11, padding: '2px 8px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)' }}
+              >Set total from items ({fmtCurrency(Math.round(invoiceDerivedTotal*100)/100, currency)})</button>
+            )}
+            <button
+              onClick={() => setShowAddInvoice(v => !v)}
+              style={{ fontSize: 11, padding: '2px 8px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)' }}
+            >+ Add</button>
+          </div>
+        </div>
+        <div className="panel-body">
+          {invoiceLoading && <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>}
+          {!invoiceLoading && invoiceItems && invoiceItems.length === 0 && !showAddInvoice && (
+            <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>No invoices recorded yet.</div>
+          )}
+          {!invoiceLoading && invoiceItems && invoiceItems.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
+                  <th style={{ padding: '2px 8px 6px 0', fontWeight: 500 }}>Date</th>
+                  <th style={{ padding: '2px 8px 6px 0', fontWeight: 500 }}>Type</th>
+                  <th style={{ padding: '2px 8px 6px 0', fontWeight: 500 }}>Description</th>
+                  <th style={{ padding: '2px 0 6px 0', fontWeight: 500, textAlign: 'right' }}>Amount</th>
+                  <th style={{ width: 24 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoiceItems.map(item => (
+                  <tr key={item.id} style={{ borderTop: '0.5px solid var(--border-light)' }}>
+                    <td style={{ padding: '5px 8px 5px 0', color: 'var(--text-primary)' }}>{item.date}</td>
+                    <td style={{ padding: '5px 8px 5px 0' }}>
+                      <span style={{
+                        fontSize: 10, padding: '1px 5px', borderRadius: 3, fontWeight: 500,
+                        background: item.type === 'credit' ? 'var(--green-bg, #F0FDF4)' : item.type === 'adjustment' ? 'var(--amber-bg, #FFFBEB)' : 'var(--blue-bg)',
+                        color: item.type === 'credit' ? 'var(--green-text, #166534)' : item.type === 'adjustment' ? 'var(--amber-text, #92400E)' : 'var(--blue-text)',
+                      }}>{item.type}</span>
+                    </td>
+                    <td style={{ padding: '5px 8px 5px 0', color: 'var(--text-secondary)' }}>{item.description || '—'}</td>
+                    <td style={{ padding: '5px 0', textAlign: 'right', color: item.type === 'credit' ? 'var(--green-text, #166534)' : 'var(--text-primary)', fontWeight: 500 }}>
+                      {item.type === 'credit' ? '−' : ''}{fmtCurrency(parseFloat(item.amount)||0, item.currency || currency)}
+                    </td>
+                    <td style={{ padding: '5px 0 5px 8px', textAlign: 'right' }}>
+                      <button onClick={() => handleDeleteInvoiceItem(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13, padding: '0 2px' }} title="Delete">×</button>
+                    </td>
+                  </tr>
+                ))}
+                {invoiceItems.length > 1 && (
+                  <tr style={{ borderTop: '1px solid var(--border-default)' }}>
+                    <td colSpan={3} style={{ padding: '6px 8px 2px 0', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Derived total</td>
+                    <td style={{ padding: '6px 0 2px 0', textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)' }}>{fmtCurrency(Math.round(invoiceDerivedTotal*100)/100, currency)}</td>
+                    <td></td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {/* Add invoice form */}
+          {showAddInvoice && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.5fr', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Date</div>
+                  <input type="date" value={newInvoice.date} onChange={e => setNewInvoice(v => ({...v, date: e.target.value}))}
+                    style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 3 }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Type</div>
+                  <select value={newInvoice.type} onChange={e => setNewInvoice(v => ({...v, type: e.target.value}))}
+                    style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 3 }}>
+                    <option value="invoice">Invoice</option>
+                    <option value="credit">Credit note</option>
+                    <option value="adjustment">Adjustment</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Amount</div>
+                  <input type="number" placeholder="0.00" value={newInvoice.amount} onChange={e => setNewInvoice(v => ({...v, amount: e.target.value}))}
+                    style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 3 }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Description</div>
+                  <input type="text" placeholder="e.g. Extra pre-night, 2 pax" value={newInvoice.description} onChange={e => setNewInvoice(v => ({...v, description: e.target.value}))}
+                    style={{ width: '100%', fontSize: 12, padding: '4px 6px', border: '0.5px solid var(--border-default)', borderRadius: 3 }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                <button onClick={() => { setShowAddInvoice(false); setNewInvoice({ date: '', description: '', amount: '', currency: '', type: 'invoice' }) }}
+                  style={{ fontSize: 11, padding: '3px 10px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)' }}>Cancel</button>
+                <button onClick={handleAddInvoiceItem} disabled={invoiceSaving || !newInvoice.amount || !newInvoice.date}
+                  style={{ fontSize: 11, padding: '3px 10px', border: 'none', borderRadius: 3, background: 'var(--blue-mid)', cursor: 'pointer', color: '#fff', opacity: (!newInvoice.amount || !newInvoice.date) ? 0.5 : 1 }}>
+                  {invoiceSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Row 2: Payments + Pax */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Payment & cancellation panel */}
         <div className="panel">
           <div className="panel-head">Payments & cancellation</div>
           <div className="panel-body">
+
+            {/* AI parsed fields — shown when emails have extracted but unconfirmed data */}
+            {Object.keys(aiParsedFields).length > 0 && (
+              <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: '0.5px solid var(--border-light)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--amber-text, #92400E)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span>⚠</span><span>AI parsed — not yet saved</span>
+                </div>
+                {Object.entries(aiParsedFields).map(([key, f]) => (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderTop: '0.5px solid var(--border-light)' }}>
+                    <div style={{ fontSize: 11 }}>
+                      <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 10 }}>{f.zoho_field}</span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 500, marginLeft: 8 }}>{String(f.value)}</span>
+                      {f.existing_value != null && (
+                        <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 10 }}>existing: {String(f.existing_value)}</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleCopyAiField(f.zoho_field, f.value)}
+                      style={{ fontSize: 10, padding: '2px 7px', border: '0.5px solid var(--blue-mid)', borderRadius: 3, background: 'var(--blue-bg)', cursor: 'pointer', color: 'var(--blue-text)', whiteSpace: 'nowrap', marginLeft: 8 }}
+                    >Copy across</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <DetailRows onEdit={handleSave} rows={[
               { label: 'Total', value: total ? fmtCurrency(total, currency) : '—', field: 'Total_Amount', type: 'number', raw: total || '' },
               ...(balanceDue != null && balanceDue !== '' ? [{ label: 'Balance due', value: fmtCurrency(parseFloat(balanceDue) || 0, currency) }] : []),
@@ -1020,26 +1249,6 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
           {email.ai_summary && (
             <div style={{ marginTop: 6, padding: '6px 10px', background: 'var(--blue-bg)', borderRadius: 'var(--radius-sm)', fontSize: 11, color: 'var(--blue-text)' }}>
               AI: {email.ai_summary}
-            </div>
-          )}
-          {email.ai_parsed_flags && Object.keys(email.ai_parsed_flags).length > 0 && (
-            <div style={{ marginTop: 6, padding: '8px 10px', background: 'var(--amber-bg, #FFFBEB)', border: '0.5px solid var(--amber-border, #F59E0B)', borderRadius: 'var(--radius-sm)', fontSize: 11 }}>
-              <div style={{ fontWeight: 600, color: 'var(--amber-text, #92400E)', marginBottom: 4 }}>
-                ⚠ Parsed but not saved — review needed
-              </div>
-              {Object.entries(email.ai_parsed_flags).map(([key, f]) => (
-                <div key={key} style={{ color: 'var(--text-primary)', marginTop: 2 }}>
-                  <span style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.zoho_field}</span>
-                  {' → '}
-                  <strong>{String(f.value)}</strong>
-                  {f.existing_value != null && (
-                    <span style={{ color: 'var(--text-secondary)' }}> (existing: {String(f.existing_value)})</span>
-                  )}
-                  <span style={{ color: 'var(--text-muted, #9CA3AF)', marginLeft: 4 }}>
-                    {f.reason === 'total_amount_always_manual' ? '— update total manually' : '— field already set'}
-                  </span>
-                </div>
-              ))}
             </div>
           )}
           {reassignError && (
