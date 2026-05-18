@@ -409,20 +409,14 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
               const due = booking[slot.dueField] || ''
               const paidDate = booking[slot.paidDateField] || ''
               const paidAmt = booking[slot.paidAmountField]
-              // Show slot if amount or due date exists
-              if (!amt && !due) return null
               return (
                 <div key={slot.prefix} style={{ marginTop: 12, paddingTop: 10, borderTop: '0.5px solid var(--border-light)' }}>
                   <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>{slot.label}</div>
                   <DetailRows onEdit={handleSave} rows={[
                     { label: 'Amount', value: amt ? fmtCurrency(amt, currency) : '—', field: slot.amountField, type: 'number', raw: amt || '' },
                     { label: 'Due', value: due ? fmtDateFull(due) : '—', field: slot.dueField, type: 'date', raw: due },
-                    ...(paidDate ? [
-                      { label: 'Paid', value: fmtDateFull(paidDate), field: slot.paidDateField, type: 'date', raw: paidDate },
-                      { label: 'Paid amount', value: paidAmt ? fmtCurrency(parseFloat(paidAmt), currency) : '—', field: slot.paidAmountField, type: 'number', raw: paidAmt || '' },
-                    ] : [
-                      { label: 'Paid', value: '—' },
-                    ]),
+                    { label: 'Paid', value: paidDate ? fmtDateFull(paidDate) : '—', field: slot.paidDateField, type: 'date', raw: paidDate },
+                    { label: 'Paid amount', value: paidAmt ? fmtCurrency(parseFloat(paidAmt), currency) : '—', field: slot.paidAmountField, type: 'number', raw: paidAmt || '' },
                   ]} />
                 </div>
               )
