@@ -296,15 +296,9 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailM
           return { booking: senderBest, method: 'sender_email_date_score_' + senderBestScore };
         }
 
-        // Date scoring failed — if there's only one future booking, use that
-        var now = new Date().toISOString().split('T')[0];
-        var futureCandidates = senderCandidates.filter(function(c) {
-          return (c.Check_in_Date || '') >= now;
-        });
-        if (futureCandidates.length === 1) {
-          return { booking: futureCandidates[0], method: 'sender_email_single_future' };
-        }
-
+        // Date scoring failed across all candidates — go unmatched rather than guess.
+        // The Zoho fallback in poll-gmail will do a live search if the right booking
+        // exists but wasn't in our in-memory snapshot.
         return {
           booking: null,
           method: 'unmatched',

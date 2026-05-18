@@ -366,7 +366,36 @@ export default async function(req, res) {
         // Hit Zoho directly: search Lodge_Bookings at this lodge name
         // and filter by date proximity. If exactly one booking falls
         // within 60 days of an email-extracted date, route to it.
-        var ambiguousReasons = ['lodge_name_ambiguous_no_date_match', 'sender_email_unique_but_dates_conflict'];
+        // Zoho RDS-ref fallback — subject contains an RDS ref that wasn't in our
+        // in-memory refMap (e.g. booking created after the snapshot was taken, or
+        // ref not yet written to the booking). Look it up directly in Zoho.
+        if (!match.booking) {
+          var subjectRdsRef = extractRdsRef(subject);
+          if (!subjectRdsRef) {
+            // Also check body for ref
+            var bodyRefMatches = (body || '').match(/RDS-[A-Za-z0-9\-\/]+/g) || [];
+            if (bodyRefMatches.length > 0) subjectRdsRef = bodyRefMatches[0];
+          }
+          if (subjectRdsRef) {
+            try {
+              var refQuery = encodeURIComponent('(RDS_Reference:equals:' + subjectRdsRef + ')');
+              var refLookup = await zohoApi('GET',
+                'Lodge_Bookings/search?criteria=' + refQuery +
+                '&fields=id,Lodge_Name,Check_in_Date,Check_out_Date,RDS_Reference,Tour,Status' +
+                '&per_page=5'
+              );
+              var refFound = (refLookup && refLookup.data) || [];
+              if (refFound.length === 1) {
+                console.log('Zoho RDS-ref fallback resolved', subjectRdsRef, '→', refFound[0].id);
+                match = { booking: refFound[0], method: 'zoho_rds_ref_lookup' };
+              }
+            } catch (refErr) {
+              console.error('Zoho RDS-ref fallback failed:', refErr.message);
+            }
+          }
+        }
+
+        var ambiguousReasons = ['lodge_name_ambiguous_no_date_match', 'sender_email_unique_but_dates_conflict', 'sender_email_matched_lodge_but_ambiguous_date'];
         if (!match.booking && match.lodge && ambiguousReasons.indexOf(match.reason) !== -1) {
           try {
             var emailDatesForLookup = extractIsoDates(subject + '\n' + (body || '').substring(0, 8000));
