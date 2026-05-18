@@ -40,8 +40,10 @@ export async function getOrCreateLabel(token, labelName) {
   var labelsResult = await gmailApi(token, 'labels');
   var labels = labelsResult.labels || [];
 
-  // Look for exact match
-  var existing = labels.find(function(l) { return l.name === labelName; });
+  // Case-insensitive match — Gmail treats labels as distinct even with different casing,
+  // so we normalise here to avoid creating e.g. "bahnhof" alongside "Bahnhof Hotel"
+  var labelNameLower = labelName.toLowerCase();
+  var existing = labels.find(function(l) { return l.name.toLowerCase() === labelNameLower; });
   if (existing) {
     labelCache[labelName] = existing.id;
     return existing.id;

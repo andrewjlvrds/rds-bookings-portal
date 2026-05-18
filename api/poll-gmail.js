@@ -686,7 +686,11 @@ export default async function(req, res) {
           if (matchedBooking.Tour) {
             tourName = typeof matchedBooking.Tour === 'object' ? matchedBooking.Tour.name : matchedBooking.Tour;
           }
-          var lodgeNameForLabel = (matchedBooking.Lodge_Name || matchedBooking.Name || '').split(' - ')[0].trim();
+          var rawLodge = matchedBooking.Lodge_Name;
+          var lodgeNameForLabel = (
+            (rawLodge && typeof rawLodge === 'object' ? rawLodge.name : rawLodge) ||
+            matchedBooking.Name || ''
+          ).split(' - ')[0].trim();
           if (tourName) {
             var labelName = tourLabelName(tourName, lodgeNameForLabel);
             var labelId = await getOrCreateLabel(token, labelName);
