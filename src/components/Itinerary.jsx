@@ -1418,13 +1418,15 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                             >{fbBadge.label}</span>
                           )}
                           <button
-                            onClick={() => {
-                              const notes = (fb.Booking_Notes || fb['Booking Notes'] || '').replace(/\s*FALLBACK\s*/gi, '').trim()
+                            onClick={e => {
+                              e.stopPropagation()
+                              const cleanNotes = (fb.Booking_Notes || fb['Booking Notes'] || '').replace(/\s*FALLBACK\s*/gi, '').trim()
+                              const cleanDesc = (fb.Day_Description || fb['Day Description'] || '').replace(/\s*FALLBACK\s*/gi, '').trim()
                               fetch('/api/update-bookings', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ booking_ids: [fbId], updates: { Booking_Notes: notes } }),
-                              }).then(r => { if (r.ok && onRefresh) onRefresh() })
+                                body: JSON.stringify({ booking_ids: [fbId], updates: { Booking_Notes: cleanNotes, Day_Description: cleanDesc } }),
+                              }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1500) })
                             }}
                             style={{
                               fontSize: 9, padding: '2px 6px', border: '0.5px solid var(--border-default)',
