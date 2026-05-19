@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, getStatus, daysBetween } from '../utils/helpers'
-import { cleanEmailBody, looksLikeRawHtml } from '../utils/emailBody'
+import { cleanEmailBody, looksLikeRawHtml, splitQuotedContent } from '../utils/emailBody'
 import { BookingActivityLog } from './ActivityLog'
 import RoutingPicker from './RoutingPicker'
 
@@ -973,11 +973,13 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
   const rawBody = email.body || email.email_content || ''
   const isHtml = looksLikeRawHtml(rawBody)
   const body = isHtml ? cleanEmailBody(rawBody) : rawBody
+  const { main: bodyMain, quoted: bodyQuoted } = isHtml ? { main: body, quoted: '' } : splitQuotedContent(body)
   const attachments = email.attachments || []
   const gmailMsgId = email.gmail_message_id || email.message_id || ''
   const hasExtracted = attachments.some(a => a && a.extractedText)
-  const firstLine = body.split('\n').filter(l => l.trim())[0] || ''
+  const firstLine = bodyMain.split('\n').filter(l => l.trim())[0] || ''
   const preview = firstLine.length > 120 ? firstLine.substring(0, 120) + '...' : firstLine
+  const [showQuoted, setShowQuoted] = React.useState(false)
 
   // When this row is the auto-expand target, scroll it into view
   // and mark read once on mount.
@@ -1187,7 +1189,22 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
                       } catch {}
                     }}
                   />
-                : <div style={{ whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto', padding: '12px 14px' }}>{body}</div>
+                : <div style={{ padding: '12px 14px' }}>
+                    <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, color: 'var(--text-primary)', fontSize: 12 }}>{bodyMain || body}</div>
+                    {bodyQuoted && (
+                      <div style={{ marginTop: 8 }}>
+                        <button
+                          onClick={() => setShowQuoted(v => !v)}
+                          style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: '0.5px solid var(--border-light)', borderRadius: 3, padding: '2px 8px', cursor: 'pointer' }}
+                        >{showQuoted ? 'Hide quoted' : 'Show quoted'}</button>
+                        {showQuoted && (
+                          <div style={{ marginTop: 8, paddingLeft: 12, borderLeft: '2px solid var(--border-default)', whiteSpace: 'pre-wrap', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                            {bodyQuoted}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
               : <div style={{ padding: '12px 14px', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 13 }}>
                   No content stored — this may be a stale entry from an older index run.
                   Try <strong>Re-parse</strong> above to re-fetch from Gmail, or delete if the email no longer exists.
@@ -1340,6 +1357,8 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
   const rawBody = email.body || ''
   const isHtml = looksLikeRawHtml(rawBody)
   const body = isHtml ? cleanEmailBody(rawBody) : rawBody
+  const { main: bodyMain, quoted: bodyQuoted } = isHtml ? { main: body, quoted: '' } : splitQuotedContent(body)
+  const [showQuoted, setShowQuoted] = React.useState(false)
   const date = email.date || ''
   const isFromUs = from.indexOf('bookings@ridedownsouth.com') > -1 || from.indexOf('ridedownsouth.com') > -1
 

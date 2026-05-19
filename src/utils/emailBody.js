@@ -96,3 +96,48 @@ export function cleanEmailBody(body) {
 
   return text;
 }
+
+// Split plain-text email body into main content and quoted reply chain.
+// Returns { main, quoted } where quoted may be empty string.
+export function splitQuotedContent(body) {
+  if (!body) return { main: '', quoted: '' }
+  const lines = body.split('\n')
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+
+    // Standard > quoting
+    if (/^>/.test(line)) {
+      const main = lines.slice(0, i).join('\n').trim()
+      const quoted = lines.slice(i).join('\n').trim()
+      return { main, quoted }
+    }
+
+    // "On [date], [name] wrote:" — may span two lines
+    if (/^On .{6,}wrote:$/i.test(line) || (i > 0 && /wrote:$/.test(line) && /^On /i.test(lines[i-1]))) {
+      const start = /^On /i.test(line) ? i : i - 1
+      const main = lines.slice(0, start).join('\n').trim()
+      const quoted = lines.slice(start).join('\n').trim()
+      return { main, quoted }
+    }
+
+    // Dividers: ---Original Message---, _____, ========
+    if (/^[-_=]{3,}/.test(line)) {
+      const main = lines.slice(0, i).join('\n').trim()
+      const quoted = lines.slice(i).join('\n').trim()
+      return { main, quoted }
+    }
+
+    // Forwarded message header block (From: / Sent: / To: in sequence)
+    if (/^From:\s+/i.test(line) && i > 0) {
+      const prev = lines[i - 1].trim()
+      if (prev === '' || /^[-_=]{3,}/.test(prev)) {
+        const main = lines.slice(0, i).join('\n').trim()
+        const quoted = lines.slice(i).join('\n').trim()
+        return { main, quoted }
+      }
+    }
+  }
+
+  return { main: body.trim(), quoted: '' }
+}
