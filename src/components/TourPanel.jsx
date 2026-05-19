@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import Itinerary from './Itinerary'
 import Payments from './Payments'
 import { fmtDateFull } from '../utils/helpers'
+import { fmtDate } from '../utils/helpers'
 
 /*
  * TourPanel wraps the two tour-level sub-views:
@@ -23,7 +24,7 @@ export default function TourPanel({
   onRefresh,
   onBack,
 }) {
-  const VALID_TABS = ['itinerary', 'payments']
+  const VALID_TABS = ['correspondence', 'itinerary', 'payments']
   const safeInitial = VALID_TABS.indexOf(initialTab) >= 0 ? initialTab : 'itinerary'
   const [activeTab, setActiveTab] = useState(safeInitial)
   const [showReplyList, setShowReplyList] = useState(false)
@@ -75,8 +76,19 @@ export default function TourPanel({
         <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
           {tour.departure_date && (
             <span>
-              Departs {fmtDateFull(tour.departure_date)}
-              {tour.end_date ? '  ·  returns ' + fmtDateFull(tour.end_date) : ''}
+              {(() => {
+                const dep = tour.departure_date ? new Date(tour.departure_date) : null
+                const end = tour.end_date ? new Date(tour.end_date) : null
+                if (!dep) return ''
+                const depDay = dep.getUTCDate()
+                const endDay = end ? end.getUTCDate() : null
+                const month = dep.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })
+                const endMonth = end ? end.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }) : null
+                const year = dep.getUTCFullYear()
+                if (end && endMonth !== month) return depDay + ' ' + month + ' – ' + endDay + ' ' + endMonth + ' ' + year
+                if (end) return depDay + '–' + endDay + ' ' + month + ' ' + year
+                return depDay + ' ' + month + ' ' + year
+              })()}
             </span>
           )}
           {newReplyCount > 0 && (
@@ -143,11 +155,25 @@ export default function TourPanel({
         display: 'flex', gap: 0, marginBottom: 18,
         borderBottom: '0.5px solid var(--border-default)',
       }}>
+        <TabBtn label="Correspondence" active={activeTab === 'correspondence'} onClick={() => setActiveTab('correspondence')} />
         <TabBtn label="Itinerary" active={activeTab === 'itinerary'} onClick={() => setActiveTab('itinerary')} />
         <TabBtn label="Payments" active={activeTab === 'payments'} onClick={() => setActiveTab('payments')} />
       </div>
 
       {/* Active tab content */}
+      {activeTab === 'correspondence' && (
+        <Itinerary
+          tour={tour}
+          lodges={lodges}
+          onSelectBooking={(bk) => onSelectBooking(bk, 'itinerary')}
+          onEditItinerary={onEditItinerary}
+          onDeleteTour={onDeleteTour}
+          onEnquireReady={onEnquireReady}
+          onRefresh={onRefresh}
+          initialSubTab="correspondence"
+        />
+      )}
+
       {activeTab === 'itinerary' && (
         <Itinerary
           tour={tour}

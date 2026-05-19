@@ -3,8 +3,8 @@ import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isC
 import { generateSubject, generateEnquiryEmail, generateConfirmationEmail } from '../utils/emailTemplates'
 import PortalSync from './PortalSync'
 
-export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh }) {
-  const [activeTab, setActiveTab] = useState('bookings') // 'bookings' | 'portal-sync'
+export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh, initialSubTab }) {
+  const [activeTab, setActiveTab] = useState(initialSubTab === 'correspondence' ? 'correspondence' : 'bookings')
   const [marking, setMarking] = useState(false)
   const [editing, setEditing] = useState(null) // { id, field, value }
   const [savingEdit, setSavingEdit] = useState(false)
@@ -480,139 +480,34 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 18, fontWeight: 500 }}>{tour.name}</h1>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
-            {hasZohoBookings ? sorted.length + ' nights' : hasDraft ? draftNights.length + ' nights (draft)' : '0 nights'}
-            {tour.departure_date ? (
-              editingDate ? (
-                <span style={{ marginLeft: 4 }}>
-                  · Departs{' '}
-                  <input
-                    type="date"
-                    value={newDate}
-                    onChange={e => setNewDate(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSaveDate(); if (e.key === 'Escape') setEditingDate(false) }}
-                    style={{
-                      fontSize: 13, padding: '1px 4px',
-                      border: '0.5px solid var(--blue-mid)', borderRadius: 4,
-                      outline: 'none', background: 'var(--bg-primary)', color: 'var(--text-primary)',
-                    }}
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleSaveDate}
-                    disabled={savingDate}
-                    style={{
-                      fontSize: 11, marginLeft: 4, padding: '2px 8px',
-                      border: 'none', borderRadius: 4, cursor: 'pointer',
-                      background: 'var(--blue-mid)', color: '#fff',
-                    }}
-                  >{savingDate ? '...' : 'Save'}</button>
-                  <button
-                    onClick={() => { setEditingDate(false); setNewDate(tour.departure_date || '') }}
-                    style={{
-                      fontSize: 11, marginLeft: 2, padding: '2px 6px',
-                      border: 'none', background: 'none', cursor: 'pointer',
-                      color: 'var(--text-muted)',
-                    }}
-                  >Cancel</button>
-                </span>
-              ) : (
-                <span
-                  onClick={() => { setNewDate(tour.departure_date || ''); setEditingDate(true) }}
-                  style={{ cursor: 'pointer', marginLeft: 4 }}
-                  title="Click to change departure date"
-                >
-                  · Departs {fmtDateFull(tour.departure_date)}
-                </span>
-              )
-            ) : (
-              <span
-                onClick={() => { setNewDate(''); setEditingDate(true) }}
-                style={{ cursor: 'pointer', color: 'var(--amber-text)', marginLeft: 4 }}
-              >
-                · No departure date — click to set
-              </span>
-            )}
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button className="btn" onClick={onEditItinerary}>
-            {hasContent ? 'Edit itinerary' : 'Create itinerary'}
+      {/* Action buttons */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, justifyContent: 'flex-end' }}>
+        <button className="btn" onClick={onEditItinerary}>
+          {hasContent ? 'Edit itinerary' : 'Create itinerary'}
+        </button>
+        {notStarted > 0 && (
+          <button className="btn" onClick={handleMarkAllReady} disabled={marking}>
+            {marking ? 'Marking...' : 'Mark all ready (' + notStarted + ')'}
           </button>
+        )}
+        {readyToSend > 0 && (
+          <button className="btn btn-primary" onClick={onEnquireReady}>
+            Enquire all ready ({readyToSend})
+          </button>
+        )}
+        {onRefresh && (
           <button
             className="btn"
-            title="Set all bookings on this tour to Guest type"
-            onClick={async () => {
-              const nonGuest = sorted.filter(b => b.Booking_Type && b.Booking_Type !== 'Guest')
-              if (!nonGuest.length) { alert('All bookings already set to Guest.'); return }
-              if (!confirm('Reset all ' + nonGuest.length + ' non-Guest bookings to Guest on this tour?')) return
-              await fetch('/api/update-bookings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  records: nonGuest.map(b => ({ id: b.id || b['Record Id'], Booking_Type: 'Guest' }))
-                }),
-              })
-              setTimeout(() => onRefresh && onRefresh(), 1500)
-            }}
-          >Reset all to Guest</button>
-          {notStarted > 0 && (
-            <button className="btn" onClick={handleMarkAllReady} disabled={marking}>
-              {marking ? 'Marking...' : 'Mark all ready (' + notStarted + ')'}
-            </button>
-          )}
-          {readyToSend > 0 && (
-            <button className="btn btn-primary" onClick={onEnquireReady}>
-              Enquire all ready ({readyToSend})
-            </button>
-          )}
-          {onRefresh && (
-            <button
-              className="btn"
-              onClick={onRefresh}
-              style={{ fontSize: 12, padding: '4px 8px' }}
-              title="Refresh data from Zoho"
-            >↻</button>
-          )}
-        </div>
-      </div>
-
-      {/* Tab switcher */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '0.5px solid var(--border-default)', alignItems: 'center' }}>
-        {[
-          { id: 'correspondence', label: 'Correspondence' },
-          { id: 'bookings', label: 'Lodge Bookings' },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              fontSize: 13, padding: '8px 16px', border: 'none', cursor: 'pointer',
-              background: 'none', fontFamily: 'var(--font-sans)',
-              color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-muted)',
-              fontWeight: activeTab === tab.id ? 600 : 400,
-              borderBottom: activeTab === tab.id ? '2px solid var(--text-primary)' : '2px solid transparent',
-              marginBottom: -1,
-            }}
-          >{tab.label}</button>
-        ))}
-        <button
-          onClick={() => setActiveTab('portal-sync')}
-          style={{
-            marginLeft: 'auto', fontSize: 11, padding: '3px 10px', marginBottom: 8,
-            border: '0.5px solid var(--border-default)', borderRadius: 3,
-            background: 'none', cursor: 'pointer', color: 'var(--text-muted)',
-          }}
-        >Portal sync</button>
+            onClick={onRefresh}
+            style={{ fontSize: 12, padding: '4px 8px' }}
+            title="Refresh data from Zoho"
+          >↻</button>
+        )}
       </div>
 
       {activeTab === 'portal-sync' && <PortalSync tour={tour} />}
 
-      {activeTab === 'correspondence' && (
+      {(activeTab === 'correspondence' || initialSubTab === 'correspondence') && activeTab === 'correspondence' && (
         <div>
           {sorted.filter(b => {
             const dd = b.Day_Description || b['Day Description'] || ''
@@ -657,7 +552,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
         </div>
       )}
 
-      {activeTab === 'bookings' && <>
+      {(activeTab === 'bookings' || (!activeTab || activeTab === 'bookings')) && <>
 
       {/* Tour config — room requirements for enquiries */}
       <TourConfig tour={tour} />
