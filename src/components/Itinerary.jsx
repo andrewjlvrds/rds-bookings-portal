@@ -1097,58 +1097,21 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                   const rawLodge = bk.Lodge_Name || bk['Lodge Booking Name'] || bk.Name || ''
                   const lodge = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
                   const lodgeRecord = lookupLodge(lodge)
-                  const email = lodgeRecord ? (lodgeRecord.email || lodgeRecord.email2 || '') : (bk.Email || bk.Lodge_Email || '')
+                  const toEmail = lodgeRecord ? (lodgeRecord.email || lodgeRecord.email2 || '') : (bk.Email || bk.Lodge_Email || '')
                   const group = lodgeGroupMap[bkId] || [bk]
-                  const subject = generateSubject(bk, tour.name, lodge)
-                  const body = generateEnquiryEmail(
-                    group, tour.name, lodge,
-                    { sender, tourConfig: { pax_single: tour.pax_single, pax_twin: tour.pax_twin, pax_double: tour.pax_double, guide_rooms: tour.guide_rooms } }
-                  )
 
                   return (
                     <tr>
                       <td colSpan="6" style={{ padding: 0 }}>
-                        <div style={{
-                          margin: '0 16px 8px', padding: '12px 16px',
-                          background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)',
-                          border: '0.5px solid var(--border-default)',
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <div style={{ fontSize: 12 }}>
-                              <span style={{ color: 'var(--text-muted)' }}>To: </span>
-                              <span style={{ fontWeight: 500 }}>{email || 'No email on file'}</span>
-                              <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>Subject: </span>
-                              <span>{subject}</span>
-                            </div>
-                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                              <div style={{ display: 'flex', gap: 0 }}>
-                                {['Helen', 'Andrew'].map(s => (
-                                  <button key={s} onClick={() => setSender(s)} style={{
-                                    fontSize: 10, padding: '2px 8px', border: 'none', cursor: 'pointer',
-                                    background: sender === s ? 'var(--blue-bg)' : 'transparent',
-                                    color: sender === s ? 'var(--blue-text)' : 'var(--text-muted)',
-                                    borderRadius: s === 'Helen' ? '3px 0 0 3px' : '0 3px 3px 0', fontWeight: 500,
-                                  }}>{s}</button>
-                                ))}
-                              </div>
-                              <button
-                                onClick={() => setPreviewId(null)}
-                                style={{ fontSize: 11, padding: '2px 6px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
-                              >×</button>
-                              <button
-                                onClick={() => handleSendEnquiry(group)}
-                                disabled={!email || sendingId}
-                                className="btn btn-primary"
-                                style={{ fontSize: 11, padding: '3px 10px' }}
-                              >{sendingId ? 'Sending...' : 'Send'}</button>
-                            </div>
-                          </div>
-                          <pre style={{
-                            fontSize: 11, lineHeight: 1.6, color: 'var(--text-primary)',
-                            whiteSpace: 'pre-wrap', fontFamily: 'var(--font-sans)',
-                            margin: 0, maxHeight: 200, overflow: 'auto',
-                          }}>{body}</pre>
-                        </div>
+                        <InlineComposer
+                          toEmail={toEmail}
+                          booking={bk}
+                          tourName={tour.name}
+                          sender={sender}
+                          onSenderChange={setSender}
+                          onClose={() => setPreviewId(null)}
+                          onSent={() => { setPreviewId(null); if (onRefresh) onRefresh() }}
+                        />
                       </td>
                     </tr>
                   )
@@ -1991,5 +1954,149 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
       />
     )}
     </>
+  )
+}
+
+// ── InlineComposer ────────────────────────────────────────────────────────
+// Blank email composer that opens inline in the itinerary row.
+// To, Subject, Body all editable. Sender toggle Helen/Andrew.
+
+const SIGNATURES = {
+  Helen: `Kind regards,
+Helen Baker
+Lodge Bookings | Ride Down South
+bookings@ridedownsouth.com
+www.ridedownsouth.com`,
+  Andrew: `Kind regards,
+Andrew Vaughan
+Director | Ride Down South
+bookings@ridedownsouth.com
+www.ridedownsouth.com`,
+}
+
+function InlineComposer({ toEmail, booking, tourName, sender, onSenderChange, onClose, onSent }) {
+  const [to, setTo] = React.useState(toEmail || '')
+  const [subject, setSubject] = React.useState('')
+  const [body, setBody] = React.useState('\n\n' + SIGNATURES[sender] || '')
+  const [sending, setSending] = React.useState(false)
+  const [error, setError] = React.useState(null)
+
+  // Keep signature in sync with sender toggle
+  React.useEffect(() => {
+    setBody(prev => {
+      const sigStart = prev.lastIndexOf('Kind regards,')
+      const beforeSig = sigStart > 0 ? prev.slice(0, sigStart) : prev + '\n\n'
+      return beforeSig + SIGNATURES[sender]
+    })
+  }, [sender])
+
+  const handleSend = async () => {
+    if (!to) { setError('No recipient email address'); return }
+    if (!subject.trim()) { setError('Please add a subject line'); return }
+    setSending(true)
+    setError(null)
+    try {
+      const bookingId = booking.id || booking['Record Id']
+      const rawLodge = booking.Lodge_Name || booking.Name || ''
+      const lodgeName = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
+      const res = await fetch('/api/send-enquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to,
+          subject: subject.trim(),
+          body: body.trim(),
+          booking_ids: [bookingId],
+          tour_name: tourName,
+          lodge_name: lodgeName,
+          sender,
+        }),
+      })
+      const d = await res.json()
+      if (!d.email_sent) throw new Error(d.email_error || d.error || 'Send failed')
+      onSent()
+    } catch (e) {
+      setError(e.message)
+      setSending(false)
+    }
+  }
+
+  const inputStyle = {
+    width: '100%', fontSize: 12, padding: '5px 8px',
+    border: '0.5px solid var(--border-default)', borderRadius: 3,
+    background: 'var(--bg-primary)', color: 'var(--text-primary)',
+    fontFamily: 'var(--font-sans)', boxSizing: 'border-box',
+  }
+
+  return (
+    <div style={{
+      margin: '0 16px 8px', padding: '14px 16px',
+      background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)',
+      border: '0.5px solid var(--border-default)',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>New email</span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {/* Sender toggle */}
+          <div style={{ display: 'flex', border: '0.5px solid var(--border-default)', borderRadius: 3, overflow: 'hidden' }}>
+            {['Helen', 'Andrew'].map(s => (
+              <button key={s} onClick={() => onSenderChange(s)} style={{
+                fontSize: 10, padding: '2px 10px', border: 'none', cursor: 'pointer',
+                background: sender === s ? 'var(--blue-bg)' : 'transparent',
+                color: sender === s ? 'var(--blue-text)' : 'var(--text-secondary)',
+                fontWeight: sender === s ? 600 : 400,
+              }}>{s}</button>
+            ))}
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, lineHeight: 1, padding: '0 2px' }}>×</button>
+        </div>
+      </div>
+
+      {/* To */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 48, flexShrink: 0 }}>To</span>
+        <input
+          value={to}
+          onChange={e => setTo(e.target.value)}
+          placeholder="recipient@lodge.com"
+          style={inputStyle}
+        />
+      </div>
+
+      {/* Subject */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 48, flexShrink: 0 }}>Subject</span>
+        <input
+          value={subject}
+          onChange={e => setSubject(e.target.value)}
+          placeholder="Email subject"
+          style={inputStyle}
+        />
+      </div>
+
+      {/* Body */}
+      <textarea
+        value={body}
+        onChange={e => setBody(e.target.value)}
+        rows={10}
+        style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6, padding: '8px' }}
+      />
+
+      {error && (
+        <div style={{ fontSize: 11, color: 'var(--red-text)', marginTop: 6 }}>{error}</div>
+      )}
+
+      {/* Footer */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 8 }}>
+        <button onClick={onClose} className="btn btn-sm">Cancel</button>
+        <button
+          onClick={handleSend}
+          disabled={sending}
+          className="btn btn-primary"
+          style={{ fontSize: 11, padding: '4px 14px' }}
+        >{sending ? 'Sending…' : 'Send'}</button>
+      </div>
+    </div>
   )
 }
