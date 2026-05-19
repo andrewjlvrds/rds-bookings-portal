@@ -1495,12 +1495,28 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                       <td></td>
                       <td></td>
                       <td style={{ paddingLeft: 20 }}>
-                        <span style={{
-                          fontSize: 9, padding: '1px 5px', borderRadius: 3, marginRight: 6,
-                          background: typeColor.bg, color: typeColor.color,
-                          border: '0.5px solid ' + typeColor.border,
-                          fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase',
-                        }}>{sbType}</span>
+                        <select
+                          value={sbType}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => {
+                            e.stopPropagation()
+                            fetch('/api/update-bookings', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ booking_ids: [sbId], updates: { Booking_Type: e.target.value } }),
+                            }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1500) })
+                          }}
+                          style={{
+                            fontSize: 9, padding: '1px 4px', borderRadius: 3,
+                            background: typeColor.bg, color: typeColor.color,
+                            border: '0.5px solid ' + typeColor.border,
+                            fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >
+                          <option value="Guest">Guest</option>
+                          <option value="Guide">Guide</option>
+                          <option value="Excursion">Excursion</option>
+                        </select>
                       </td>
                       <td>
                         <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{sbLodge}</div>
