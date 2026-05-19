@@ -16,6 +16,7 @@ import PlannerDashboard from './components/PlannerDashboard'
 import NewTour from './components/NewTour'
 import Inbox from './components/Inbox'
 import ActivityLog from './components/ActivityLog'
+import GmailImport from './components/GmailImport'
 import './styles/global.css'
 
 const API = ''
@@ -364,6 +365,10 @@ export default function App() {
           onSelectBooking={(bk) => handleSelectBooking(bk, 'correspondence')}
         />
       )
+    }
+
+    if (activeView === 'gmail-import') {
+      return <GmailImport tours={tours} />
     }
 
     if (activeView === 'payments') {

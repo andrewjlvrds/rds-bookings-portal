@@ -37,7 +37,7 @@ export function categorizeTours(tours) {
 }
 
 const PLANNER_VIEWS = ['dashboard', 'itinerary', 'edit-itinerary', 'enquiry-preview']
-const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'lodges', 'tour-panel', 'inbox', 'activity-log']
+const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'lodges', 'tour-panel', 'inbox', 'activity-log', 'gmail-import']
 const GUEST_VIEWS = ['guest-dashboard', 'guest-tour', 'guest-detail', 'transfers', 'guest-excursions', 'guest-accommodation', 'guest-payments', 'guest-bikes']
 
 function getSection(activeView) {
@@ -175,6 +175,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
             onClick={() => { onSelectTour(null); onSelectView('activity-log') }}
           />
           <NavItem label="Payments" active={activeView === 'payments'} onClick={() => { onSelectTour(null); onSelectView('payments') }} />
+          <NavItem label="Gmail import" active={activeView === 'gmail-import'} onClick={() => { onSelectTour(null); onSelectView('gmail-import') }} />
         </div>
       )}
 
