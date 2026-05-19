@@ -473,6 +473,7 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
               <th style={{ textAlign: 'right' }}>Amount</th>
               <th>Ccy</th>
               <th>Status</th>
+              <th>Stage</th>
               <th></th>
             </tr>
           </thead>
@@ -580,6 +581,9 @@ export default function Payments({ allBookings, tours, onSelectBooking, onRefres
                   )}
                 </td>
                 <td style={{ fontSize: 12 }}>{p.currency}</td>
+                <td>
+                  <PaymentStageCell bookingId={p.bookingId} value={p.paymentStage} />
+                </td>
                 <td>
                   {p.statusKey === 'paid' ? (
                     <span
@@ -794,6 +798,7 @@ function extractPayments(bookings, now) {
         dueDate: ps.dueDate, amount: amt,
         paidDate: ps.paidDate, paidAmount: ps.paidAmount,
         paymentNote: bk.Payment_Note || '',
+        paymentStage: bk.Payment_Stage || '',
         statusKey, statusLabel,
       })
     })
@@ -808,4 +813,47 @@ function extractPayments(bookings, now) {
   })
 
   return payments
+}
+
+// Inline editable Payment_Stage cell
+function PaymentStageCell({ bookingId, value }) {
+  const [stage, setStage] = React.useState(value || '')
+  const [saving, setSaving] = React.useState(false)
+
+  const STAGES = ['', 'OBE for Auth', 'OBE for Quote', 'Quote Received']
+
+  const handleChange = async (newStage) => {
+    setStage(newStage)
+    setSaving(true)
+    try {
+      await fetch('/api/bp-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: bookingId, Payment_Stage: newStage || null }),
+      })
+    } catch (e) {
+      console.error('Stage save failed:', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <select
+      value={stage}
+      onChange={e => handleChange(e.target.value)}
+      disabled={saving}
+      style={{
+        fontSize: 11, padding: '2px 4px',
+        border: stage ? '0.5px solid var(--border-default)' : 'none',
+        borderRadius: 3, background: 'transparent',
+        color: stage ? 'var(--text-primary)' : 'var(--text-muted)',
+        cursor: 'pointer', maxWidth: 130,
+      }}
+    >
+      {STAGES.map(s => (
+        <option key={s} value={s}>{s || '—'}</option>
+      ))}
+    </select>
+  )
 }
