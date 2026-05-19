@@ -2,8 +2,9 @@ import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
 import { generateSubject, generateEnquiryEmail, generateConfirmationEmail } from '../utils/emailTemplates'
 import PortalSync from './PortalSync'
+import RoutingPicker from './RoutingPicker'
 
-export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh, initialSubTab }) {
+export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh, initialSubTab, tours }) {
   const [activeTab, setActiveTab] = useState(initialSubTab === 'correspondence' ? 'correspondence' : 'bookings')
   const [marking, setMarking] = useState(false)
   const [editing, setEditing] = useState(null) // { id, field, value }
@@ -508,7 +509,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
       {activeTab === 'portal-sync' && <PortalSync tour={tour} />}
 
       {(activeTab === 'correspondence' || initialSubTab === 'correspondence') && activeTab === 'correspondence' && (
-        <TourInbox tour={tour} sorted={sorted} onSelectBooking={onSelectBooking} getStatus={getStatus} getStatusBadge={getStatusBadge} />
+        <TourInbox tour={tour} sorted={sorted} onSelectBooking={onSelectBooking} tours={tours} />
       )}
 
       {(activeTab === 'bookings' || (!activeTab || activeTab === 'bookings')) && <>
@@ -1789,12 +1790,13 @@ function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefre
 // Conversation-grouped view: one row per booking/lodge, showing thread summary.
 // Click row to expand full thread inline. View button opens booking detail.
 
-function TourInbox({ tour, sorted, onSelectBooking }) {
+function TourInbox({ tour, sorted, onSelectBooking, tours }) {
   const [allEmails, setAllEmails] = React.useState(null)
   const [loading, setLoading] = React.useState(true)
   const [expanded, setExpanded] = React.useState({}) // bookingId → bool
   const [threadCache, setThreadCache] = React.useState({}) // bookingId → emails[]
   const [expandedEmail, setExpandedEmail] = React.useState({}) // emailId → bool
+  const [routingEmail, setRoutingEmail] = React.useState(null) // { email, bookingId }
 
   // Build booking map
   const bookingMap = React.useMemo(() => {
@@ -1844,10 +1846,36 @@ function TourInbox({ tour, sorted, onSelectBooking }) {
     }
   }
 
+  const handleReroute = async (newBookingId) => {
+    if (!routingEmail) return
+    const sourcePath = routingEmail.email._blob_path || ('emails/booking/' + routingEmail.bookingId + '/' + (routingEmail.email.id || routingEmail.email.gmail_message_id) + '.json')
+    try {
+      const r = await fetch('/api/email-route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_path: sourcePath, booking_id: newBookingId }),
+      })
+      const d = await r.json()
+      if (!d.success) throw new Error(d.error || 'Route failed')
+      setRoutingEmail(null)
+      // Remove from thread cache
+      setThreadCache(prev => {
+        const next = { ...prev }
+        if (next[routingEmail.bookingId]) {
+          next[routingEmail.bookingId] = next[routingEmail.bookingId].filter(e => e.id !== routingEmail.email.id)
+        }
+        return next
+      })
+    } catch (e) {
+      alert('Could not reroute: ' + e.message)
+    }
+  }
+
   if (loading) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
   if (!conversations.length) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>No emails found for this tour.</div>
 
   return (
+    <>
     <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
       {conversations.map(([bookingId, summaries], ci) => {
         const bk = bookingMap[bookingId]
@@ -1913,25 +1941,35 @@ function TourInbox({ tour, sorted, onSelectBooking }) {
                   const from = (em.from || '').split('<')[0].trim() || em.from || ''
                   const body = em.body || em.email_content || ''
 
+                  const bodyText = body.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
                   return (
                     <div key={emId} style={{ borderBottom: ei < thread.length - 1 ? '0.5px solid var(--border-light)' : 'none' }}>
-                      <div
-                        onClick={() => setExpandedEmail(prev => ({ ...prev, [emId]: !isEmailOpen }))}
-                        style={{ display: 'grid', gridTemplateColumns: '32px 1fr auto', alignItems: 'center', gap: 8, padding: '8px 14px 8px 32px', cursor: 'pointer' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary, var(--bg-secondary))'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <span style={{ fontSize: 10, color: isInbound ? 'var(--green-text)' : 'var(--blue-text)', fontWeight: 500 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px 8px 32px' }}>
+                        <span style={{ fontSize: 10, color: isInbound ? 'var(--green-text)' : 'var(--blue-text)', fontWeight: 500, flexShrink: 0, width: 32 }}>
                           {isInbound ? '↙ In' : '↗ Out'}
                         </span>
-                        <div style={{ overflow: 'hidden' }}>
+                        <div
+                          onClick={() => setExpandedEmail(prev => ({ ...prev, [emId]: !isEmailOpen }))}
+                          style={{ flex: 1, cursor: 'pointer', overflow: 'hidden', minWidth: 0 }}
+                        >
                           <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{em.subject || '(no subject)'}</span>
+                          {!isEmailOpen && bodyText && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
+                              {bodyText.slice(0, 100)}{bodyText.length > 100 ? '…' : ''}
+                            </span>
+                          )}
                         </div>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{emDate}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{emDate}</span>
+                        {isInbound && tours && (
+                          <button
+                            onClick={e => { e.stopPropagation(); setRoutingEmail({ email: em, bookingId }) }}
+                            style={{ fontSize: 10, padding: '2px 6px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0 }}
+                          >Reroute</button>
+                        )}
                       </div>
                       {isEmailOpen && body && (
                         <div style={{ padding: '8px 14px 12px 64px', fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto', background: 'var(--bg-primary)' }}>
-                          {body.replace(/<[^>]+>/g, '').trim()}
+                          {bodyText}
                         </div>
                       )}
                     </div>
@@ -1943,5 +1981,15 @@ function TourInbox({ tour, sorted, onSelectBooking }) {
         )
       })}
     </div>
+    {routingEmail && (
+      <RoutingPicker
+        email={routingEmail.email}
+        tours={tours}
+        currentBookingId={routingEmail.bookingId}
+        onCancel={() => setRoutingEmail(null)}
+        onRoute={handleReroute}
+      />
+    )}
+    </>
   )
 }

@@ -509,6 +509,7 @@ export default function App() {
         <TourPanel
           tour={activeTour}
           lodges={lodges}
+          tours={tours}
           initialTab={returnToTourTab}
           onSelectBooking={handleSelectBooking}
           onEditItinerary={() => setActiveView('edit-itinerary')}
@@ -526,6 +527,7 @@ export default function App() {
         <TourPanel
           tour={activeTour}
           lodges={lodges}
+          tours={tours}
           initialTab="itinerary"
           onSelectBooking={handleSelectBooking}
           onEditItinerary={() => setActiveView('edit-itinerary')}

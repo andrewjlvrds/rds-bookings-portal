@@ -16,6 +16,7 @@ import { fmtDate } from '../utils/helpers'
 export default function TourPanel({
   tour,
   lodges,
+  tours,
   initialTab,
   onSelectBooking,
   onEditItinerary,
@@ -165,6 +166,7 @@ export default function TourPanel({
         <Itinerary
           tour={tour}
           lodges={lodges}
+          tours={tours}
           onSelectBooking={(bk) => onSelectBooking(bk, 'itinerary')}
           onEditItinerary={onEditItinerary}
           onDeleteTour={onDeleteTour}
@@ -178,6 +180,7 @@ export default function TourPanel({
         <Itinerary
           tour={tour}
           lodges={lodges}
+          tours={tours}
           onSelectBooking={(bk) => onSelectBooking(bk, 'itinerary')}
           onEditItinerary={onEditItinerary}
           onDeleteTour={onDeleteTour}
