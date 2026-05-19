@@ -772,6 +772,26 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
               {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
             </span>
+            {emails.some(e => !e.body && !e.email_content) && (
+              <button
+                className="btn btn-sm"
+                onClick={async () => {
+                  const stale = emails.filter(e => !e.body && !e.email_content)
+                  for (const em of stale) {
+                    try {
+                      await fetch('/api/delete-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ booking_id: bookingId, email_id: em.id }),
+                      })
+                    } catch (err) { console.error('Delete failed:', err) }
+                  }
+                  fetchEmails()
+                }}
+                style={{ fontSize: 11, padding: '3px 8px', color: 'var(--amber-text, #92400E)', border: '0.5px solid var(--amber-border, #F59E0B)', borderRadius: 3, background: 'var(--amber-bg, #FFFBEB)', cursor: 'pointer' }}
+                title="Delete all emails with no content (stale index entries)"
+              >Clear stale ({emails.filter(e => !e.body && !e.email_content).length})</button>
+            )}
           </div>
         </div>
         <div className="panel-body" style={{ padding: 0 }}>
@@ -788,11 +808,43 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
           {/* Gmail search results */}
           {gmailResults.length > 0 && (
             <div style={{ borderTop: '1px solid var(--border-default)' }}>
-              <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, background: 'var(--bg-secondary)' }}>
-                Gmail results ({gmailResults.length})
+              <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>Gmail results ({gmailResults.length})</span>
+                <button
+                  onClick={async () => {
+                    for (const gm of gmailResults) {
+                      const isFromUs = (gm.from || '').indexOf('ridedownsouth.com') > -1
+                      const rawBody = gm.body || ''
+                      const body = looksLikeRawHtml(rawBody) ? cleanEmailBody(rawBody) : rawBody
+                      try {
+                        await fetch('/api/import-email', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            message_id: gm.gmail_id,
+                            booking_id: bookingId,
+                            type: isFromUs ? 'outbound' : 'lodge_reply',
+                            direction: isFromUs ? 'outbound' : 'inbound',
+                            email_from: gm.from || '',
+                            email_to: gm.to || '',
+                            email_subject: gm.subject || '',
+                            email_content: body,
+                            email_date: gm.date || '',
+                            attachments: gm.attachments || [],
+                            import_source: 'gmail_search',
+                          }),
+                        })
+                      } catch (err) { console.error('Import failed for', gm.gmail_id, err) }
+                    }
+                    setGmailResults([])
+                    fetchEmails()
+                    if (onRefresh) onRefresh()
+                  }}
+                  style={{ fontSize: 11, padding: '2px 8px', border: '0.5px solid var(--blue-mid)', borderRadius: 3, background: 'var(--blue-bg)', cursor: 'pointer', color: 'var(--blue-text)' }}
+                >Import all</button>
                 <button
                   onClick={() => setGmailResults([])}
-                  style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11 }}
                 >Clear</button>
               </div>
               {lastDismissed && (
