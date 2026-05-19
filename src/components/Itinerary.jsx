@@ -934,7 +934,10 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                   <td style={{ fontVariantNumeric: 'tabular-nums' }}>{nightNum}</td>
                   <td>{fmtDate(checkIn)}</td>
                   <td>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{route}</div>
+                    <div
+                      onClick={() => onSelectBooking(bk)}
+                      style={{ fontSize: 13, color: 'var(--blue-text)', cursor: 'pointer', display: 'inline-block', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+                    >{route || '—'}</div>
                     {bk._km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{bk._km} km</div>}
                     {bk._route_notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 1 }}>{bk._route_notes}</div>}
                     {bk.Booking_Notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>{bk.Booking_Notes}</div>}
@@ -1355,12 +1358,10 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                     <tr
                       key={'fb-' + fbId}
                       style={{
-                        cursor: 'pointer',
                         borderLeft: '3px solid #f59e0b',
                         background: 'rgba(245,158,11,0.04)',
                         fontSize: 12,
                       }}
-
                     >
                       <td></td>
                       <td></td>
