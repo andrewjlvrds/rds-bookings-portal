@@ -392,40 +392,17 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
     })
     if (!isDuplicate) dateBookings[d].push(bk)
   })
-  // Mark which bookings are alternatives (fallback) — manual tags take priority
-  const statusPriority = { 'Confirmed': 10, 'Balance Paid': 10, 'Deposit Paid': 9, 'Proforma Received': 8, 'Availability Confirmed': 7, 'Available': 6, 'Enquiry Sent': 5, 'Ready to Send': 4, 'Not Started': 3, 'Waitlisted': 2, 'Not Available': 1, 'Cancelled': 0 }
-  const alternativeSet = new Set() // booking IDs that are fallback
+  // Lodge priority — Option 1 (or blank) = primary, Option 2/3/4 = alternatives
+  // Guide/Excursion bookings are sub-items and never treated as alternatives
+  const priorityOrder = { 'Option 1': 1, 'Option 2': 2, 'Option 3': 3, 'Option 4': 4 }
+  const alternativeSet = new Set() // booking IDs that are option 2/3/4
 
-  // First pass: manual FALLBACK tags
-  const manualFallbackIds = new Set()
   merged.forEach(bk => {
-    const notes = (bk.Booking_Notes || bk['Booking Notes'] || '').toUpperCase()
-    if (notes.indexOf('FALLBACK') > -1) {
-      const id = bk.id || bk['Record Id']
-      alternativeSet.add(id)
-      manualFallbackIds.add(id)
-    }
-  })
-
-  // Second pass: auto-detect same date, different lodge — but skip dates where a manual tag exists
-  const datesWithManualFallback = new Set()
-  merged.forEach(bk => {
-    if (manualFallbackIds.has(bk.id || bk['Record Id'])) {
-      datesWithManualFallback.add(bk.Check_in_Date || bk['Check-in'] || '')
-    }
-  })
-  Object.entries(dateBookings).forEach(([date, group]) => {
-    if (group.length <= 1) return
-    if (datesWithManualFallback.has(date)) return // manual tag handles this date
-    // Exclude Guide and Excursion bookings — they are sub-items, not fallbacks
-    const guestOnly = group.filter(b => {
-      const t = b.Booking_Type || 'Guest'
-      return t !== 'Guide' && t !== 'Excursion'
-    })
-    if (guestOnly.length <= 1) return
-    const ranked = guestOnly.slice().sort((a, b) => (statusPriority[getStatus(b)] || 0) - (statusPriority[getStatus(a)] || 0))
-    for (let ri = 1; ri < ranked.length; ri++) {
-      alternativeSet.add(ranked[ri].id || ranked[ri]['Record Id'])
+    const p = bk.Lodge_Priority || ''
+    const t = bk.Booking_Type || 'Guest'
+    if (t === 'Guide' || t === 'Excursion') return
+    if (p === 'Option 2' || p === 'Option 3' || p === 'Option 4') {
+      alternativeSet.add(bk.id || bk['Record Id'])
     }
   })
 
@@ -1018,6 +995,38 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                     {bk._backup && (
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Backup: {bk._backup}</div>
                     )}
+                    {/* Lodge priority dropdown — for primary rows */}
+                    {(() => {
+                      const currentPriority = bk.Lodge_Priority || ''
+                      const isDefault = !currentPriority || currentPriority === 'Option 1'
+                      return (
+                        <select
+                          value={currentPriority || 'Option 1'}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => {
+                            e.stopPropagation()
+                            fetch('/api/update-bookings', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ booking_ids: [bk.id || bk['Record Id']], updates: { Lodge_Priority: e.target.value } }),
+                            }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1500) })
+                          }}
+                          style={{
+                            marginTop: 2, fontSize: 9, padding: '1px 2px',
+                            border: isDefault ? 'none' : '0.5px solid #f59e0b',
+                            borderRadius: 3, background: isDefault ? 'transparent' : 'rgba(245,158,11,0.15)',
+                            cursor: 'pointer', color: isDefault ? 'var(--text-muted)' : '#b45309',
+                            fontWeight: isDefault ? 400 : 600,
+                            opacity: isDefault ? 0.4 : 1,
+                          }}
+                        >
+                          <option value="Option 1">Option 1</option>
+                          <option value="Option 2">Option 2</option>
+                          <option value="Option 3">Option 3</option>
+                          <option value="Option 4">Option 4</option>
+                        </select>
+                      )
+                    })()}
                     {/* Booking type dropdown */}
                     {(() => {
                       const currentType = bk.Booking_Type || 'Guest'
@@ -1372,11 +1381,30 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                       <td></td>
                       <td></td>
                       <td style={{ color: 'var(--text-muted)', fontSize: 11, paddingLeft: 16 }}>
-                        <span style={{
-                          fontSize: 9, padding: '1px 5px', borderRadius: 3, marginRight: 6,
-                          background: 'rgba(245,158,11,0.15)', color: '#b45309',
-                          fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase',
-                        }}>Fallback</span>
+                        <select
+                          value={fb.Lodge_Priority || 'Option 2'}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => {
+                            e.stopPropagation()
+                            const val = e.target.value
+                            fetch('/api/update-bookings', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ booking_ids: [fbId], updates: { Lodge_Priority: val } }),
+                            }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1500) })
+                          }}
+                          style={{
+                            fontSize: 9, padding: '1px 4px', borderRadius: 3,
+                            background: 'rgba(245,158,11,0.15)', color: '#b45309',
+                            border: '0.5px solid #f59e0b', fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <option value="Option 1">Option 1</option>
+                          <option value="Option 2">Option 2</option>
+                          <option value="Option 3">Option 3</option>
+                          <option value="Option 4">Option 4</option>
+                        </select>
                       </td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1419,19 +1447,17 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                           <button
                             onClick={e => {
                               e.stopPropagation()
-                              const cleanNotes = (fb.Booking_Notes || fb['Booking Notes'] || '').replace(/\s*FALLBACK\s*/gi, '').trim()
-                              const cleanDesc = (fb.Day_Description || fb['Day Description'] || '').replace(/\s*FALLBACK\s*/gi, '').trim()
                               fetch('/api/update-bookings', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ booking_ids: [fbId], updates: { Booking_Notes: cleanNotes, Day_Description: cleanDesc } }),
+                                body: JSON.stringify({ booking_ids: [fbId], updates: { Lodge_Priority: 'Option 1' } }),
                               }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1500) })
                             }}
                             style={{
                               fontSize: 9, padding: '2px 6px', border: '0.5px solid var(--border-default)',
                               borderRadius: 3, background: 'rgba(245,158,11,0.15)', cursor: 'pointer', color: '#b45309',
                             }}
-                          >✕ Remove fallback</button>
+                          >↑ Make primary</button>
                         </div>
                       </td>
                       <td onClick={e => e.stopPropagation()}>
