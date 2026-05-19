@@ -742,17 +742,6 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
                   // 1. Poll Gmail for new replies
                   await fetch('/api/poll-gmail', { method: 'POST' })
                   // 2. Search Gmail for any emails not yet in blob
-                  if (lodgeEmail) {
-                    const params = new URLSearchParams()
-                    params.set('lodge_email', lodgeEmail)
-                    if (checkIn) params.set('check_in', checkIn)
-                    const sr = await fetch('/api/gmail-search?' + params.toString())
-                    const sdata = await sr.json()
-                    if (sdata.emails) {
-                      const storedIds = new Set(emails.map(e => e.message_id || e.gmail_id || ''))
-                      setGmailResults(sdata.emails.filter(gm => !storedIds.has(gm.gmail_id)))
-                    }
-                  }
                   // 3. Re-parse attachments
                   await fetch('/api/reparse-email', {
                     method: 'POST',
