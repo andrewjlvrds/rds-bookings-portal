@@ -1159,6 +1159,17 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
         <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
           {date ? fmtDate(date) : ''}
         </span>
+        {!isOutbound && tours && email.id && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setReassignError(null); setReassigning(true) }}
+            style={{
+              fontSize: 10, padding: '2px 6px', border: '0.5px solid var(--border-default)',
+              borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer',
+              color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap',
+            }}
+            title="Move this email to a different booking"
+          >Reroute</button>
+        )}
       </div>
       {expanded && (
         <div style={{ padding: '8px 14px 14px 88px' }}>

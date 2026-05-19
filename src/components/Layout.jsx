@@ -128,7 +128,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
           inboxStats={inboxStats}
           unreadCounts={unreadCounts}
         />
-        <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', minWidth: 0 }}>
+        <main style={{ flex: 1, padding: '20px 24px', overflow: 'auto', minWidth: 0, boxSizing: 'border-box' }}>
           {children}
         </main>
       </div>
