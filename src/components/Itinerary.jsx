@@ -508,49 +508,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
       {activeTab === 'portal-sync' && <PortalSync tour={tour} />}
 
       {(activeTab === 'correspondence' || initialSubTab === 'correspondence') && activeTab === 'correspondence' && (
-        <div>
-          {sorted.filter(b => {
-            const dd = b.Day_Description || b['Day Description'] || ''
-            return !(dd.startsWith('Z ') || dd.startsWith('z '))
-          }).slice().sort((a, b) => {
-            // Newest activity first: new replies float to top, then sort by last response date, then check-in date
-            if (a.New_Reply && !b.New_Reply) return -1
-            if (!a.New_Reply && b.New_Reply) return 1
-            const aDate = a.Last_Response_Date || a.Enquiry_Sent_Date || a.Check_in_Date || ''
-            const bDate = b.Last_Response_Date || b.Enquiry_Sent_Date || b.Check_in_Date || ''
-            return bDate.localeCompare(aDate)
-          }).map(b => {
-            const lodge = (b.Lodge_Name && typeof b.Lodge_Name === 'object' ? b.Lodge_Name.name : b.Lodge_Name) || b.Name || '—'
-            const status = getStatus(b)
-            const badge = getStatusBadge(status)
-            const hasNewReply = b.New_Reply === true
-            const lastResponse = b.Last_Response_Date || ''
-            return (
-              <div
-                key={b.id}
-                onClick={() => onSelectBooking(b, 'itinerary', { focusTab: 'correspondence' })}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                  borderBottom: '0.5px solid var(--border-light)', cursor: 'pointer',
-                  background: hasNewReply ? 'var(--blue-bg)' : 'var(--bg-primary)',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-                onMouseLeave={e => e.currentTarget.style.background = hasNewReply ? 'var(--blue-bg)' : 'var(--bg-primary)'}
-              >
-                {hasNewReply && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C62828', flexShrink: 0 }} />}
-                {!hasNewReply && <span style={{ width: 6, flexShrink: 0 }} />}
-                <span style={{ fontSize: 13, fontWeight: hasNewReply ? 600 : 400, color: 'var(--text-primary)', minWidth: 180, flexShrink: 0 }}>{lodge}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {b.Reservation_Comments || b.RDS_Reference || ''}
-                </span>
-                <span style={{
-                  fontSize: 10, padding: '1px 6px', borderRadius: 3, fontWeight: 500, flexShrink: 0,
-                  background: badge.bg, color: badge.color, border: badge.border || 'none',
-                }}>{status}</span>
-              </div>
-            )
-          })}
-        </div>
+        <TourInbox tour={tour} sorted={sorted} onSelectBooking={onSelectBooking} getStatus={getStatus} getStatusBadge={getStatusBadge} />
       )}
 
       {(activeTab === 'bookings' || (!activeTab || activeTab === 'bookings')) && <>
@@ -1823,6 +1781,82 @@ function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefre
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+// ── TourInbox ──────────────────────────────────────────────────────────────
+// Flat list of all emails across all bookings for a tour, newest first.
+// Subject line is the primary info — makes it easy to spot misallocated emails.
+
+function TourInbox({ tour, sorted, onSelectBooking, getStatus, getStatusBadge }) {
+  const [emails, setEmails] = React.useState(null)
+  const [loading, setLoading] = React.useState(true)
+
+  // Build a map from booking_id → booking for lodge name lookup
+  const bookingMap = React.useMemo(() => {
+    const m = {}
+    sorted.forEach(b => { m[b.id || b['Record Id']] = b })
+    return m
+  }, [sorted])
+
+  React.useEffect(() => {
+    const ids = sorted.map(b => b.id || b['Record Id']).filter(Boolean)
+    if (!ids.length) { setLoading(false); return }
+    fetch('/api/bp-tour-emails?booking_ids=' + ids.join(','))
+      .then(r => r.json())
+      .then(d => { setEmails(d.emails || []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [tour.id])
+
+  if (loading) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Loading emails…</div>
+  if (!emails || !emails.length) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>No emails found for this tour.</div>
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '16px 180px 1fr 90px 80px', gap: 0, padding: '6px 14px', borderBottom: '1px solid var(--border-default)', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+        <div></div>
+        <div>Lodge</div>
+        <div>Subject</div>
+        <div style={{ textAlign: 'right' }}>Date</div>
+        <div style={{ textAlign: 'right' }}>Match</div>
+      </div>
+      {emails.map((em, i) => {
+        const bk = bookingMap[em.booking_id]
+        const lodge = bk ? ((bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || bk.Name || '—') : em.booking_id
+        const isInbound = em.direction === 'inbound'
+        const isOutbound = em.direction === 'outbound'
+        const isSuspect = em.match_method && (em.match_method === 'closest_date' || em.match_method.includes('ambiguous') || em.match_method.includes('fallback'))
+        const date = em.date ? new Date(em.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''
+        const matchShort = em.match_method ? em.match_method.replace('sender_email_', '').replace('rds_reference_', 'ref_').replace('check_in_date', 'date').replace('thread_backfill', 'thread') : ''
+
+        return (
+          <div
+            key={em.id || i}
+            onClick={() => bk && onSelectBooking(bk, 'itinerary', { focusTab: 'correspondence' })}
+            style={{
+              display: 'grid', gridTemplateColumns: '16px 180px 1fr 90px 80px', gap: 0,
+              padding: '8px 14px', borderBottom: '0.5px solid var(--border-light)',
+              cursor: bk ? 'pointer' : 'default',
+              background: isSuspect ? 'rgba(245,158,11,0.05)' : 'var(--bg-primary)',
+              fontSize: 12,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = isSuspect ? 'rgba(245,158,11,0.1)' : 'var(--bg-secondary)'}
+            onMouseLeave={e => e.currentTarget.style.background = isSuspect ? 'rgba(245,158,11,0.05)' : 'var(--bg-primary)'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {isInbound && <span style={{ fontSize: 9, color: 'var(--green-text)' }}>↙</span>}
+              {isOutbound && <span style={{ fontSize: 9, color: 'var(--blue-text)' }}>↗</span>}
+            </div>
+            <div style={{ fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lodge}</div>
+            <div style={{ color: isSuspect ? '#b45309' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
+              {isSuspect && <span title="Weak match — may be misallocated" style={{ marginRight: 4 }}>⚠</span>}
+              {em.subject || '(no subject)'}
+            </div>
+            <div style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: 11 }}>{date}</div>
+            <div style={{ color: isSuspect ? '#b45309' : 'var(--text-muted)', textAlign: 'right', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={em.match_method}>{matchShort}</div>
+          </div>
+        )
+      })}
     </div>
   )
 }
