@@ -730,112 +730,153 @@ function timeAgo(date) {
 // Site-wide email search across all stored blobs.
 // Searches by lodge name, sender, subject, or check-in date.
 
+
+// ── EmailSearch ───────────────────────────────────────────────────────────
+// Global email search. Loads full email index once, then filters client-side
+// as you type. Matches tokens against lodge name, tour name, check-in date,
+// subject, and sender — so "desert sands 30 may bon 26" works naturally.
+
 function EmailSearch({ allBookings, tours, onSelectBooking }) {
   const [query, setQuery] = React.useState('')
-  const [results, setResults] = React.useState(null)
-  const [loading, setLoading] = React.useState(false)
+  const [index, setIndex] = React.useState(null)   // full email metadata array
+  const [indexLoading, setIndexLoading] = React.useState(false)
+  const [indexError, setIndexError] = React.useState(null)
 
-  // Build booking lookup map
+  // Build booking lookup enriched with lodge name, tour name, check-in
   const bookingMap = React.useMemo(() => {
     const m = {}
-    allBookings.forEach(b => { m[b.id || b['Record Id']] = b })
+    allBookings.forEach(b => {
+      const id = b.id || b['Record Id']
+      if (!id) return
+      const lodge = ((b.Lodge_Name && typeof b.Lodge_Name === 'object'
+        ? b.Lodge_Name.name : b.Lodge_Name) || b.Name || '').split(' - ')[0]
+      const tourName = b.Tour && typeof b.Tour === 'object' ? b.Tour.name : (b.Tour || '')
+      const checkIn = b.Check_in_Date || b['Check-in'] || ''
+      m[id] = { booking: b, lodge, tourName, checkIn }
+    })
     return m
   }, [allBookings])
 
-  const handleSearch = async () => {
-    if (!query.trim()) return
-    setLoading(true)
-    setResults(null)
-    try {
-      const r = await fetch('/api/email-search?q=' + encodeURIComponent(query.trim()))
-      const d = await r.json()
-      setResults(d.results || [])
-    } catch (e) {
-      setResults([])
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Load index on mount
+  React.useEffect(() => {
+    setIndexLoading(true)
+    fetch('/api/email-search?q=*')
+      .then(r => r.json())
+      .then(d => { setIndex(d.results || []); setIndexLoading(false) })
+      .catch(e => { setIndexError(e.message); setIndexLoading(false) })
+  }, [])
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') handleSearch()
-  }
+  // Client-side filtering — split query into tokens, all must match
+  const results = React.useMemo(() => {
+    if (!index || !query.trim()) return null
+    const tokens = query.toLowerCase().trim().split(/\s+/).filter(t => t.length > 1)
+    if (!tokens.length) return null
+
+    return index.filter(em => {
+      const meta = bookingMap[em.booking_id] || {}
+      const searchable = [
+        em.subject || '',
+        em.from || '',
+        em.date || '',
+        meta.lodge || '',
+        meta.tourName || '',
+        meta.checkIn || '',
+      ].join(' ').toLowerCase()
+
+      return tokens.every(t => searchable.includes(t))
+    }).slice(0, 50)
+  }, [index, query, bookingMap])
+
+  const inputRef = React.useRef(null)
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      {/* Search input */}
+      <div style={{ marginBottom: 16, position: 'relative' }}>
         <input
+          ref={inputRef}
           value={query}
           onChange={e => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Search by lodge name, sender, subject, date (e.g. Bahnhof, 2026-05-28, RE: Invoice)…"
+          placeholder="e.g. desert sands 30 may bon 26"
+          autoFocus
           style={{
-            flex: 1, fontSize: 13, padding: '7px 12px',
+            width: '100%', fontSize: 13, padding: '8px 12px',
             border: '0.5px solid var(--border-default)', borderRadius: 4,
             background: 'var(--bg-primary)', color: 'var(--text-primary)',
-            fontFamily: 'var(--font-sans)',
+            fontFamily: 'var(--font-sans)', boxSizing: 'border-box',
           }}
-          autoFocus
         />
-        <button
-          onClick={handleSearch}
-          disabled={loading || !query.trim()}
-          className="btn btn-primary"
-          style={{ padding: '7px 16px', fontSize: 12 }}
-        >{loading ? 'Searching…' : 'Search'}</button>
+        {indexLoading && (
+          <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-muted)' }}>
+            Loading index…
+          </span>
+        )}
       </div>
 
-      {results === null && (
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '20px 0' }}>
-          Search across all stored emails. Matches on subject, sender, lodge name, or date.
+      {indexError && (
+        <div style={{ fontSize: 12, color: 'var(--red-text)', marginBottom: 12 }}>Could not load email index: {indexError}</div>
+      )}
+
+      {!query.trim() && !indexLoading && (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          {index ? `${index.length} emails indexed. ` : ''}
+          Type any combination of lodge name, tour, date or subject.
         </div>
       )}
 
-      {results && results.length === 0 && (
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '20px 0' }}>No emails found for "{query}".</div>
+      {results && results.length === 0 && query.trim() && (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No emails found for "{query}".</div>
       )}
 
       {results && results.length > 0 && (
         <div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{results.length} result{results.length !== 1 ? 's' : ''}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+            {results.length}{results.length === 50 ? '+' : ''} result{results.length !== 1 ? 's' : ''}
+          </div>
           <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
             {results.map((em, i) => {
-              const bk = bookingMap[em.booking_id]
-              const lodge = bk
-                ? ((bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || bk.Name || '—').split(' - ')[0]
-                : '—'
-              const tourName = bk?.Tour && typeof bk.Tour === 'object' ? bk.Tour.name : (bk?.Tour || '')
-              const date = em.date ? new Date(em.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : ''
+              const meta = bookingMap[em.booking_id] || {}
+              const { booking, lodge, tourName, checkIn } = meta
+              const date = em.date
+                ? new Date(em.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
+                : ''
               const isInbound = em.direction === 'inbound'
+              const from = (em.from || '').split('<')[0].trim() || em.from || ''
 
               return (
                 <div
                   key={i}
-                  onClick={() => bk && onSelectBooking(bk, em.id)}
+                  onClick={() => booking && onSelectBooking(booking, em.id)}
                   style={{
-                    display: 'grid', gridTemplateColumns: '50px 160px 1fr auto',
-                    alignItems: 'center', gap: 12, padding: '10px 14px',
+                    display: 'grid',
+                    gridTemplateColumns: '44px 170px 1fr 70px',
+                    alignItems: 'center', gap: 10, padding: '9px 14px',
                     borderBottom: i < results.length - 1 ? '0.5px solid var(--border-light)' : 'none',
-                    cursor: bk ? 'pointer' : 'default',
-                    background: 'var(--bg-primary)',
+                    cursor: booking ? 'pointer' : 'default',
                   }}
-                  onMouseEnter={e => { if (bk) e.currentTarget.style.background = 'var(--bg-secondary)' }}
-                  onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-primary)'}
+                  onMouseEnter={e => { if (booking) e.currentTarget.style.background = 'var(--bg-secondary)' }}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}
                 >
                   <span style={{ fontSize: 10, fontWeight: 600, color: isInbound ? 'var(--green-text)' : 'var(--blue-text)' }}>
                     {isInbound ? '↙ In' : '↗ Out'}
                   </span>
                   <div style={{ overflow: 'hidden' }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lodge}</div>
-                    {tourName && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tourName}</div>}
-                  </div>
-                  <div style={{ overflow: 'hidden' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{em.subject || '(no subject)'}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {(em.from || '').split('<')[0].trim() || em.from}
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {lodge || '—'}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {tourName}{checkIn ? ' · ' + checkIn : ''}
                     </div>
                   </div>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{date}</span>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {em.subject || '(no subject)'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {from}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', whiteSpace: 'nowrap' }}>{date}</span>
                 </div>
               )
             })}

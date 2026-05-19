@@ -72,15 +72,17 @@ export default async function handler(req, res) {
   try {
     const emails = await getAllEmailMeta();
 
+    // q=* returns the full index for client-side filtering
+    if (q === '*') {
+      return res.status(200).json({ results: emails, total: emails.length });
+    }
+
+    const tokens = q.split(/\s+/).filter(t => t.length > 1);
     const results = emails.filter(em => {
-      const subject = (em.subject || '').toLowerCase();
-      const from = (em.from || '').toLowerCase();
-      const date = (em.date || '').toLowerCase();
-      const bookingId = (em.booking_id || '').toLowerCase();
-      return subject.includes(q) || from.includes(q) || date.includes(q) || bookingId.includes(q);
+      const searchable = [em.subject, em.from, em.date, em.booking_id].join(' ').toLowerCase();
+      return tokens.every(t => searchable.includes(t));
     });
 
-    // Sort newest first
     results.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
     return res.status(200).json({ results: results.slice(0, 100), total: results.length });
