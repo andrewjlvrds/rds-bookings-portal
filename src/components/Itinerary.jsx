@@ -1784,76 +1784,166 @@ function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefre
     </div>
   )
 }
+
 // ── TourInbox ──────────────────────────────────────────────────────────────
-// Flat list of all emails across all bookings for a tour, newest first.
-// Subject line is the primary info — makes it easy to spot misallocated emails.
+// Conversation-grouped view: one row per booking/lodge, showing thread summary.
+// Click row to expand full thread inline. View button opens booking detail.
 
-function TourInbox({ tour, sorted, onSelectBooking, getStatus, getStatusBadge }) {
-  const [emails, setEmails] = React.useState(null)
+function TourInbox({ tour, sorted, onSelectBooking }) {
+  const [allEmails, setAllEmails] = React.useState(null)
   const [loading, setLoading] = React.useState(true)
+  const [expanded, setExpanded] = React.useState({}) // bookingId → bool
+  const [threadCache, setThreadCache] = React.useState({}) // bookingId → emails[]
+  const [expandedEmail, setExpandedEmail] = React.useState({}) // emailId → bool
 
-  // Build a map from booking_id → booking for lodge name lookup
+  // Build booking map
   const bookingMap = React.useMemo(() => {
     const m = {}
     sorted.forEach(b => { m[b.id || b['Record Id']] = b })
     return m
   }, [sorted])
 
+  // Load all email summaries for the tour upfront
   React.useEffect(() => {
     const ids = sorted.map(b => b.id || b['Record Id']).filter(Boolean)
     if (!ids.length) { setLoading(false); return }
     fetch('/api/bp-tour-emails?booking_ids=' + ids.join(','))
       .then(r => r.json())
-      .then(d => { setEmails(d.emails || []); setLoading(false) })
+      .then(d => { setAllEmails(d.emails || []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [tour.id])
 
-  if (loading) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Loading emails…</div>
-  if (!emails || !emails.length) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>No emails found for this tour.</div>
+  // Group emails by booking_id, newest first per group
+  const conversations = React.useMemo(() => {
+    if (!allEmails) return []
+    const groups = {}
+    allEmails.forEach(em => {
+      if (!groups[em.booking_id]) groups[em.booking_id] = []
+      groups[em.booking_id].push(em)
+    })
+    // Sort each group newest first
+    Object.values(groups).forEach(g => g.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)))
+    // Sort conversations by most recent email
+    return Object.entries(groups).sort((a, b) => {
+      const aDate = a[1][0] ? new Date(a[1][0].date || 0) : 0
+      const bDate = b[1][0] ? new Date(b[1][0].date || 0) : 0
+      return bDate - aDate
+    })
+  }, [allEmails])
+
+  const toggleExpand = async (bookingId) => {
+    const isOpen = expanded[bookingId]
+    setExpanded(prev => ({ ...prev, [bookingId]: !isOpen }))
+    // Load full thread if not cached
+    if (!isOpen && !threadCache[bookingId]) {
+      try {
+        const r = await fetch('/api/bp-emails?booking_id=' + bookingId)
+        const d = await r.json()
+        setThreadCache(prev => ({ ...prev, [bookingId]: d.emails || [] }))
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  if (loading) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+  if (!conversations.length) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>No emails found for this tour.</div>
 
   return (
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '16px 180px 1fr 90px 80px', gap: 0, padding: '6px 14px', borderBottom: '1px solid var(--border-default)', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
-        <div></div>
-        <div>Lodge</div>
-        <div>Subject</div>
-        <div style={{ textAlign: 'right' }}>Date</div>
-        <div style={{ textAlign: 'right' }}>Match</div>
-      </div>
-      {emails.map((em, i) => {
-        const bk = bookingMap[em.booking_id]
-        const lodge = bk ? ((bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || bk.Name || '—') : em.booking_id
-        const isInbound = em.direction === 'inbound'
-        const isOutbound = em.direction === 'outbound'
-        const isSuspect = em.match_method && (em.match_method === 'closest_date' || em.match_method.includes('ambiguous') || em.match_method.includes('fallback'))
-        const date = em.date ? new Date(em.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''
-        const matchShort = em.match_method ? em.match_method.replace('sender_email_', '').replace('rds_reference_', 'ref_').replace('check_in_date', 'date').replace('thread_backfill', 'thread') : ''
+    <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+      {conversations.map(([bookingId, summaries], ci) => {
+        const bk = bookingMap[bookingId]
+        const lodge = bk
+          ? ((bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || bk.Name || '—')
+          : bookingId
+        const latest = summaries[0]
+        const hasNewReply = bk && bk.New_Reply === true
+        const count = summaries.length
+        const isOpen = expanded[bookingId]
+        const thread = threadCache[bookingId]
+        const date = latest && latest.date
+          ? new Date(latest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+          : ''
 
         return (
-          <div
-            key={em.id || i}
-            onClick={() => bk && onSelectBooking(bk, 'itinerary', { focusTab: 'correspondence' })}
-            style={{
-              display: 'grid', gridTemplateColumns: '16px 180px 1fr 90px 80px', gap: 0,
-              padding: '8px 14px', borderBottom: '0.5px solid var(--border-light)',
-              cursor: bk ? 'pointer' : 'default',
-              background: isSuspect ? 'rgba(245,158,11,0.05)' : 'var(--bg-primary)',
-              fontSize: 12,
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = isSuspect ? 'rgba(245,158,11,0.1)' : 'var(--bg-secondary)'}
-            onMouseLeave={e => e.currentTarget.style.background = isSuspect ? 'rgba(245,158,11,0.05)' : 'var(--bg-primary)'}
-          >
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              {isInbound && <span style={{ fontSize: 9, color: 'var(--green-text)' }}>↙</span>}
-              {isOutbound && <span style={{ fontSize: 9, color: 'var(--blue-text)' }}>↗</span>}
+          <div key={bookingId} style={{ borderBottom: ci < conversations.length - 1 ? '0.5px solid var(--border-light)' : 'none' }}>
+            {/* Conversation row */}
+            <div
+              onClick={() => toggleExpand(bookingId)}
+              style={{
+                display: 'grid', gridTemplateColumns: '24px 1fr auto auto auto',
+                alignItems: 'center', gap: 10, padding: '10px 14px',
+                cursor: 'pointer', background: isOpen ? 'var(--bg-secondary)' : hasNewReply ? 'var(--blue-bg)' : 'var(--bg-primary)',
+              }}
+              onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = 'var(--bg-secondary)' }}
+              onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = hasNewReply ? 'var(--blue-bg)' : 'var(--bg-primary)' }}
+            >
+              <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
+                {hasNewReply
+                  ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#C62828', display: 'inline-block' }} />
+                  : <span style={{ color: 'var(--text-muted)' }}>{isOpen ? '▾' : '▸'}</span>
+                }
+              </div>
+              <div>
+                <span style={{ fontWeight: hasNewReply ? 600 : 500, fontSize: 13, color: 'var(--text-primary)' }}>{lodge}</span>
+                <span style={{ marginLeft: 10, fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {latest ? latest.subject || '(no subject)' : ''}
+                </span>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{count} email{count !== 1 ? 's' : ''}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{date}</span>
+              <button
+                onClick={e => { e.stopPropagation(); bk && onSelectBooking(bk, 'itinerary', { focusTab: 'correspondence' }) }}
+                style={{ fontSize: 11, padding: '2px 8px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)' }}
+              >View</button>
             </div>
-            <div style={{ fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lodge}</div>
-            <div style={{ color: isSuspect ? '#b45309' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
-              {isSuspect && <span title="Weak match — may be misallocated" style={{ marginRight: 4 }}>⚠</span>}
-              {em.subject || '(no subject)'}
-            </div>
-            <div style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: 11 }}>{date}</div>
-            <div style={{ color: isSuspect ? '#b45309' : 'var(--text-muted)', textAlign: 'right', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={em.match_method}>{matchShort}</div>
+
+            {/* Expanded thread */}
+            {isOpen && (
+              <div style={{ background: 'var(--bg-secondary)', borderTop: '0.5px solid var(--border-light)' }}>
+                {!thread && (
+                  <div style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)' }}>Loading thread…</div>
+                )}
+                {thread && thread.length === 0 && (
+                  <div style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)' }}>No emails stored for this booking.</div>
+                )}
+                {thread && thread.map((em, ei) => {
+                  const emId = em.id || ei
+                  const isEmailOpen = expandedEmail[emId]
+                  const isInbound = em.direction === 'inbound'
+                  const emDate = em.date ? new Date(em.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+                  const from = (em.from || '').split('<')[0].trim() || em.from || ''
+                  const body = em.body || em.email_content || ''
+
+                  return (
+                    <div key={emId} style={{ borderBottom: ei < thread.length - 1 ? '0.5px solid var(--border-light)' : 'none' }}>
+                      <div
+                        onClick={() => setExpandedEmail(prev => ({ ...prev, [emId]: !isEmailOpen }))}
+                        style={{ display: 'grid', gridTemplateColumns: '32px 1fr auto', alignItems: 'center', gap: 8, padding: '8px 14px 8px 32px', cursor: 'pointer' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary, var(--bg-secondary))'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <span style={{ fontSize: 10, color: isInbound ? 'var(--green-text)' : 'var(--blue-text)', fontWeight: 500 }}>
+                          {isInbound ? '↙ In' : '↗ Out'}
+                        </span>
+                        <div style={{ overflow: 'hidden' }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{em.subject || '(no subject)'}</span>
+                          {!isEmailOpen && body && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
+                              {body.replace(/<[^>]+>/g, '').trim().slice(0, 80)}…
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{emDate}</span>
+                      </div>
+                      {isEmailOpen && body && (
+                        <div style={{ padding: '8px 14px 12px 64px', fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto', background: 'var(--bg-primary)' }}>
+                          {body.replace(/<[^>]+>/g, '').trim()}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )
       })}
