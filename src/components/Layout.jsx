@@ -50,7 +50,7 @@ const TABS = [
   { id: 'guests', label: 'Guest bookings', defaultView: 'guest-dashboard' },
 ]
 
-export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats, children }) {
+export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats, unreadCounts, children }) {
   const currentSection = getSection(activeView)
 
   const handleTabClick = (tab) => {
@@ -126,6 +126,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
           onSelectView={onSelectView}
           onCreateTour={onCreateTour}
           inboxStats={inboxStats}
+          unreadCounts={unreadCounts}
         />
         <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', minWidth: 0 }}>
           {children}
@@ -136,7 +137,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
 }
 
 
-function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats }) {
+function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats, unreadCounts }) {
   // Filter tours for committed-only sections
   const committedTours = (tours || []).filter(t => {
     if (typeof t.id === 'string' && t.id.startsWith('local_')) return false
@@ -189,6 +190,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
           onTourClick={handleTourClick}
           onCreateTour={section === 'planner' ? onCreateTour : null}
           mode={section === 'planner' ? 'planner' : 'committed'}
+          unreadCounts={unreadCounts}
         />
       </div>
 
@@ -201,7 +203,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
 }
 
 
-function TourList({ tours, activeTour, onTourClick, onCreateTour, mode }) {
+function TourList({ tours, activeTour, onTourClick, onCreateTour, mode, unreadCounts }) {
   const [showPast, setShowPast] = useState(false)
   const [collapsedYears, setCollapsedYears] = useState({})
   const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
@@ -243,7 +245,7 @@ function TourList({ tours, activeTour, onTourClick, onCreateTour, mode }) {
                 <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: collapsedYears[year] ? 'rotate(0deg)' : 'rotate(180deg)', display: 'inline-block' }}>▾</span>
               </button>
               {!collapsedYears[year] && yearGroups[year].map(tour => (
-                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => onTourClick(tour)} />
+                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} onClick={() => onTourClick(tour)} unreadCounts={unreadCounts} />
               ))}
             </div>
           ))}
@@ -264,7 +266,7 @@ function TourList({ tours, activeTour, onTourClick, onCreateTour, mode }) {
                 <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: showPast ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▾</span>
               </button>
               {showPast && past.map(tour => (
-                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} onClick={() => onTourClick(tour)} dimmed />
+                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} onClick={() => onTourClick(tour)} dimmed unreadCounts={unreadCounts} />
               ))}
             </div>
           )}
@@ -380,7 +382,7 @@ function TourGroup({ label, tours, activeTour, onTourClick, onAdd, drafts }) {
       {tours.map(tour => {
         const isDraftTour = (drafts || []).some(d => d.id === tour.id)
         return (
-          <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id}
+          <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts}
             onClick={() => onTourClick(tour)} isDraft={isDraftTour} />
         )
       })}
@@ -389,9 +391,12 @@ function TourGroup({ label, tours, activeTour, onTourClick, onAdd, drafts }) {
 }
 
 
-function TourItem({ tour, active, onClick, dimmed, isDraft }) {
+function TourItem({ tour, active, onClick, dimmed, isDraft, unreadCounts }) {
   const bookings = tour.bookings || []
-  const newReplies = bookings.filter(b => b && b.New_Reply === true).length
+  // Use blob-based unread counts if available, fall back to Zoho New_Reply
+  const newReplies = unreadCounts != null
+    ? bookings.reduce((sum, b) => sum + (unreadCounts[(b.id || b['Record Id'])] || 0), 0)
+    : bookings.filter(b => b && b.New_Reply === true).length
 
   // Count overdue payments across all bookings
   const now = new Date().toISOString().slice(0, 10)

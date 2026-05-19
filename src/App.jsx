@@ -90,6 +90,7 @@ export default function App() {
   // optimistic updates in the Inbox component (e.g. dismiss) propagate
   // to the badge without an extra refetch.
   const inboxStats = inboxData?.stats || { unread: 0, unmatched: 0, tour_bucket: 0 }
+  const [unreadCounts, setUnreadCounts] = useState(null) // { [bookingId]: number }
 
   const fetchInboxStats = (force) => {
     // Skip refetch if we already have fresh data, unless force=true
@@ -148,6 +149,32 @@ export default function App() {
   }
 
   // Refresh data from API without losing current view
+  // Fetch blob-based unread counts for all bookings
+  const fetchUnreadCounts = async (bookings) => {
+    if (!bookings || !bookings.length) return
+    const lastReadAt = {}
+    bookings.forEach(b => {
+      const id = b.id || b['Record Id']
+      if (!id) return
+      try {
+        const stored = localStorage.getItem('rds_last_read_' + id)
+        if (stored) lastReadAt[id] = stored
+      } catch (e) {}
+    })
+    try {
+      const ids = bookings.map(b => b.id || b['Record Id']).filter(Boolean)
+      const r = await fetch('/api/unread-counts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_ids: ids, last_read_at: lastReadAt }),
+      })
+      const d = await r.json()
+      if (d.counts) setUnreadCounts(d.counts)
+    } catch (e) {
+      console.error('unread-counts fetch failed:', e)
+    }
+  }
+
   const refreshData = (keepTourId, retriesLeft = 3) => {
     fetch(API + '/api/bp-data')
       .then(r => {
@@ -180,6 +207,9 @@ export default function App() {
             setTimeout(() => refreshData(keepTourId, retriesLeft - 1), 1500)
           }
         }
+
+        // Fetch blob-based unread counts after bookings loaded
+        fetchUnreadCounts(all)
       })
       .catch(err => console.error('Refresh error:', err))
   }
@@ -207,6 +237,7 @@ export default function App() {
         tourList.forEach(t => { all.push(...(t.bookings || [])) })
         setAllBookings(all)
         setLoading(false)
+        fetchUnreadCounts(all)
       })
       .catch(err => {
         console.error('API error:', err)
@@ -243,7 +274,23 @@ export default function App() {
     setFocusEmailId(opts && opts.focusEmailId ? opts.focusEmailId : null)
     setFocusTab(opts && opts.focusTab ? opts.focusTab : null)
     setActiveView('lodge-detail')
+    // Record when this booking was last opened so unread counts are accurate
+    const bkId = bk && (bk.id || bk['Record Id'])
+    if (bkId) {
+      try {
+        localStorage.setItem('rds_last_read_' + bkId, new Date().toISOString())
+        // Update unread count for this booking to 0 immediately
+        setUnreadCounts(prev => prev ? { ...prev, [bkId]: 0 } : prev)
+      } catch (e) {}
+    }
   }
+
+  // Refresh unread counts every 10 minutes (in sync with poll-gmail cron)
+  useEffect(() => {
+    if (!allBookings.length) return
+    const interval = setInterval(() => fetchUnreadCounts(allBookings), 10 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [allBookings])
 
   // Local draft tours stored in localStorage
   const LOCAL_TOURS_KEY = 'rds_local_tours'
@@ -519,6 +566,7 @@ export default function App() {
         onSelectView={setActiveView}
         onCreateTour={handleCreateTour}
         inboxStats={inboxStats}
+        unreadCounts={unreadCounts}
       >
         {renderContent()}
       </Layout>
