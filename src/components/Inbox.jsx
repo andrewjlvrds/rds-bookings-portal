@@ -195,11 +195,12 @@ export default function Inbox({
   }
 
   const handleReassignUnread = (email) => {
-    if (!email.id || !email.booking_id) {
-      alert('Cannot reassign — missing email or booking id')
+    if (!email.booking_id) {
+      alert('Cannot reassign — missing booking id')
       return
     }
-    const sourcePath = 'emails/booking/' + email.booking_id + '/' + email.id + '.json'
+    // Use _blob_path if available (set by inbox.js), otherwise construct it
+    const sourcePath = email._blob_path || ('emails/booking/' + email.booking_id + '/' + email.id + '.json')
     setRoutingEmail({ email, sourcePath, isReassign: true })
   }
 

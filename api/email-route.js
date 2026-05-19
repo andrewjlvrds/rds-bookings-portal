@@ -63,12 +63,22 @@ export default async function handler(req, res) {
       }
     }
 
-    // 1. Find the source blob.
-    const result = await list({ prefix: sourcePath, limit: 1 });
-    if (!result.blobs || result.blobs.length === 0) {
+    // 1. Find the source blob — try exact path first, then prefix search.
+    let sourceBlob = null;
+    const exactResult = await list({ prefix: sourcePath, limit: 1 });
+    if (exactResult.blobs && exactResult.blobs.length > 0) {
+      sourceBlob = exactResult.blobs[0];
+    } else {
+      // Fallback: strip .json and search by prefix (handles safeId vs raw id mismatch)
+      const pathWithoutExt = sourcePath.replace(/\.json$/, '');
+      const prefixResult = await list({ prefix: pathWithoutExt, limit: 1 });
+      if (prefixResult.blobs && prefixResult.blobs.length > 0) {
+        sourceBlob = prefixResult.blobs[0];
+      }
+    }
+    if (!sourceBlob) {
       return res.status(404).json({ error: 'source blob not found' });
     }
-    const sourceBlob = result.blobs[0];
 
     // 2. Read its content.
     const r = await fetch(sourceBlob.url, { cache: 'no-store' });
