@@ -1015,9 +1015,8 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                             marginTop: 2, fontSize: 9, padding: '1px 2px',
                             border: isDefault ? 'none' : '0.5px solid #f59e0b',
                             borderRadius: 3, background: isDefault ? 'transparent' : 'rgba(245,158,11,0.15)',
-                            cursor: 'pointer', color: isDefault ? 'var(--text-muted)' : '#b45309',
+                            cursor: 'pointer', color: isDefault ? 'var(--text-secondary)' : '#b45309',
                             fontWeight: isDefault ? 400 : 600,
-                            opacity: isDefault ? 0.4 : 1,
                           }}
                         >
                           <option value="Option 1">Option 1</option>
@@ -1053,10 +1052,10 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                             marginTop: 3, fontSize: 9, padding: '1px 2px',
                             border: isGuest ? 'none' : '0.5px solid var(--border-default)',
                             borderRadius: 3, background: 'transparent', cursor: 'pointer',
-                            color: typeStyle.color, fontWeight: isGuest ? 400 : 600,
+                            color: isGuest ? 'var(--text-secondary)' : typeStyle.color,
+                            fontWeight: isGuest ? 400 : 600,
                             textTransform: 'uppercase', letterSpacing: 0.3,
                             appearance: isGuest ? 'none' : 'auto',
-                            opacity: isGuest ? 0.4 : 1,
                           }}
                         >
                           <option value="Guest">Guest</option>
