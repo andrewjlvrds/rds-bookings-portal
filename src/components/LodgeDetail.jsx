@@ -772,26 +772,6 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
               {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
             </span>
-            {emails.some(e => !e.body && !e.email_content) && (
-              <button
-                className="btn btn-sm"
-                onClick={async () => {
-                  const stale = emails.filter(e => !e.body && !e.email_content)
-                  for (const em of stale) {
-                    try {
-                      await fetch('/api/delete-email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ booking_id: bookingId, email_id: em.id }),
-                      })
-                    } catch (err) { console.error('Delete failed:', err) }
-                  }
-                  fetchEmails()
-                }}
-                style={{ fontSize: 11, padding: '3px 8px', color: 'var(--amber-text, #92400E)', border: '0.5px solid var(--amber-border, #F59E0B)', borderRadius: 3, background: 'var(--amber-bg, #FFFBEB)', cursor: 'pointer' }}
-                title="Delete all emails with no content (stale index entries)"
-              >Clear stale ({emails.filter(e => !e.body && !e.email_content).length})</button>
-            )}
           </div>
         </div>
         <div className="panel-body" style={{ padding: 0 }}>

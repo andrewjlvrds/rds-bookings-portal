@@ -615,6 +615,75 @@ export default async function(req, res) {
           }
         }
 
+        // Thread backfill — pull earlier messages in this Gmail thread that
+        // aren't yet stored. Catches emails Helen sent directly from Gmail
+        // (not via the portal) so outbound context isn't missing.
+        if (threadId) {
+          try {
+            var threadData = await gmailApi(token, 'threads/' + threadId + '?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=Message-ID');
+            var threadMessages = (threadData && threadData.messages) || [];
+            for (var ti = 0; ti < threadMessages.length; ti++) {
+              var tm = threadMessages[ti];
+              if (!tm.id || tm.id === msgId) continue; // skip current message
+              var alreadyStored = await isEmailStored(bookingId, tm.id);
+              if (alreadyStored) continue;
+              // Fetch full message to get body
+              try {
+                var tmFull = await gmailApi(token, 'messages/' + tm.id + '?format=full');
+                if (!tmFull || !tmFull.payload) continue;
+                var tmHeaders = tmFull.payload.headers || [];
+                function getTmHeader(name) {
+                  var h = tmHeaders.find(function(hh) { return hh.name.toLowerCase() === name.toLowerCase(); });
+                  return h ? h.value : '';
+                }
+                var tmFrom = getTmHeader('From');
+                var tmTo = getTmHeader('To');
+                var tmSubject = getTmHeader('Subject');
+                var tmDate = getTmHeader('Date');
+                var tmRfc = getTmHeader('Message-ID');
+                // Extract body
+                var tmText = '', tmHtml = '';
+                function walkTm(part) {
+                  if (!part) return;
+                  if (part.mimeType === 'text/plain' && part.body && part.body.data && !tmText) {
+                    var p = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
+                    tmText = Buffer.from(p, 'base64').toString('utf-8');
+                  }
+                  if (part.mimeType === 'text/html' && part.body && part.body.data && !tmHtml) {
+                    var p2 = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
+                    tmHtml = Buffer.from(p2, 'base64').toString('utf-8');
+                  }
+                  if (part.parts) part.parts.forEach(walkTm);
+                }
+                walkTm(tmFull.payload);
+                var tmBody = tmText || tmHtml || '';
+                if (!tmBody.trim()) continue; // skip empty messages
+                var tmIsFromUs = tmFrom.indexOf('ridedownsouth.com') > -1;
+                await storeEmail({
+                  booking_id: bookingId,
+                  message_id: tm.id,
+                  type: tmIsFromUs ? 'enquiry' : 'lodge_reply',
+                  direction: tmIsFromUs ? 'outbound' : 'inbound',
+                  email_from: tmFrom,
+                  email_to: tmTo,
+                  email_subject: tmSubject,
+                  email_content: tmBody,
+                  email_date: tmDate ? new Date(tmDate).toISOString() : new Date().toISOString(),
+                  gmail_thread_id: threadId,
+                  gmail_message_id: tm.id,
+                  rfc_message_id: tmRfc,
+                  match_method: 'thread_backfill',
+                });
+                console.log('Thread backfill: stored', tm.id, 'for booking', bookingId);
+              } catch (tmFetchErr) {
+                console.error('Thread backfill fetch failed for', tm.id, tmFetchErr.message);
+              }
+            }
+          } catch (threadErr) {
+            console.error('Thread backfill failed for thread', threadId, threadErr.message);
+          }
+        }
+
         // Detect auto-replies — store but don't update booking status
         var isAutoReply = false;
         var autoReplyHeader = getHeader(headers, 'Auto-Submitted');

@@ -42,8 +42,15 @@ export default async function handler(req, res) {
       }
     }
 
-    // Reverse chronological (newest first). Inbound and outbound interleaved
-    // so Helen sees the latest activity on a booking thread at the top.
+    // Silently drop stale blobs from old reindex runs — no body = not useful.
+    var staleCount = 0;
+    emails = emails.filter(function(e) {
+      var hasBody = (e.body && e.body.trim()) || (e.email_content && e.email_content.trim());
+      if (!hasBody) { staleCount++; return false; }
+      return true;
+    });
+
+    // Reverse chronological (newest first). Inbound and outbound interleaved.
     emails.sort(function(a, b) {
       return new Date(b.date || b.email_date || 0) - new Date(a.date || a.email_date || 0);
     });
@@ -55,6 +62,7 @@ export default async function handler(req, res) {
       _diag: {
         prefix_searched: prefix,
         blobs_found: blobs.length,
+        stale_filtered: staleCount,
         fetch_errors: fetchErrors,
       }
     });
