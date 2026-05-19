@@ -22,6 +22,7 @@ export default function Inbox({
   onSelectBooking, onMarkRead, onMarkManyRead,
 }) {
   const [routingEmail, setRoutingEmail] = useState(null) // { email, sourcePath }
+  const [toast, setToast] = useState(null) // { msg, ok }
   const [activeTab, setActiveTab] = useState(null) // 'routing' | 'unread' | 'ready' | null (auto)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
@@ -189,8 +190,11 @@ export default function Inbox({
         tour_bucket: (prev.tour_bucket || []).filter(e => e.id !== email.id),
       }))
       setRoutingEmail(null)
+      setToast({ msg: 'Email routed successfully', ok: true })
+      setTimeout(() => setToast(null), 4000)
     } catch (err) {
-      alert('Could not route email: ' + err.message)
+      setToast({ msg: 'Could not route email: ' + err.message, ok: false })
+      setTimeout(() => setToast(null), 6000)
     }
   }
 
@@ -244,6 +248,20 @@ export default function Inbox({
 
   return (
     <div>
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          background: toast.ok ? '#166534' : '#991b1b',
+          color: '#fff', fontSize: 13, fontWeight: 500,
+          padding: '10px 18px', borderRadius: 6,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span>{toast.ok ? '✓' : '✕'}</span>
+          <span>{toast.msg}</span>
+          <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 14, marginLeft: 4 }}>×</button>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 500 }}>Inbox</h1>

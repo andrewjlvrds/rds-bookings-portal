@@ -25,6 +25,7 @@ import { categorizeTours } from './Layout'
  *   onRoute     — fired with the chosen bookingId when she clicks one
  */
 export default function RoutingPicker({ email, tours, currentBookingId, onCancel, onRoute }) {
+  const [selectedBooking, setSelectedBooking] = React.useState(null)
   const [search, setSearch] = useState('')
   const [selectedTourId, setSelectedTourId] = useState(null)
   const [collapsedGroups, setCollapsedGroups] = useState({}) // all expanded by default
@@ -192,16 +193,18 @@ export default function RoutingPicker({ email, tours, currentBookingId, onCancel
               return (
                 <button
                   key={bk.id}
-                  onClick={() => onRoute(bk.id)}
+                  onClick={() => setSelectedBooking(bk)}
                   style={{
                     display: 'block', width: '100%', textAlign: 'left',
                     padding: '8px 12px', fontSize: 12,
-                    border: 'none', background: 'transparent',
+                    border: 'none',
+                    background: selectedBooking && selectedBooking.id === bk.id ? 'var(--blue-bg)' : 'transparent',
                     color: 'var(--text-primary)', cursor: 'pointer',
                     borderBottom: '0.5px solid var(--border-subtle)',
+                    outline: selectedBooking && selectedBooking.id === bk.id ? '1.5px solid var(--blue-mid)' : 'none',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  onMouseEnter={e => { if (!selectedBooking || selectedBooking.id !== bk.id) e.currentTarget.style.background = 'var(--bg-secondary)' }}
+                  onMouseLeave={e => { if (!selectedBooking || selectedBooking.id !== bk.id) e.currentTarget.style.background = 'transparent' }}
                 >
                   <div style={{ fontWeight: 500 }}>{displayName}</div>
                   {subtitle && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{subtitle}</div>}
@@ -219,8 +222,27 @@ export default function RoutingPicker({ email, tours, currentBookingId, onCancel
           </div>
         </div>
 
-        <div style={{ padding: '10px 16px', borderTop: '0.5px solid var(--border-default)', display: 'flex', justifyContent: 'flex-end' }}>
-          <button onClick={onCancel} className="btn btn-sm">Cancel</button>
+        <div style={{ padding: '10px 16px', borderTop: '0.5px solid var(--border-default)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {selectedBooking ? (
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              Route to: <strong>{(typeof selectedBooking.Lodge_Name === 'object' ? selectedBooking.Lodge_Name?.name : selectedBooking.Lodge_Name) || selectedBooking.Name}</strong>
+            </span>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Select a booking above</span>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={onCancel} className="btn btn-sm">Cancel</button>
+            <button
+              onClick={() => selectedBooking && onRoute(selectedBooking.id)}
+              disabled={!selectedBooking}
+              className="btn btn-sm"
+              style={{
+                background: selectedBooking ? 'var(--blue-mid)' : 'var(--bg-secondary)',
+                color: selectedBooking ? '#fff' : 'var(--text-muted)',
+                border: 'none', cursor: selectedBooking ? 'pointer' : 'default',
+              }}
+            >Route now</button>
+          </div>
         </div>
       </div>
     </div>
