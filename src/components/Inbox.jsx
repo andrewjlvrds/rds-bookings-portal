@@ -769,7 +769,7 @@ function EmailSearch({ allBookings, tours, onSelectBooking }) {
   // Client-side filtering — split query into tokens, all must match
   const results = React.useMemo(() => {
     if (!index || !query.trim()) return null
-    const tokens = query.toLowerCase().trim().split(/\s+/).filter(t => t.length > 1)
+    const tokens = query.toLowerCase().trim().split(/\s+/).filter(t => t.length >= 3)
     if (!tokens.length) return null
 
     return index.filter(em => {
