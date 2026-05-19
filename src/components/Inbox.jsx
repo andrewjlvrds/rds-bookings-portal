@@ -23,7 +23,10 @@ export default function Inbox({
 }) {
   const [routingEmail, setRoutingEmail] = useState(null) // { email, sourcePath }
   const [toast, setToast] = useState(null) // { msg, ok }
-  const [activeTab, setActiveTab] = useState(null) // 'routing' | 'unread' | 'ready' | null (auto)
+  const [activeTab, setActiveTab] = useState(null) // 'routing' | 'unread' | 'search' | null (auto)
+  const [searchQuery, setSearchQuery] = React.useState('')
+  const [searchResults, setSearchResults] = React.useState(null) // null = not searched
+  const [searching, setSearching] = React.useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState(null)
 
@@ -320,30 +323,31 @@ export default function Inbox({
         </div>
       )}
 
-      {total > 0 && (
-        <>
-        <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '0.5px solid var(--border-default)' }}>
-          <TabButton
-            active={tab === 'unread'}
-            onClick={() => setActiveTab('unread')}
-            label="Unread"
-            count={unread.length}
-            urgentColour="#C62828"
-          />
-          <TabButton
-            active={tab === 'routing'}
-            onClick={() => setActiveTab('routing')}
-            label="Needs routing"
-            count={needsRouting.length}
-            urgentColour="#E65100"
-          />
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '0.5px solid var(--border-default)' }}>
+        <TabButton
+          active={tab === 'unread'}
+          onClick={() => setActiveTab('unread')}
+          label="Unread"
+          count={unread.length}
+          urgentColour="#C62828"
+        />
+        <TabButton
+          active={tab === 'routing'}
+          onClick={() => setActiveTab('routing')}
+          label="Needs routing"
+          count={needsRouting.length}
+          urgentColour="#E65100"
+        />
+        <TabButton
+          active={tab === 'search'}
+          onClick={() => setActiveTab('search')}
+          label="Search"
+        />
+      </div>
+      {tab === 'routing' && total > 0 && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, padding: '0 2px' }}>
+          Emails the system couldn't automatically match to a booking. Assign each one to the right booking, or dismiss if not relevant.
         </div>
-        {tab === 'routing' && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, padding: '0 2px' }}>
-            Emails the system couldn't automatically match to a booking. Assign each one to the right booking, or dismiss if not relevant.
-          </div>
-        )}
-        </>
       )}
       {tab === 'routing' && needsRouting.length > 0 && (
         <>
@@ -425,6 +429,10 @@ export default function Inbox({
       )}
       {tab === 'ready' && readyToMarkDone.length === 0 && total > 0 && (
         <EmptyTab message="No replies waiting on your sign-off." />
+      )}
+
+      {tab === 'search' && (
+        <EmailSearch allBookings={allBookings} tours={tours} onSelectBooking={onSelectBooking} />
       )}
 
       {routingEmail && (
@@ -716,4 +724,124 @@ function timeAgo(date) {
   if (weeks < 5) return weeks + 'w ago'
   const months = Math.floor(days / 30)
   return months + 'mo ago'
+}
+
+// ── EmailSearch ───────────────────────────────────────────────────────────
+// Site-wide email search across all stored blobs.
+// Searches by lodge name, sender, subject, or check-in date.
+
+function EmailSearch({ allBookings, tours, onSelectBooking }) {
+  const [query, setQuery] = React.useState('')
+  const [results, setResults] = React.useState(null)
+  const [loading, setLoading] = React.useState(false)
+
+  // Build booking lookup map
+  const bookingMap = React.useMemo(() => {
+    const m = {}
+    allBookings.forEach(b => { m[b.id || b['Record Id']] = b })
+    return m
+  }, [allBookings])
+
+  const handleSearch = async () => {
+    if (!query.trim()) return
+    setLoading(true)
+    setResults(null)
+    try {
+      const r = await fetch('/api/email-search?q=' + encodeURIComponent(query.trim()))
+      const d = await r.json()
+      setResults(d.results || [])
+    } catch (e) {
+      setResults([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSearch()
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Search by lodge name, sender, subject, date (e.g. Bahnhof, 2026-05-28, RE: Invoice)…"
+          style={{
+            flex: 1, fontSize: 13, padding: '7px 12px',
+            border: '0.5px solid var(--border-default)', borderRadius: 4,
+            background: 'var(--bg-primary)', color: 'var(--text-primary)',
+            fontFamily: 'var(--font-sans)',
+          }}
+          autoFocus
+        />
+        <button
+          onClick={handleSearch}
+          disabled={loading || !query.trim()}
+          className="btn btn-primary"
+          style={{ padding: '7px 16px', fontSize: 12 }}
+        >{loading ? 'Searching…' : 'Search'}</button>
+      </div>
+
+      {results === null && (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '20px 0' }}>
+          Search across all stored emails. Matches on subject, sender, lodge name, or date.
+        </div>
+      )}
+
+      {results && results.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '20px 0' }}>No emails found for "{query}".</div>
+      )}
+
+      {results && results.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{results.length} result{results.length !== 1 ? 's' : ''}</div>
+          <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+            {results.map((em, i) => {
+              const bk = bookingMap[em.booking_id]
+              const lodge = bk
+                ? ((bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || bk.Name || '—').split(' - ')[0]
+                : '—'
+              const tourName = bk?.Tour && typeof bk.Tour === 'object' ? bk.Tour.name : (bk?.Tour || '')
+              const date = em.date ? new Date(em.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : ''
+              const isInbound = em.direction === 'inbound'
+
+              return (
+                <div
+                  key={i}
+                  onClick={() => bk && onSelectBooking(bk, em.id)}
+                  style={{
+                    display: 'grid', gridTemplateColumns: '50px 160px 1fr auto',
+                    alignItems: 'center', gap: 12, padding: '10px 14px',
+                    borderBottom: i < results.length - 1 ? '0.5px solid var(--border-light)' : 'none',
+                    cursor: bk ? 'pointer' : 'default',
+                    background: 'var(--bg-primary)',
+                  }}
+                  onMouseEnter={e => { if (bk) e.currentTarget.style.background = 'var(--bg-secondary)' }}
+                  onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-primary)'}
+                >
+                  <span style={{ fontSize: 10, fontWeight: 600, color: isInbound ? 'var(--green-text)' : 'var(--blue-text)' }}>
+                    {isInbound ? '↙ In' : '↗ Out'}
+                  </span>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lodge}</div>
+                    {tourName && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{tourName}</div>}
+                  </div>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{em.subject || '(no subject)'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {(em.from || '').split('<')[0].trim() || em.from}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{date}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
