@@ -875,11 +875,32 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                 // No primary exists — show as normal row (orphaned fallback)
               }
 
+              // Skip guide/excursion bookings from main rows — they render as sub-items
+              const bkType = bk.Booking_Type || 'Guest'
+              const isSubItem = bkType === 'Guide' || bkType === 'Excursion'
+              if (isSubItem) {
+                const hasPrimary = merged.some(other => {
+                  const otherDate = other.Check_in_Date || other['Check-in'] || ''
+                  const otherType = other.Booking_Type || 'Guest'
+                  const otherId = other.id || other['Record Id']
+                  return otherDate === checkIn && otherType === 'Guest' && !alternativeSet.has(otherId)
+                })
+                if (hasPrimary) return null
+              }
+
               // Find fallback bookings for this date
               const fallbacks = merged.filter(fb => {
                 const fbDate = fb.Check_in_Date || fb['Check-in'] || ''
                 const fbId = fb.id || fb['Record Id']
                 return fbDate === checkIn && alternativeSet.has(fbId)
+              })
+
+              // Find guide/excursion sub-bookings for this date
+              const subItems = merged.filter(sb => {
+                const sbDate = sb.Check_in_Date || sb['Check-in'] || ''
+                const sbType = sb.Booking_Type || 'Guest'
+                const sbId = sb.id || sb['Record Id']
+                return sbDate === checkIn && (sbType === 'Guide' || sbType === 'Excursion') && sbId !== bkId
               })
 
               const nightMatch = dayDesc.match(/Day\s*(\d+)/)
@@ -1369,6 +1390,60 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                               cursor: 'pointer', color: 'var(--blue-text)',
                             }}
                           >Email</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+                {/* Guide / Excursion sub-item rows */}
+                {subItems.map(sb => {
+                  const sbLodge = (sb.Lodge_Name || sb['Lodge Booking Name'] || sb.Name || '').split(' - ')[0]
+                  const sbStatus = getStatus(sb)
+                  const sbBadge = getStatusBadge(sbStatus)
+                  const sbId = sb.id || sb['Record Id']
+                  const sbType = sb.Booking_Type || 'Guide'
+                  const sbLr = lookupLodge(sbLodge)
+                  const sbEmail = sbLr ? (sbLr.email || '') : ''
+                  const typeColor = sbType === 'Excursion' ? { bg: 'rgba(99,102,241,0.1)', color: '#4338ca', border: '#c7d2fe' } : { bg: 'rgba(16,185,129,0.08)', color: '#065f46', border: '#a7f3d0' }
+                  return (
+                    <tr
+                      key={'sub-' + sbId}
+                      style={{ cursor: 'pointer', background: typeColor.bg, fontSize: 12 }}
+                      onClick={() => onSelectBooking(sb)}
+                      onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                      onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                    >
+                      <td></td>
+                      <td></td>
+                      <td style={{ paddingLeft: 20 }}>
+                        <span style={{
+                          fontSize: 9, padding: '1px 5px', borderRadius: 3, marginRight: 6,
+                          background: typeColor.bg, color: typeColor.color,
+                          border: '0.5px solid ' + typeColor.border,
+                          fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase',
+                        }}>{sbType}</span>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{sbLodge}</div>
+                        {sbEmail && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{sbEmail}</div>}
+                      </td>
+                      <td>
+                        <span className={'badge ' + sbBadge.cls}>{sbBadge.label}</span>
+                      </td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <button className="btn btn-sm" onClick={() => onSelectBooking(sb)} style={{ fontSize: 11, padding: '3px 6px' }}>View</button>
+                          {sbEmail && (
+                            <button
+                              onClick={() => setPreviewId(previewId === sbId ? null : sbId)}
+                              style={{
+                                fontSize: 10, padding: '3px 6px',
+                                border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+                                background: previewId === sbId ? 'var(--blue-bg)' : 'var(--bg-primary)',
+                                cursor: 'pointer', color: 'var(--blue-text)',
+                              }}
+                            >Email</button>
+                          )}
                         </div>
                       </td>
                     </tr>
