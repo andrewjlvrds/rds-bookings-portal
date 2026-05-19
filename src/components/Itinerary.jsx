@@ -998,26 +998,43 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                     {bk._backup && (
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Backup: {bk._backup}</div>
                     )}
-                    {/* Booking type toggle — inline, no need to open detail */}
+                    {/* Booking type toggle — only show for non-Guest types; click to cycle */}
                     {(() => {
                       const currentType = bk.Booking_Type || 'Guest'
+                      if (currentType === 'Guest') return (
+                        <div
+                          onClick={e => {
+                            e.stopPropagation()
+                            fetch('/api/update-bookings', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ booking_ids: [bk.id || bk['Record Id']], updates: { Booking_Type: 'Guide' } }),
+                            }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1500) })
+                          }}
+                          title="Set as Guide booking"
+                          style={{
+                            display: 'inline-block', marginTop: 3, fontSize: 9, padding: '1px 6px',
+                            borderRadius: 3, cursor: 'pointer', fontWeight: 400,
+                            letterSpacing: 0.3, textTransform: 'uppercase',
+                            color: 'var(--text-muted)', border: '0.5px dashed var(--border-light)',
+                          }}
+                        >guest ▾</div>
+                      )
                       const typeStyle = currentType === 'Guide'
-                        ? { bg: 'rgba(16,185,129,0.1)', color: '#065f46', border: '#a7f3d0' }
-                        : currentType === 'Excursion'
-                        ? { bg: 'rgba(99,102,241,0.1)', color: '#4338ca', border: '#c7d2fe' }
-                        : { bg: 'transparent', color: 'var(--text-muted)', border: 'var(--border-light)' }
+                        ? { bg: 'rgba(16,185,129,0.12)', color: '#065f46', border: '#6ee7b7' }
+                        : { bg: 'rgba(99,102,241,0.12)', color: '#4338ca', border: '#a5b4fc' }
+                      const next = currentType === 'Guide' ? 'Excursion' : 'Guest'
                       return (
                         <div
                           onClick={e => {
                             e.stopPropagation()
-                            const next = currentType === 'Guide' ? 'Excursion' : currentType === 'Excursion' ? 'Guest' : 'Guide'
                             fetch('/api/update-bookings', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ booking_ids: [bk.id || bk['Record Id']], updates: { Booking_Type: next } }),
-                            }).then(r => { if (r.ok && onRefresh) onRefresh() })
+                            }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1500) })
                           }}
-                          title="Click to change booking type"
+                          title={'Click to set as ' + next}
                           style={{
                             display: 'inline-block', marginTop: 3, fontSize: 9, padding: '1px 6px',
                             borderRadius: 3, cursor: 'pointer', fontWeight: 600,
@@ -1025,7 +1042,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                             background: typeStyle.bg, color: typeStyle.color,
                             border: '0.5px solid ' + typeStyle.border,
                           }}
-                        >{currentType}</div>
+                        >{currentType} ▾</div>
                       )
                     })()}
                   </td>
