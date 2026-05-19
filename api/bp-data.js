@@ -47,9 +47,9 @@ export default async function(req, res) {
     var bookingFields = [
       'Name','Lodge_Name','Check_in_Date','Check_out_Date','Nights','Status',
       'Sgl_Twin_Dbl_Guides','Meals','Total_Amount','Deposit_Amount',
-      'Lodge_Currency','Booking_Notes','Reservation_Comments',
+      'Lodge_Currency','Booking_Reference','Booking_Notes','Reservation_Comments',
       'Lodge','Tour',
-      'RDS_Reference','Lodge_Reference','Cancel_Free_Before','Cancellation_Policy_Text',
+      'RDS_Reference','Lodge_Reference','Cancel_Free_Before',
       'Credit_Amount','Enquiry_Sent_Date','Last_Response_Date',
       'Follow_up_Date','Excursion','Excursion_booking_status','Excursion_Date','Excursion_notes',
       'Deposit_Due_Date','Second_Payment_Amount','Second_Payment_Due_Date',
