@@ -88,7 +88,8 @@ export default function Inbox({
       if (onRefresh) onRefresh()
       return
     }
-    if (onMarkRead && email.id) onMarkRead(email.id)
+    // Don't mark read on open — only on explicit Dismiss.
+    // Email stays in the list until Helen acts on it.
     onSelectBooking(bk, email.id)
   }
 
