@@ -998,51 +998,42 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                     {bk._backup && (
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Backup: {bk._backup}</div>
                     )}
-                    {/* Booking type toggle — only show for non-Guest types; click to cycle */}
+                    {/* Booking type dropdown */}
                     {(() => {
                       const currentType = bk.Booking_Type || 'Guest'
-                      if (currentType === 'Guest') return (
-                        <div
-                          onClick={e => {
-                            e.stopPropagation()
-                            fetch('/api/update-bookings', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ booking_ids: [bk.id || bk['Record Id']], updates: { Booking_Type: 'Guide' } }),
-                            }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1500) })
-                          }}
-                          title="Set as Guide booking"
-                          style={{
-                            display: 'inline-block', marginTop: 3, fontSize: 9, padding: '1px 6px',
-                            borderRadius: 3, cursor: 'pointer', fontWeight: 400,
-                            letterSpacing: 0.3, textTransform: 'uppercase',
-                            color: 'var(--text-muted)', border: '0.5px dashed var(--border-light)',
-                          }}
-                        >guest ▾</div>
-                      )
+                      const isGuest = currentType === 'Guest'
                       const typeStyle = currentType === 'Guide'
-                        ? { bg: 'rgba(16,185,129,0.12)', color: '#065f46', border: '#6ee7b7' }
-                        : { bg: 'rgba(99,102,241,0.12)', color: '#4338ca', border: '#a5b4fc' }
-                      const next = currentType === 'Guide' ? 'Excursion' : 'Guest'
+                        ? { color: '#065f46' }
+                        : currentType === 'Excursion'
+                        ? { color: '#4338ca' }
+                        : { color: 'var(--text-muted)' }
                       return (
-                        <div
-                          onClick={e => {
+                        <select
+                          value={currentType}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => {
                             e.stopPropagation()
+                            const next = e.target.value
                             fetch('/api/update-bookings', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ booking_ids: [bk.id || bk['Record Id']], updates: { Booking_Type: next } }),
                             }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1500) })
                           }}
-                          title={'Click to set as ' + next}
                           style={{
-                            display: 'inline-block', marginTop: 3, fontSize: 9, padding: '1px 6px',
-                            borderRadius: 3, cursor: 'pointer', fontWeight: 600,
-                            letterSpacing: 0.3, textTransform: 'uppercase',
-                            background: typeStyle.bg, color: typeStyle.color,
-                            border: '0.5px solid ' + typeStyle.border,
+                            marginTop: 3, fontSize: 9, padding: '1px 2px',
+                            border: isGuest ? 'none' : '0.5px solid var(--border-default)',
+                            borderRadius: 3, background: 'transparent', cursor: 'pointer',
+                            color: typeStyle.color, fontWeight: isGuest ? 400 : 600,
+                            textTransform: 'uppercase', letterSpacing: 0.3,
+                            appearance: isGuest ? 'none' : 'auto',
+                            opacity: isGuest ? 0.4 : 1,
                           }}
-                        >{currentType} ▾</div>
+                        >
+                          <option value="Guest">Guest</option>
+                          <option value="Guide">Guide</option>
+                          <option value="Excursion">Excursion</option>
+                        </select>
                       )
                     })()}
                   </td>
