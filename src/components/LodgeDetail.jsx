@@ -1107,10 +1107,10 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
         ) : (
           <span style={{ width: 6, flexShrink: 0 }} />
         )}
-        <span style={{ fontWeight: 500, fontSize: 11, width: 52, flexShrink: 0, color: isOutbound ? 'var(--blue-text)' : 'var(--green-text)' }}>
+        <span style={{ fontWeight: 600, fontSize: 11, width: 52, flexShrink: 0, color: isOutbound ? 'var(--blue-text)' : 'var(--green-text)' }}>
           {isOutbound ? 'Sent' : 'Received'}
         </span>
-        <span style={{ color: 'var(--text-muted)', width: 180, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ color: 'var(--text-secondary)', width: 180, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {isOutbound ? 'to lodge' : from.split('<')[0].trim() || from}
         </span>
         <span style={{
@@ -1145,7 +1145,7 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
             📎 {attachments.length}
           </span>
         )}
-        <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
           {date ? fmtDate(date) : ''}
         </span>
         {!isOutbound && tours && email.id && (
@@ -1154,7 +1154,7 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
             style={{
               fontSize: 10, padding: '2px 6px', border: '0.5px solid var(--border-default)',
               borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer',
-              color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap',
+              color: 'var(--text-primary)', flexShrink: 0, whiteSpace: 'nowrap',
             }}
             title="Move this email to a different booking"
           >Reroute</button>
@@ -1406,7 +1406,7 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
         <span style={{ color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {expanded ? subject : (subject || preview)}
         </span>
-        <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
           {date ? fmtDate(date) : ''}
         </span>
         <button
