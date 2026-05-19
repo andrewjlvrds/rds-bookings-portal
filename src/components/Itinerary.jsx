@@ -539,13 +539,14 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
               >
                 {hasNewReply && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C62828', flexShrink: 0 }} />}
                 {!hasNewReply && <span style={{ width: 6, flexShrink: 0 }} />}
-                <span style={{ fontSize: 13, fontWeight: hasNewReply ? 600 : 400, flex: 1, color: 'var(--text-primary)' }}>{lodge}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{b.Check_in_Date || ''}</span>
+                <span style={{ fontSize: 13, fontWeight: hasNewReply ? 600 : 400, color: 'var(--text-primary)', minWidth: 180, flexShrink: 0 }}>{lodge}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {b.Reservation_Comments || b.RDS_Reference || ''}
+                </span>
                 <span style={{
-                  fontSize: 10, padding: '1px 6px', borderRadius: 3, fontWeight: 500,
+                  fontSize: 10, padding: '1px 6px', borderRadius: 3, fontWeight: 500, flexShrink: 0,
                   background: badge.bg, color: badge.color, border: badge.border || 'none',
                 }}>{status}</span>
-                {lastResponse && <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 70, textAlign: 'right' }}>Last: {lastResponse}</span>}
               </div>
             )
           })}
