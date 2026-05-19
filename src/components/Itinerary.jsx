@@ -417,7 +417,13 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   Object.entries(dateBookings).forEach(([date, group]) => {
     if (group.length <= 1) return
     if (datesWithManualFallback.has(date)) return // manual tag handles this date
-    const ranked = group.slice().sort((a, b) => (statusPriority[getStatus(b)] || 0) - (statusPriority[getStatus(a)] || 0))
+    // Exclude Guide and Excursion bookings — they are sub-items, not fallbacks
+    const guestOnly = group.filter(b => {
+      const t = b.Booking_Type || 'Guest'
+      return t !== 'Guide' && t !== 'Excursion'
+    })
+    if (guestOnly.length <= 1) return
+    const ranked = guestOnly.slice().sort((a, b) => (statusPriority[getStatus(b)] || 0) - (statusPriority[getStatus(a)] || 0))
     for (let ri = 1; ri < ranked.length; ri++) {
       alternativeSet.add(ranked[ri].id || ranked[ri]['Record Id'])
     }
