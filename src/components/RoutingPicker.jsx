@@ -27,7 +27,7 @@ import { categorizeTours } from './Layout'
 export default function RoutingPicker({ email, tours, currentBookingId, onCancel, onRoute }) {
   const [search, setSearch] = useState('')
   const [selectedTourId, setSelectedTourId] = useState(null)
-  const [collapsedGroups, setCollapsedGroups] = useState({ past: true }) // past collapsed by default
+  const [collapsedGroups, setCollapsedGroups] = useState({}) // all expanded by default
 
   // Pre-select the tour whose name appears in the subject (best-effort).
   useEffect(() => {
