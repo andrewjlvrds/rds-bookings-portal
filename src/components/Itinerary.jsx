@@ -690,14 +690,14 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
       {hasZohoBookings && (
       <div>
       <div className="table-wrap">
-        <table style={{ tableLayout: 'fixed' }}>
+        <table style={{ tableLayout: 'fixed', width: '100%' }}>
           <colgroup>
-            <col style={{ width: 50 }} />
-            <col style={{ width: 80 }} />
+            <col style={{ width: 44 }} />
+            <col style={{ width: 72 }} />
+            <col style={{ width: '25%' }} />
             <col style={{ width: '28%' }} />
-            <col style={{ width: '30%' }} />
-            <col style={{ width: 120 }} />
-            <col style={{ width: 60 }} />
+            <col style={{ width: 110 }} />
+            <col style={{ width: 140 }} />
           </colgroup>
           <thead>
             <tr>
