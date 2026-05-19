@@ -923,7 +923,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                     >{route || '—'}</div>
                     {bk._km && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{bk._km} km</div>}
                     {bk._route_notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 1 }}>{bk._route_notes}</div>}
-                    {bk.Booking_Notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>{bk.Booking_Notes}</div>}
+                    {bk.Booking_Notes && !['guide','excursion','fallback'].includes((bk.Booking_Notes || '').toLowerCase().trim()) && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>{bk.Booking_Notes}</div>}
                     {bk.Excursion && (
                       <div style={{ fontSize: 10, color: 'var(--blue-text)', marginTop: 2 }}>
                         Excursion: {bk.Excursion}
