@@ -1,5 +1,6 @@
 import { put, del, list } from '@vercel/blob';
 import { reassignEmailLinks } from './_activity-log.js';
+import { zohoApi } from './_zoho.js';
 
 /*
  * /api/email-route
@@ -113,6 +114,45 @@ export default async function handler(req, res) {
       }
     }
 
+    // 6. Auto-add sender email to lodge record if not already registered.
+    // When Helen manually routes an email, we learn which lodge it came from.
+    // Add the sender address to Email_Reservations_2 so future emails auto-match.
+    let emailAdded = false;
+    try {
+      const senderEmail = (record.from || record.email_from || '').match(/<([^>]+)>/);
+      const senderAddr = senderEmail ? senderEmail[1].toLowerCase().trim() : 
+        ((record.from || record.email_from || '').indexOf('@') > -1 ? (record.from || record.email_from || '').toLowerCase().trim() : '');
+
+      if (senderAddr && !senderAddr.includes('ridedownsouth.com')) {
+        // Find the booking to get the lodge ID
+        const bkResult = await zohoApi('GET', 'Lodge_Bookings/' + bookingId + '?fields=id,Lodge,Lodge_Name');
+        const lodgeId = bkResult?.data?.Lodge?.id;
+
+        if (lodgeId) {
+          // Fetch lodge record to check existing emails
+          const lodgeResult = await zohoApi('GET', 'CustomModule5/' + lodgeId + '?fields=id,Name,Email,Preferred_Email,Email_Reservations_2');
+          const lodge = lodgeResult?.data;
+          if (lodge) {
+            const existingEmails = [lodge.Email, lodge.Preferred_Email, lodge.Email_Reservations_2]
+              .filter(Boolean).map(e => e.toLowerCase().trim());
+            
+            if (!existingEmails.includes(senderAddr)) {
+              // Add to Email_Reservations_2 if empty, otherwise log for manual review
+              if (!lodge.Email_Reservations_2) {
+                await zohoApi('PUT', 'CustomModule5', { data: [{ id: lodgeId, Email_Reservations_2: senderAddr }] });
+                emailAdded = true;
+                console.log('Auto-added email', senderAddr, 'to lodge', lodge.Name);
+              } else {
+                console.log('Lodge', lodge.Name, 'already has Email_Reservations_2 set — new sender', senderAddr, 'needs manual review');
+              }
+            }
+          }
+        }
+      }
+    } catch (emailErr) {
+      console.error('email-route: auto-add sender email failed:', emailErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       mode: isReassignment ? 'reassign' : 'initial_route',
@@ -121,6 +161,7 @@ export default async function handler(req, res) {
       previous_booking_id: oldBookingId,
       delete_error: deleteError,
       log_entries_updated: logEntriesUpdated,
+      sender_email_added: emailAdded,
     });
   } catch (err) {
     console.error('email-route error:', err);

@@ -358,12 +358,16 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailM
             }
             if (ds > fuzzyBestScore) { fuzzyBestScore = ds; fuzzyBest = c; }
           });
-          if (fuzzyBest && fuzzyBestScore > 0) {
-            return { booking: fuzzyBest, method: 'sender_email_domain_fuzzy_' + Math.round(bestFuzzyScore * 10) };
-          }
-          if (fuzzyCandidates.length === 1) {
-            return { booking: fuzzyCandidates[0], method: 'sender_email_domain_fuzzy_single' };
-          }
+          // Don't auto-assign fuzzy matches — flag for manual routing instead.
+          // The hint tells the routing UI which lodge is the likely match.
+          return {
+            booking: null,
+            method: 'unmatched',
+            reason: 'sender_email_domain_fuzzy',
+            fuzzy_lodge: bestFuzzyLodge,
+            fuzzy_score: bestFuzzyScore,
+            suggested_booking: fuzzyBest || (fuzzyCandidates.length === 1 ? fuzzyCandidates[0] : null),
+          };
         }
       }
     }
