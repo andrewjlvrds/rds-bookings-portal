@@ -769,12 +769,17 @@ function EmailSearch({ allBookings, tours, onSelectBooking }) {
   // Client-side filtering — split query into tokens, all must match
   const results = React.useMemo(() => {
     if (!index || !query.trim()) return null
-    const tokens = query.toLowerCase().trim().split(/\s+/).filter(t => t.length >= 3)
-    if (!tokens.length) return null
+    const rawTokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
+    if (!rawTokens.length) return null
+
+    // Split tokens into general (3+ chars) and date fragments (1-2 digit numbers, years)
+    const generalTokens = rawTokens.filter(t => t.length >= 3 && !/^\d{1,2}$/.test(t))
+    const dateTokens = rawTokens.filter(t => /^\d{1,4}$/.test(t)) // e.g. "30", "26", "2026"
 
     return index.filter(em => {
       const meta = bookingMap[em.booking_id] || {}
-      const searchable = [
+      const dateSearchable = [em.date || '', meta.checkIn || ''].join(' ').toLowerCase()
+      const fullSearchable = [
         em.subject || '',
         em.from || '',
         em.date || '',
@@ -783,7 +788,9 @@ function EmailSearch({ allBookings, tours, onSelectBooking }) {
         meta.checkIn || '',
       ].join(' ').toLowerCase()
 
-      return tokens.every(t => searchable.includes(t))
+      const generalMatch = generalTokens.every(t => fullSearchable.includes(t))
+      const dateMatch = dateTokens.every(t => dateSearchable.includes(t))
+      return generalMatch && dateMatch
     }).slice(0, 50)
   }, [index, query, bookingMap])
 
