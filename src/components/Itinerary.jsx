@@ -560,6 +560,23 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
           <button className="btn" onClick={onEditItinerary}>
             {hasContent ? 'Edit itinerary' : 'Create itinerary'}
           </button>
+          <button
+            className="btn"
+            title="Set all bookings on this tour to Guest type"
+            onClick={async () => {
+              const nonGuest = sorted.filter(b => b.Booking_Type && b.Booking_Type !== 'Guest')
+              if (!nonGuest.length) { alert('All bookings already set to Guest.'); return }
+              if (!confirm('Reset all ' + nonGuest.length + ' non-Guest bookings to Guest on this tour?')) return
+              await fetch('/api/update-bookings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  records: nonGuest.map(b => ({ id: b.id || b['Record Id'], Booking_Type: 'Guest' }))
+                }),
+              })
+              setTimeout(() => onRefresh && onRefresh(), 1500)
+            }}
+          >Reset all to Guest</button>
           {notStarted > 0 && (
             <button className="btn" onClick={handleMarkAllReady} disabled={marking}>
               {marking ? 'Marking...' : 'Mark all ready (' + notStarted + ')'}
