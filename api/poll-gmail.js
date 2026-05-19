@@ -230,16 +230,29 @@ export default async function(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
+    var t0 = Date.now();
     var refetch = req.query && req.query.refetch === 'true';
     var token = await getGmailToken();
 
-    // Fetch recent messages — wider window for refetch
-    // Search everywhere — not just inbox — so labelled replies are found
+    // Fetch recent messages — paginate fully, no arbitrary cap.
+    // A 3-day window can easily have 100+ messages; capping at 20 or 50
+    // silently dropped emails and was the root cause of missing correspondence.
     var searchWindow = refetch ? '14d' : '3d';
     var query = 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
-    var listResult = await gmailApi(token, 'messages?q=' + encodeURIComponent(query) + '&maxResults=' + (refetch ? '100' : '50'));
+    var messages = [];
+    var pageToken = null;
+    var pageLimit = 10; // max 10 pages × 100 = 1000 messages per run
+    for (var pg = 0; pg < pageLimit; pg++) {
+      if (Date.now() - t0 > 45000) break; // hard deadline
+      var pageUrl = 'messages?q=' + encodeURIComponent(query) + '&maxResults=100';
+      if (pageToken) pageUrl += '&pageToken=' + pageToken;
+      var listResult = await gmailApi(token, pageUrl);
+      var pageMsgs = listResult.messages || [];
+      messages = messages.concat(pageMsgs);
+      pageToken = listResult.nextPageToken || null;
+      if (!pageToken || pageMsgs.length === 0) break;
+    }
 
-    var messages = listResult.messages || [];
     if (messages.length === 0) {
       return res.status(200).json({ success: true, checked: 0, stored: 0, message: 'No new messages' });
     }
