@@ -307,6 +307,21 @@ export default async function handler(req, res) {
           results.errors.push('label ' + ll.labelName + ': ' + labelErr.message);
         }
 
+        // After importing emails for this lodge booking, update Zoho
+        // New_Reply and Last_Response_Date so the sidebar badges reflect reality.
+        if (!dryRun && lodgeResult.imported > 0) {
+          try {
+            const today = new Date().toISOString().split('T')[0];
+            await zohoApi('PUT', 'Lodge_Bookings', { data: [{
+              id: bookingId,
+              New_Reply: true,
+              Last_Response_Date: today,
+            }]});
+          } catch (zohoErr) {
+            console.error('Failed to update New_Reply for', bookingId, zohoErr.message);
+          }
+        }
+
         tourResult.lodges.push(lodgeResult);
       }
 
