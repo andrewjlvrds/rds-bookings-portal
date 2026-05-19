@@ -998,6 +998,36 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                     {bk._backup && (
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Backup: {bk._backup}</div>
                     )}
+                    {/* Booking type toggle — inline, no need to open detail */}
+                    {(() => {
+                      const currentType = bk.Booking_Type || 'Guest'
+                      const typeStyle = currentType === 'Guide'
+                        ? { bg: 'rgba(16,185,129,0.1)', color: '#065f46', border: '#a7f3d0' }
+                        : currentType === 'Excursion'
+                        ? { bg: 'rgba(99,102,241,0.1)', color: '#4338ca', border: '#c7d2fe' }
+                        : { bg: 'transparent', color: 'var(--text-muted)', border: 'var(--border-light)' }
+                      return (
+                        <div
+                          onClick={e => {
+                            e.stopPropagation()
+                            const next = currentType === 'Guide' ? 'Excursion' : currentType === 'Excursion' ? 'Guest' : 'Guide'
+                            fetch('/api/update-bookings', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ booking_ids: [bk.id || bk['Record Id']], updates: { Booking_Type: next } }),
+                            }).then(r => { if (r.ok && onRefresh) onRefresh() })
+                          }}
+                          title="Click to change booking type"
+                          style={{
+                            display: 'inline-block', marginTop: 3, fontSize: 9, padding: '1px 6px',
+                            borderRadius: 3, cursor: 'pointer', fontWeight: 600,
+                            letterSpacing: 0.3, textTransform: 'uppercase',
+                            background: typeStyle.bg, color: typeStyle.color,
+                            border: '0.5px solid ' + typeStyle.border,
+                          }}
+                        >{currentType}</div>
+                      )
+                    })()}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     {editing && editing.id === (bk.id || bk['Record Id']) && editing.field === 'status' ? (
