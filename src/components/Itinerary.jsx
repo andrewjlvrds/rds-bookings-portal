@@ -617,6 +617,13 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
           {sorted.filter(b => {
             const dd = b.Day_Description || b['Day Description'] || ''
             return !(dd.startsWith('Z ') || dd.startsWith('z '))
+          }).slice().sort((a, b) => {
+            // Newest activity first: new replies float to top, then sort by last response date, then check-in date
+            if (a.New_Reply && !b.New_Reply) return -1
+            if (!a.New_Reply && b.New_Reply) return 1
+            const aDate = a.Last_Response_Date || a.Enquiry_Sent_Date || a.Check_in_Date || ''
+            const bDate = b.Last_Response_Date || b.Enquiry_Sent_Date || b.Check_in_Date || ''
+            return bDate.localeCompare(aDate)
           }).map(b => {
             const lodge = (b.Lodge_Name && typeof b.Lodge_Name === 'object' ? b.Lodge_Name.name : b.Lodge_Name) || b.Name || '—'
             const status = getStatus(b)
