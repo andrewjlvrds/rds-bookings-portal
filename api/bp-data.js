@@ -156,7 +156,7 @@ export default async function(req, res) {
     var allLodges = [];
     try {
       var lodgeFields = 'Name,Email,Preferred_Email,Email_Reservations_2,Email_Accounts,' +
-        'Secondary_Email,Contact_First_Name,Phone,Country,Status,Lodge_Currency,' +
+        'Email_4,Secondary_Email,Contact_First_Name,Phone,Country,Status,Lodge_Currency,' +
         'STO_Discount,STO_Valid_From,STO_Valid_To,Guide_Room_Policy,id';
 
       var lodgePage = 1;

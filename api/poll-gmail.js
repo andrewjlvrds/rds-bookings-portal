@@ -283,7 +283,7 @@ export default async function(req, res) {
     var emailMap = {};
     var allLodges = [];
     try {
-      var lodgeResult = await zohoApi('GET', 'Lodges?fields=Name,Email,Preferred_Email,Email_Reservations_2&per_page=200');
+      var lodgeResult = await zohoApi('GET', 'Lodges?fields=Name,Email,Preferred_Email,Email_Reservations_2,Secondary_Email,Email_4,Email_Accounts&per_page=200');
       allLodges = (lodgeResult && lodgeResult.data) || [];
       emailMap = buildEmailMap(allLodges);
       console.log('Built emailMap with', Object.keys(emailMap).length, 'email addresses (' + allLodges.length + ' lodges)');

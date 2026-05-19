@@ -120,7 +120,7 @@ export function buildEmailMap(lodgeRecords) {
   var map = {};
   (lodgeRecords || []).forEach(function(lodge) {
     var name = lodge.Name || '';
-    var emails = [lodge.Email, lodge.Preferred_Email, lodge.Email_Reservations_2];
+    var emails = [lodge.Email, lodge.Preferred_Email, lodge.Email_Reservations_2, lodge.Secondary_Email, lodge.Email_4, lodge.Email_Accounts];
     emails.forEach(function(e) {
       if (e && typeof e === 'string') {
         map[e.toLowerCase().trim()] = name;

@@ -130,20 +130,30 @@ export default async function handler(req, res) {
 
         if (lodgeId) {
           // Fetch lodge record to check existing emails
-          const lodgeResult = await zohoApi('GET', 'CustomModule5/' + lodgeId + '?fields=id,Name,Email,Preferred_Email,Email_Reservations_2');
+          const lodgeResult = await zohoApi('GET', 'CustomModule5/' + lodgeId + '?fields=id,Name,Email,Preferred_Email,Email_Reservations_2,Secondary_Email,Email_4,Email_Accounts');
           const lodge = lodgeResult?.data;
           if (lodge) {
-            const existingEmails = [lodge.Email, lodge.Preferred_Email, lodge.Email_Reservations_2]
+            const allEmailFields = [
+              { field: 'Preferred_Email', value: lodge.Preferred_Email },
+              { field: 'Email_Reservations_2', value: lodge.Email_Reservations_2 },
+              { field: 'Secondary_Email', value: lodge.Secondary_Email },
+              { field: 'Email_4', value: lodge.Email_4 },
+              { field: 'Email_Accounts', value: lodge.Email_Accounts },
+            ];
+            const existingEmails = [lodge.Email, ...allEmailFields.map(f => f.value)]
               .filter(Boolean).map(e => e.toLowerCase().trim());
-            
+
             if (!existingEmails.includes(senderAddr)) {
-              // Add to Email_Reservations_2 if empty, otherwise log for manual review
-              if (!lodge.Email_Reservations_2) {
-                await zohoApi('PUT', 'CustomModule5', { data: [{ id: lodgeId, Email_Reservations_2: senderAddr }] });
+              // Find first empty slot
+              const emptySlot = allEmailFields.find(f => !f.value);
+              if (emptySlot) {
+                const update = { id: lodgeId };
+                update[emptySlot.field] = senderAddr;
+                await zohoApi('PUT', 'CustomModule5', { data: [update] });
                 emailAdded = true;
-                console.log('Auto-added email', senderAddr, 'to lodge', lodge.Name);
+                console.log('Auto-added email', senderAddr, 'to lodge', lodge.Name, 'field', emptySlot.field);
               } else {
-                console.log('Lodge', lodge.Name, 'already has Email_Reservations_2 set — new sender', senderAddr, 'needs manual review');
+                console.log('Lodge', lodge.Name, 'has no empty email slots — new sender', senderAddr, 'needs manual review');
               }
             }
           }
