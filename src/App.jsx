@@ -232,12 +232,15 @@ export default function App() {
     setActiveView('tour-panel')
   }
 
+  const [focusTab, setFocusTab] = useState(null)
+
   const handleSelectBooking = (bk, fromTab, opts) => {
     setActiveBooking(bk)
     if (fromTab) setReturnToTourTab(fromTab)
     if (opts && opts.origin) setLodgeDetailOrigin(opts.origin)
     else setLodgeDetailOrigin('tour-panel')
     setFocusEmailId(opts && opts.focusEmailId ? opts.focusEmailId : null)
+    setFocusTab(opts && opts.focusTab ? opts.focusTab : null)
     setActiveView('lodge-detail')
   }
 
@@ -324,6 +327,7 @@ export default function App() {
           }}
           backLabel={backLabel}
           focusEmailId={focusEmailId}
+          focusTab={focusTab}
           onRefresh={() => refreshData(activeTour ? activeTour.id : null)}
           readState={readState}
           onMarkRead={markRead}

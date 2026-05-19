@@ -582,10 +582,10 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
       </div>
 
       {/* Tab switcher */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '0.5px solid var(--border-default)' }}>
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '0.5px solid var(--border-default)', alignItems: 'center' }}>
         {[
+          { id: 'correspondence', label: 'Correspondence' },
           { id: 'bookings', label: 'Lodge Bookings' },
-          { id: 'portal-sync', label: 'Portal Sync' },
         ].map(tab => (
           <button
             key={tab.id}
@@ -600,9 +600,55 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
             }}
           >{tab.label}</button>
         ))}
+        <button
+          onClick={() => setActiveTab('portal-sync')}
+          style={{
+            marginLeft: 'auto', fontSize: 11, padding: '3px 10px', marginBottom: 8,
+            border: '0.5px solid var(--border-default)', borderRadius: 3,
+            background: 'none', cursor: 'pointer', color: 'var(--text-muted)',
+          }}
+        >Portal sync</button>
       </div>
 
       {activeTab === 'portal-sync' && <PortalSync tour={tour} />}
+
+      {activeTab === 'correspondence' && (
+        <div>
+          {sorted.filter(b => {
+            const dd = b.Day_Description || b['Day Description'] || ''
+            return !(dd.startsWith('Z ') || dd.startsWith('z '))
+          }).map(b => {
+            const lodge = (b.Lodge_Name && typeof b.Lodge_Name === 'object' ? b.Lodge_Name.name : b.Lodge_Name) || b.Name || '—'
+            const status = getStatus(b)
+            const badge = getStatusBadge(status)
+            const hasNewReply = b.New_Reply === true
+            const lastResponse = b.Last_Response_Date || ''
+            return (
+              <div
+                key={b.id}
+                onClick={() => onSelectBooking(b, 'itinerary', { focusTab: 'correspondence' })}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                  borderBottom: '0.5px solid var(--border-light)', cursor: 'pointer',
+                  background: hasNewReply ? 'var(--blue-bg)' : 'var(--bg-primary)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                onMouseLeave={e => e.currentTarget.style.background = hasNewReply ? 'var(--blue-bg)' : 'var(--bg-primary)'}
+              >
+                {hasNewReply && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C62828', flexShrink: 0 }} />}
+                {!hasNewReply && <span style={{ width: 6, flexShrink: 0 }} />}
+                <span style={{ fontSize: 13, fontWeight: hasNewReply ? 600 : 400, flex: 1, color: 'var(--text-primary)' }}>{lodge}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{b.Check_in_Date || ''}</span>
+                <span style={{
+                  fontSize: 10, padding: '1px 6px', borderRadius: 3, fontWeight: 500,
+                  background: badge.bg, color: badge.color, border: badge.border || 'none',
+                }}>{status}</span>
+                {lastResponse && <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 70, textAlign: 'right' }}>Last: {lastResponse}</span>}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {activeTab === 'bookings' && <>
 

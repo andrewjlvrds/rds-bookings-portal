@@ -4,7 +4,7 @@ import { cleanEmailBody, looksLikeRawHtml } from '../utils/emailBody'
 import { BookingActivityLog } from './ActivityLog'
 import RoutingPicker from './RoutingPicker'
 
-export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead, tours, backLabel, focusEmailId }) {
+export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead, tours, backLabel, focusEmailId, focusTab }) {
   const [emails, setEmails] = useState([])
   const [loadingEmails, setLoadingEmails] = useState(true)
   const [editing, setEditing] = useState(null)
@@ -28,7 +28,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
   // navigated here by clicking a specific email, land on the
   // Correspondence tab so she sees the thread first.
   const [activeDetailTab, setActiveDetailTab] = useState(
-    (focusEmailId || booking.New_Reply === true) ? 'correspondence' : 'details'
+    focusTab || ((focusEmailId || booking.New_Reply === true) ? 'correspondence' : 'details')
   )
 
   const bookingId = booking.id || booking['Record Id']
@@ -730,48 +730,42 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
         <div className="panel-head">
           <span>Email thread</span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {lodgeEmail && (
-              <button
-                className="btn btn-sm"
-                onClick={handleSearchGmail}
-                disabled={searchingGmail}
-                style={{ fontSize: 11, padding: '3px 10px' }}
-              >
-                {searchingGmail ? 'Searching...' : 'Search Gmail'}
-              </button>
-            )}
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
+              {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
+            </span>
             <button
               className="btn btn-sm"
-              onClick={handleCheckReplies}
-              disabled={polling}
-              style={{ fontSize: 11, padding: '3px 10px' }}
-            >
-              {polling ? 'Checking...' : 'Check for replies'}
-            </button>
-            <button
-              className="btn btn-sm"
+              disabled={polling || searchingGmail}
               onClick={async () => {
                 setPolling(true)
                 try {
-                  const res = await fetch('/api/reparse-email', {
+                  // 1. Poll Gmail for new replies
+                  await fetch('/api/poll-gmail', { method: 'POST' })
+                  // 2. Search Gmail for any emails not yet in blob
+                  if (lodgeEmail) {
+                    const params = new URLSearchParams()
+                    params.set('lodge_email', lodgeEmail)
+                    if (checkIn) params.set('check_in', checkIn)
+                    const sr = await fetch('/api/gmail-search?' + params.toString())
+                    const sdata = await sr.json()
+                    if (sdata.emails) {
+                      const storedIds = new Set(emails.map(e => e.message_id || e.gmail_id || ''))
+                      setGmailResults(sdata.emails.filter(gm => !storedIds.has(gm.gmail_id)))
+                    }
+                  }
+                  // 3. Re-parse attachments
+                  await fetch('/api/reparse-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ booking_id: bookingId }),
                   })
-                  const result = await res.json()
-                  console.log('Reparse result:', result)
                   fetchEmails()
                   if (onRefresh) onRefresh()
-                } catch (err) { console.error('Re-parse error:', err) }
+                } catch (err) { console.error('Refresh error:', err) }
                 finally { setPolling(false) }
               }}
-              disabled={polling}
-              style={{ fontSize: 11, padding: '3px 10px', color: 'var(--text-muted)' }}
-              title="Re-download attachments and re-parse with AI (extracts payment data from PDFs)"
-            >{polling ? 'Parsing...' : '↻ Re-parse'}</button>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
-              {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
-            </span>
+              style={{ fontSize: 11, padding: '3px 10px' }}
+            >{(polling || searchingGmail) ? 'Refreshing...' : '↻ Refresh'}</button>
           </div>
         </div>
         <div className="panel-body" style={{ padding: 0 }}>
