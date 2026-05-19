@@ -929,13 +929,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
               return (
                 <React.Fragment key={bk['Record Id'] || bk.id || i}>
                 <tr
-                  style={Object.assign(
-                    { cursor: 'pointer' },
-                    status === 'Not Available' ? { opacity: 0.6 } : {}
-                  )}
-                  onClick={e => { if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'OPTION') onSelectBooking(bk) }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  style={Object.assign({ cursor: 'default' }, status === 'Not Available' ? { opacity: 0.6 } : {})}
                 >
                   <td style={{ fontVariantNumeric: 'tabular-nums' }}>{nightNum}</td>
                   <td>{fmtDate(checkIn)}</td>
@@ -1366,9 +1360,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                         background: 'rgba(245,158,11,0.04)',
                         fontSize: 12,
                       }}
-                      onClick={e => { if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'OPTION') onSelectBooking(fb) }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(245,158,11,0.08)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(245,158,11,0.04)'}
+
                     >
                       <td></td>
                       <td></td>
@@ -1466,9 +1458,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                     <tr
                       key={'sub-' + sbId}
                       style={{ cursor: 'pointer', background: typeColor.bg, fontSize: 12 }}
-                      onClick={() => onSelectBooking(sb)}
-                      onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
-                      onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+
                     >
                       <td></td>
                       <td></td>
