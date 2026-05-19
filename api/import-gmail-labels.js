@@ -130,14 +130,18 @@ export default async function handler(req, res) {
     const labelsResult = await gmailApi(token, 'labels');
     const allLabels = labelsResult.labels || [];
 
-    // 2. Fetch all Zoho tours + bookings for matching
-    const toursResult = await zohoApi('GET', 'CustomModule2?fields=id,Name,Departure_Date&per_page=50');
-    const tours = (toursResult?.data || []);
-
-    const bookingsResult = await zohoApi('GET', 
-      'Lodge_Bookings?fields=id,Name,Lodge_Name,Check_in_Date,Check_out_Date,Tour&per_page=200&sort_by=Created_Time&sort_order=desc'
-    );
-    const allBookings = bookingsResult?.data || [];
+    // 2. Fetch all Zoho bookings for matching (paginated)
+    const allBookings = [];
+    let bkPage = 1, bkMore = true;
+    while (bkMore && bkPage <= 10) {
+      const bkResult = await zohoApi('GET',
+        'Lodge_Bookings?fields=id,Name,Lodge_Name,Check_in_Date,Check_out_Date,Tour&per_page=200&page=' + bkPage + '&sort_by=Created_Time&sort_order=desc'
+      );
+      const bkData = bkResult?.data || [];
+      allBookings.push(...bkData);
+      bkMore = bkResult?.info?.more_records || false;
+      bkPage++;
+    }
 
     // Group bookings by tour name
     const bookingsByTour = {};
