@@ -237,7 +237,7 @@ export default async function(req, res) {
     // Search everywhere — not just inbox — so labelled replies are found
     var searchWindow = refetch ? '14d' : '3d';
     var query = 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
-    var listResult = await gmailApi(token, 'messages?q=' + encodeURIComponent(query) + '&maxResults=' + (refetch ? '50' : '20'));
+    var listResult = await gmailApi(token, 'messages?q=' + encodeURIComponent(query) + '&maxResults=' + (refetch ? '100' : '50'));
 
     var messages = listResult.messages || [];
     if (messages.length === 0) {
