@@ -933,7 +933,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                     { cursor: 'pointer' },
                     status === 'Not Available' ? { opacity: 0.6 } : {}
                   )}
-                  onClick={() => onSelectBooking(bk)}
+                  onClick={e => { if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'OPTION') onSelectBooking(bk) }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
@@ -1366,7 +1366,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
                         background: 'rgba(245,158,11,0.04)',
                         fontSize: 12,
                       }}
-                      onClick={() => onSelectBooking(fb)}
+                      onClick={e => { if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'OPTION') onSelectBooking(fb) }}
                       onMouseEnter={e => e.currentTarget.style.background = 'rgba(245,158,11,0.08)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'rgba(245,158,11,0.04)'}
                     >
