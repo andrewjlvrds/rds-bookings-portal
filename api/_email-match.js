@@ -318,5 +318,56 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailM
     };
   }
 
+  // 4b. Sender email local-part / domain fuzzy match against lodge names.
+  // Catches cases like bahnhof@hotel-aus.com → "Bahnhof Hotel" where the
+  // exact email isn't registered but the local part is clearly the lodge name.
+  if (emailMap) {
+    var senderAddr4b = extractEmailAddress(frm);
+    if (senderAddr4b && senderAddr4b.indexOf('@') !== -1) {
+      var localPart = senderAddr4b.split('@')[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+      var domainPart = senderAddr4b.split('@')[1].split('.')[0].toLowerCase(); // e.g. "hotel-aus" → "hotelaus"
+      // Find lodge names that contain the local part or vice versa
+      var bestFuzzyLodge = null, bestFuzzyScore = 0;
+      Object.keys(nameMap).forEach(function(lodgeKey) {
+        var lodgeClean = lodgeKey.replace(/[^a-z0-9]/gi, '').toLowerCase();
+        // Score based on overlap
+        var score = 0;
+        if (localPart.length > 3 && (lodgeClean.includes(localPart) || localPart.includes(lodgeClean))) score = 0.8;
+        else if (domainPart.length > 3 && (lodgeClean.includes(domainPart) || domainPart.includes(lodgeClean))) score = 0.5;
+        if (score > bestFuzzyScore) { bestFuzzyScore = score; bestFuzzyLodge = lodgeKey; }
+      });
+      if (bestFuzzyLodge && bestFuzzyScore >= 0.5) {
+        var fuzzyCandidates = nameMap[bestFuzzyLodge];
+        if (fuzzyCandidates && fuzzyCandidates.length > 0) {
+          // Apply date scoring — same logic as Tier 4
+          var fuzzyBest = null, fuzzyBestScore = 0;
+          fuzzyCandidates.forEach(function(c) {
+            var cIn = c.Check_in_Date ? new Date(c.Check_in_Date) : null;
+            var cOut = c.Check_out_Date ? new Date(c.Check_out_Date) : null;
+            var ds = 0;
+            if (emailDates && emailDates.size > 0 && cIn) {
+              emailDates.forEach(function(iso) {
+                var d = new Date(iso);
+                var diffDays = Math.abs((d - cIn) / 86400000);
+                if (diffDays === 0) ds = Math.max(ds, 10);
+                else if (diffDays <= 1) ds = Math.max(ds, 7);
+                else if (diffDays <= 7) ds = Math.max(ds, 4);
+                else if (diffDays <= 30) ds = Math.max(ds, 1);
+                if (cOut && d >= cIn && d <= cOut) ds = Math.max(ds, 8);
+              });
+            }
+            if (ds > fuzzyBestScore) { fuzzyBestScore = ds; fuzzyBest = c; }
+          });
+          if (fuzzyBest && fuzzyBestScore > 0) {
+            return { booking: fuzzyBest, method: 'sender_email_domain_fuzzy_' + Math.round(bestFuzzyScore * 10) };
+          }
+          if (fuzzyCandidates.length === 1) {
+            return { booking: fuzzyCandidates[0], method: 'sender_email_domain_fuzzy_single' };
+          }
+        }
+      }
+    }
+  }
+
   return { booking: null, method: 'unmatched', reason: 'no_lodge_name_match' };
 }
