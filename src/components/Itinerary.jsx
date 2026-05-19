@@ -1926,11 +1926,6 @@ function TourInbox({ tour, sorted, onSelectBooking }) {
                         </span>
                         <div style={{ overflow: 'hidden' }}>
                           <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{em.subject || '(no subject)'}</span>
-                          {!isEmailOpen && body && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
-                              {body.replace(/<[^>]+>/g, '').trim().slice(0, 80)}…
-                            </span>
-                          )}
                         </div>
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{emDate}</span>
                       </div>

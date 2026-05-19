@@ -1127,7 +1127,7 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
           fontWeight: isUnread ? 600 : 400,
           flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          {expanded ? subject : (preview || subject)}
+          {expanded ? subject : (subject || preview)}
         </span>
         {swapFlag && (
           <span style={{
@@ -1385,7 +1385,7 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
           {isFromUs ? 'to lodge' : from.split('<')[0].trim() || from}
         </span>
         <span style={{ color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {expanded ? subject : preview}
+          {expanded ? subject : (subject || preview)}
         </span>
         <span style={{ color: 'var(--text-hint)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
           {date ? fmtDate(date) : ''}
