@@ -1230,8 +1230,9 @@ ${nights.map(n => {
             <colgroup>
               <col style={{ width: 50 }} />
               <col style={{ width: 80 }} />
-              <col style={{ width: '30%' }} />
-              <col style={{ width: '30%' }} />
+              <col style={{ width: '23%' }} />
+              <col style={{ width: '23%' }} />
+              <col style={{ width: '22%' }} />
               <col style={{ width: 80 }} />
             </colgroup>
             <thead>
@@ -1239,6 +1240,7 @@ ${nights.map(n => {
                 <th>Day</th>
                 <th>Date</th>
                 <th>Route</th>
+                <th>Alt route</th>
                 <th>Lodge</th>
                 <th></th>
               </tr>
@@ -1321,11 +1323,13 @@ ${nights.map(n => {
                         }}
                       >+ Excursion</button>
                     )}
-                    {/* Alt route toggle */}
+                  </td>
+                  {/* Alt route column */}
+                  <td style={{ verticalAlign: 'top', padding: '8px 6px' }}>
                     {n.alt ? (
-                      <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--border-light)' }}>
+                      <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--amber-text, #92400E)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Alt route</span>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--amber-text, #92400E)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Alt</span>
                           <button onClick={() => removeAlt(i)} style={{ background: 'none', border: 'none', fontSize: 10, color: 'var(--text-muted)', cursor: 'pointer', marginLeft: 'auto' }}>×</button>
                         </div>
                         <input
@@ -1333,7 +1337,7 @@ ${nights.map(n => {
                           value={n.alt.route || ''}
                           onChange={e => updateAlt(i, 'route', e.target.value)}
                           style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '1px 0', outline: 'none', color: 'var(--text-primary)' }}
-                          placeholder="Alt route description"
+                          placeholder="Alt route"
                         />
                         <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                           <input
@@ -1352,11 +1356,18 @@ ${nights.map(n => {
                           style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 10, padding: '1px 0', outline: 'none', color: 'var(--text-muted)', fontStyle: 'italic' }}
                           placeholder="Alt route notes"
                         />
+                        <input
+                          type="text"
+                          value={n.alt.lodge || ''}
+                          onChange={e => updateAlt(i, 'lodge', e.target.value)}
+                          style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 0', outline: 'none', color: 'var(--amber-text, #92400E)', marginTop: 4, borderTop: '0.5px dashed var(--border-light)' }}
+                          placeholder="Alt lodge"
+                        />
                       </div>
                     ) : (
                       <button
                         onClick={() => addAlt(i)}
-                        style={{ background: 'none', border: 'none', fontSize: 9, color: 'var(--amber-text, #92400E)', cursor: 'pointer', padding: '2px 0', opacity: 0.7, marginTop: 2 }}
+                        style={{ background: 'none', border: 'none', fontSize: 9, color: 'var(--amber-text, #92400E)', cursor: 'pointer', padding: '2px 0', opacity: 0.7 }}
                       >+ Alt route</button>
                     )}
                   </td>
@@ -1477,18 +1488,6 @@ ${nights.map(n => {
                 <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10, color: 'var(--text-muted)' }}>Booking details</div>
                 <Field label="Lodge" value={n.lodge} />
                 <Field label="Backup lodge" value={n.backup} field="backup" />
-                {n.alt && (
-                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-light)' }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--amber-text, #92400E)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Alt lodge</div>
-                    <input
-                      type="text"
-                      value={n.alt.lodge || ''}
-                      onChange={e => updateAlt(i, 'lodge', e.target.value)}
-                      style={{ width: '100%', border: 'none', borderBottom: '0.5px solid var(--border-light)', background: 'transparent', fontSize: 12, padding: '2px 0', outline: 'none', color: 'var(--text-primary)' }}
-                      placeholder="Alt lodge name"
-                    />
-                  </div>
-                )}
                 <Field label="Contact" value={ls.contact || ''} />
                 <Field label="Email" value={ls.email || ''} />
                 <Field label="Check-in" value={fmtDateFull(n.date)} />
