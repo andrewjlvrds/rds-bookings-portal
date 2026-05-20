@@ -236,6 +236,22 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
     setPushed(false)
   }
 
+  const updateAlt = (idx, field, value) => {
+    setNights(prev => prev.map((n, i) => i === idx ? { ...n, alt: { ...(n.alt || {}), [field]: value } } : n))
+    setDirty(true)
+    setPushed(false)
+  }
+
+  const addAlt = (idx) => {
+    setNights(prev => prev.map((n, i) => i === idx ? { ...n, alt: { route: '', km: '', route_notes: '', lodge: '' } } : n))
+    setDirty(true)
+  }
+
+  const removeAlt = (idx) => {
+    setNights(prev => prev.map((n, i) => i === idx ? { ...n, alt: undefined } : n))
+    setDirty(true)
+  }
+
   // Add a night after index — shifts all subsequent dates forward
   const addNightAfter = (idx) => {
     const prev = nights[idx]
@@ -744,6 +760,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   .meals { width: 40px; color: #888; }
   .notes { font-size: 9px; color: #888; margin-top: 2px; }
   .route-notes { font-size: 9px; color: #888; font-style: italic; margin-top: 2px; }
+  .alt-route { font-size: 9px; color: #92400E; margin-top: 4px; padding-top: 3px; border-top: 1px dashed #ddd; }
+  .alt-lodge { font-size: 9px; color: #92400E; margin-top: 2px; }
   .total { font-weight: 600; background: #f5f5f5; }
   .footer { margin-top: 14px; font-size: 9px; color: #999; }
   @media print { body { padding: 0; } }
@@ -757,9 +775,9 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 ${nights.map(n => `<tr>
   <td class="night">${n.pre_tour ? 'Pre' : n.day}</td>
   <td class="date">${fmtDate(n.date)}</td>
-  <td class="route">${n.route || ''}${n.km ? '<div class="notes">' + n.km + ' km</div>' : ''}${n.route_notes ? '<div class="route-notes">' + n.route_notes + '</div>' : ''}${n.notes ? '<div class="notes">' + n.notes + '</div>' : ''}</td>
+  <td class="route">${n.route || ''}${n.km ? '<div class="notes">' + n.km + ' km</div>' : ''}${n.route_notes ? '<div class="route-notes">' + n.route_notes + '</div>' : ''}${n.notes ? '<div class="notes">' + n.notes + '</div>' : ''}${n.alt ? '<div class="alt-route"><strong>Alt:</strong> ' + (n.alt.route || '') + (n.alt.km ? ' · ' + n.alt.km + ' km' : '') + (n.alt.route_notes ? '<br><em>' + n.alt.route_notes + '</em>' : '') + '</div>' : ''}</td>
   <td class="km">${n.km || ''}</td>
-  <td><div class="lodge">${n.lodge || ''}</div>${n.backup ? '<div class="backup">Backup: ' + n.backup + '</div>' : ''}</td>
+  <td><div class="lodge">${n.lodge || ''}</div>${n.alt && n.alt.lodge ? '<div class="alt-lodge"><strong>Alt:</strong> ' + n.alt.lodge + '</div>' : ''}${n.backup ? '<div class="backup">Backup: ' + n.backup + '</div>' : ''}</td>
   <td class="meals">${n.meals || ''}</td>
 </tr>`).join('')}
 <tr class="total"><td></td><td></td><td>Total</td><td class="km">${totalKm} km</td><td></td><td></td></tr>
@@ -833,6 +851,9 @@ ${nights.map(n => `<tr>
   .route-name { font-weight: 500; color: #2a2a2a; }
   .route-km { font-size: 10px; color: #999; margin-top: 2px; }
   .route-notes { font-size: 10px; color: #777; font-style: italic; margin-top: 3px; line-height: 1.4; }
+  .alt-route { font-size: 10px; color: #92400E; margin-top: 5px; padding-top: 4px; border-top: 1px dashed #ddd; line-height: 1.4; }
+  .alt-lodge { font-size: 10px; color: #92400E; margin-top: 3px; }
+  .alt-label { font-weight: 600; }
   .excursion { font-size: 10px; color: #b8860b; margin-top: 3px; }
   .lodge-col { font-weight: 500; color: #2a2a2a; }
   
@@ -887,8 +908,9 @@ ${nights.map(n => {
           ${hasKm ? '<div class="route-km">' + n.km + ' km</div>' : ''}
           ${hasNotes ? '<div class="route-notes">' + n.route_notes.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : ''}
           ${hasExcursion ? '<div class="excursion">★ ' + n.excursion.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : ''}
+          ${n.alt ? '<div class="alt-route"><span class="alt-label">Alt:</span> ' + (n.alt.route || '') + (n.alt.km ? ' · ' + n.alt.km + ' km' : '') + (n.alt.route_notes ? '<br><em>' + n.alt.route_notes.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</em>' : '') + '</div>' : ''}
         </td>
-        <td class="lodge-col">${n.lodge || '—'}</td>
+        <td class="lodge-col">${n.lodge || '—'}${n.alt && n.alt.lodge ? '<div class="alt-lodge"><span class="alt-label">Alt:</span> ' + n.alt.lodge + '</div>' : ''}</td>
       </tr>`
 }).join('\n')}
       <tr class="total-row">
@@ -1299,6 +1321,44 @@ ${nights.map(n => {
                         }}
                       >+ Excursion</button>
                     )}
+                    {/* Alt route toggle */}
+                    {n.alt ? (
+                      <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--border-light)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--amber-text, #92400E)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Alt route</span>
+                          <button onClick={() => removeAlt(i)} style={{ background: 'none', border: 'none', fontSize: 10, color: 'var(--text-muted)', cursor: 'pointer', marginLeft: 'auto' }}>×</button>
+                        </div>
+                        <input
+                          type="text"
+                          value={n.alt.route || ''}
+                          onChange={e => updateAlt(i, 'route', e.target.value)}
+                          style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '1px 0', outline: 'none', color: 'var(--text-primary)' }}
+                          placeholder="Alt route description"
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                          <input
+                            type="text"
+                            value={n.alt.km || ''}
+                            onChange={e => updateAlt(i, 'km', e.target.value.replace(/[^0-9/.]/g, ''))}
+                            style={{ width: 40, border: 'none', background: 'transparent', fontSize: 11, padding: '1px 0', outline: 'none', color: 'var(--text-muted)', textAlign: 'right' }}
+                            placeholder="—"
+                          />
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>km</span>
+                        </div>
+                        <input
+                          type="text"
+                          value={n.alt.route_notes || ''}
+                          onChange={e => updateAlt(i, 'route_notes', e.target.value)}
+                          style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 10, padding: '1px 0', outline: 'none', color: 'var(--text-muted)', fontStyle: 'italic' }}
+                          placeholder="Alt route notes"
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addAlt(i)}
+                        style={{ background: 'none', border: 'none', fontSize: 9, color: 'var(--amber-text, #92400E)', cursor: 'pointer', padding: '2px 0', opacity: 0.7, marginTop: 2 }}
+                      >+ Alt route</button>
+                    )}
                   </td>
                   <td>
                     {(n.lodges || []).length > 0 ? (
@@ -1417,6 +1477,18 @@ ${nights.map(n => {
                 <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10, color: 'var(--text-muted)' }}>Booking details</div>
                 <Field label="Lodge" value={n.lodge} />
                 <Field label="Backup lodge" value={n.backup} field="backup" />
+                {n.alt && (
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-light)' }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--amber-text, #92400E)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Alt lodge</div>
+                    <input
+                      type="text"
+                      value={n.alt.lodge || ''}
+                      onChange={e => updateAlt(i, 'lodge', e.target.value)}
+                      style={{ width: '100%', border: 'none', borderBottom: '0.5px solid var(--border-light)', background: 'transparent', fontSize: 12, padding: '2px 0', outline: 'none', color: 'var(--text-primary)' }}
+                      placeholder="Alt lodge name"
+                    />
+                  </div>
+                )}
                 <Field label="Contact" value={ls.contact || ''} />
                 <Field label="Email" value={ls.email || ''} />
                 <Field label="Check-in" value={fmtDateFull(n.date)} />
