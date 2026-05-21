@@ -481,7 +481,8 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
 
   const handlePDF = () => {
     const rows = sorted.filter(isActiveBooking).map(bk => {
-      const lodge = (bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || bk.Name || ''
+      const rawLodge = bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name
+      const lodge = rawLodge ? rawLodge.split(' - ')[0] : (bk.Name || '').split(' - ')[0].replace(/\s+BoN.*|\s+FoSA.*|\s+WH-CT.*|\s+GL.*|\s+EoA.*|\s+2026.*|\s+2027.*/, '')
       const dd = bk.Day_Description || ''
       const routeMatch = dd.match(/Day\s*\d+:\s*(.+)/)
       const route = routeMatch ? routeMatch[1] : dd
