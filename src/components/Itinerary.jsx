@@ -503,8 +503,8 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
 @media print { body { padding: 0; } }
 </style></head><body>
 <h1>${tour.name}</h1><div class="sub">Departure: ${dep}</div>
-<table><thead><tr><th>Day</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr></thead>
-<tbody>${rows.map(r => `<tr><td class="day">${r.day}</td><td class="date">${r.date ? new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}</td><td>${r.route}</td><td class="lodge">${r.lodge}</td><td class="meals">${r.meals}</td></tr>`).join('')}</tbody>
+<table><thead><tr><th>Day</th><th>Date</th><th>Route</th><th>Lodge</th></tr></thead>
+<tbody>${rows.map(r => `<tr><td class="day">${r.day}</td><td class="date">${r.date ? new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}</td><td>${r.route}</td><td class="lodge">${r.lodge}</td></tr>`).join('')}</tbody>
 </table>
 <div class="footer">Ride Down South · ${tour.name} · Generated ${new Date().toLocaleDateString('en-GB')}</div>
 </body></html>`
