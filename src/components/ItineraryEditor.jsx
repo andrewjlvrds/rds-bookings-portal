@@ -90,6 +90,10 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   // Track whether we have unsaved local changes
   const [dirty, setDirty] = useState(false)
 
+  // PDF field options
+  const [pdfOptions, setPdfOptions] = useState({ km: true, route_notes: true, meals: true, excursion: true, alt: true })
+  const [showPdfOptions, setShowPdfOptions] = useState(false)
+
   // Auto-save draft to localStorage whenever nights change
   useEffect(() => {
     if (nights.length > 0) {
@@ -736,7 +740,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   }
 
   // Download as printable PDF (opens print dialog)
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = (opts) => {
+    const o = opts || pdfOptions
     const totalKm = nights.reduce((sum, n) => sum + (parseInt(n.km) || 0), 0)
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -770,17 +775,17 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 <h1>${tour.name}</h1>
 <div class="sub">Departure: ${departureDate ? fmtDateFull(departureDate) : 'TBC'}${tour.tour_type ? ' · ' + tour.tour_type : ''}</div>
 <table>
-<thead><tr><th>Day</th><th>Date</th><th>Route</th><th>Km</th><th>Lodge</th><th>Meals</th></tr></thead>
+<thead><tr><th>Day</th><th>Date</th><th>Route</th>${o.km ? '<th>Km</th>' : ''}<th>Lodge</th>${o.meals ? '<th>Meals</th>' : ''}</tr></thead>
 <tbody>
 ${nights.map(n => `<tr>
   <td class="night">${n.pre_tour ? 'Pre' : n.day}</td>
   <td class="date">${fmtDate(n.date)}</td>
-  <td class="route">${n.route || ''}${n.km ? '<div class="notes">' + n.km + ' km</div>' : ''}${n.route_notes ? '<div class="route-notes">' + n.route_notes + '</div>' : ''}${n.notes ? '<div class="notes">' + n.notes + '</div>' : ''}${n.alt ? '<div class="alt-route"><strong>Alt:</strong> ' + (n.alt.route || '') + (n.alt.km ? ' · ' + n.alt.km + ' km' : '') + (n.alt.route_notes ? '<br><em>' + n.alt.route_notes + '</em>' : '') + '</div>' : ''}</td>
-  <td class="km">${n.km || ''}</td>
-  <td><div class="lodge">${n.lodge || ''}</div>${n.alt && n.alt.lodge ? '<div class="alt-lodge"><strong>Alt:</strong> ' + n.alt.lodge + '</div>' : ''}${n.backup ? '<div class="backup">Backup: ' + n.backup + '</div>' : ''}</td>
-  <td class="meals">${n.meals || ''}</td>
+  <td class="route">${n.route || ''}${o.km && n.km ? '<div class="notes">' + n.km + ' km</div>' : ''}${o.route_notes && n.route_notes ? '<div class="route-notes">' + n.route_notes + '</div>' : ''}${n.notes ? '<div class="notes">' + n.notes + '</div>' : ''}${o.excursion && n.excursion ? '<div class="notes">Excursion: ' + n.excursion + '</div>' : ''}${o.alt && n.alt ? '<div class="alt-route"><strong>Alt:</strong> ' + (n.alt.route || '') + (o.km && n.alt.km ? ' · ' + n.alt.km + ' km' : '') + (o.route_notes && n.alt.route_notes ? '<br><em>' + n.alt.route_notes + '</em>' : '') + '</div>' : ''}</td>
+  ${o.km ? '<td class="km">' + (n.km || '') + '</td>' : ''}
+  <td><div class="lodge">${n.lodge || ''}</div>${o.alt && n.alt && n.alt.lodge ? '<div class="alt-lodge"><strong>Alt:</strong> ' + n.alt.lodge + '</div>' : ''}${n.backup ? '<div class="backup">Backup: ' + n.backup + '</div>' : ''}</td>
+  ${o.meals ? '<td class="meals">' + (n.meals || '') + '</td>' : ''}
 </tr>`).join('')}
-<tr class="total"><td></td><td></td><td>Total</td><td class="km">${totalKm} km</td><td></td><td></td></tr>
+<tr class="total"><td></td><td></td><td>Total${o.km ? ': ' + totalKm + ' km' : ''}</td>${o.km ? '<td class="km"></td>' : ''}<td></td>${o.meals ? '<td></td>' : ''}</tr>
 </tbody></table>
 <div class="footer">Ride Down South · ${tour.name} · Generated ${new Date().toLocaleDateString()}</div>
 </body></html>`
@@ -1004,7 +1009,44 @@ ${nights.map(n => {
               {showSaveTemplate ? '× Template' : '💾 Template'}
             </button>
             <button className="btn" onClick={handleDownloadExcel} title="Download as CSV (Excel)">↓ Excel</button>
-            <button className="btn" onClick={handleDownloadPDF} title="Print / Save as PDF">↓ PDF</button>
+            <div style={{ position: 'relative' }}>
+              <button
+                className="btn"
+                onClick={() => setShowPdfOptions(v => !v)}
+                title="Print / Save as PDF"
+              >↓ PDF</button>
+              {showPdfOptions && (
+                <div style={{
+                  position: 'absolute', top: '110%', left: 0, zIndex: 100,
+                  background: 'var(--bg-primary)', border: '0.5px solid var(--border-default)',
+                  borderRadius: 'var(--radius-md)', padding: '10px 14px', minWidth: 180,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Include fields</div>
+                  {[
+                    { key: 'km', label: 'Distance (km)' },
+                    { key: 'route_notes', label: 'Route notes' },
+                    { key: 'meals', label: 'Meals' },
+                    { key: 'excursion', label: 'Excursions' },
+                    { key: 'alt', label: 'Alt routes' },
+                  ].map(({ key, label }) => (
+                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 6, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={pdfOptions[key]}
+                        onChange={e => setPdfOptions(prev => ({ ...prev, [key]: e.target.checked }))}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                  <button
+                    onClick={() => { setShowPdfOptions(false); handleDownloadPDF() }}
+                    className="btn btn-primary"
+                    style={{ width: '100%', marginTop: 8, fontSize: 11 }}
+                  >Generate PDF</button>
+                </div>
+              )}
+            </div>
             <button className="btn" onClick={handleClientProposal} title="Client-facing route proposal (no internal details)" style={{ color: 'var(--amber-text, #b8860b)' }}>↓ Proposal</button>
             <button className="btn" onClick={handleCopyProposal} title="Copy route summary to clipboard for email" style={{ color: 'var(--amber-text, #b8860b)' }}>{copied ? '✓ Copied' : '⎘ Copy'}</button>
             <button className="btn" onClick={handleClear}>Clear</button>
