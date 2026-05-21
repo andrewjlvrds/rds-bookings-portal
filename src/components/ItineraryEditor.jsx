@@ -742,7 +742,14 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
   // Download as printable PDF (opens print dialog)
   const handleDownloadPDF = (opts) => {
     const o = opts || pdfOptions
-    const totalKm = nights.reduce((sum, n) => sum + (parseInt(n.km) || 0), 0)
+    // Filter out cancelled/Z-prefixed nights
+    const activeNights = nights.filter(n => {
+      const name = (n.id || n.name || '').toLowerCase()
+      const lodge = (n.lodge || '').toLowerCase()
+      const status = (n.status || '').toLowerCase()
+      return !lodge.startsWith('z ') && status !== 'cancelled' && !name.startsWith('z')
+    })
+    const totalKm = activeNights.reduce((sum, n) => sum + (parseInt(n.km) || 0), 0)
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <title>${tour.name} — Itinerary</title>
@@ -777,7 +784,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
 <table>
 <thead><tr><th>Day</th><th>Date</th><th>Route</th>${o.km ? '<th>Km</th>' : ''}<th>Lodge</th>${o.meals ? '<th>Meals</th>' : ''}</tr></thead>
 <tbody>
-${nights.map(n => `<tr>
+${activeNights.map(n => `<tr>
   <td class="night">${n.pre_tour ? 'Pre' : n.day}</td>
   <td class="date">${fmtDate(n.date)}</td>
   <td class="route">${n.route || ''}${o.km && n.km ? '<div class="notes">' + n.km + ' km</div>' : ''}${o.route_notes && n.route_notes ? '<div class="route-notes">' + n.route_notes + '</div>' : ''}${n.notes ? '<div class="notes">' + n.notes + '</div>' : ''}${o.excursion && n.excursion ? '<div class="notes">Excursion: ' + n.excursion + '</div>' : ''}${o.alt && n.alt ? '<div class="alt-route"><strong>Alt:</strong> ' + (n.alt.route || '') + (o.km && n.alt.km ? ' · ' + n.alt.km + ' km' : '') + (o.route_notes && n.alt.route_notes ? '<br><em>' + n.alt.route_notes + '</em>' : '') + '</div>' : ''}</td>

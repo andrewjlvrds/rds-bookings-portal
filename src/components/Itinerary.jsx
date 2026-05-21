@@ -479,10 +479,45 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
     }
   }
 
+  const handlePDF = () => {
+    const rows = sorted.filter(isActiveBooking).map(bk => {
+      const lodge = (bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || bk.Name || ''
+      const dd = bk.Day_Description || ''
+      const routeMatch = dd.match(/Day\s*\d+:\s*(.+)/)
+      const route = routeMatch ? routeMatch[1] : dd
+      const day = dd.match(/Day\s*(\d+)/)?.[1] || ''
+      return { day, date: bk.Check_in_Date || '', route, lodge, meals: bk.Meals || '' }
+    })
+    const dep = tour.departure_date ? new Date(tour.departure_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC'
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${tour.name}</title>
+<style>* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: Arial, sans-serif; font-size: 11px; color: #222; padding: 20px; }
+h1 { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+.sub { font-size: 11px; color: #666; margin-bottom: 14px; }
+table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+th { text-align: left; font-size: 10px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1.5px solid #333; }
+td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
+.day { font-weight: 500; width: 40px; } .date { width: 70px; color: #555; } .lodge { font-weight: 500; } .meals { width: 40px; color: #888; }
+.footer { margin-top: 14px; font-size: 9px; color: #999; }
+@media print { body { padding: 0; } }
+</style></head><body>
+<h1>${tour.name}</h1><div class="sub">Departure: ${dep}</div>
+<table><thead><tr><th>Day</th><th>Date</th><th>Route</th><th>Lodge</th><th>Meals</th></tr></thead>
+<tbody>${rows.map(r => `<tr><td class="day">${r.day}</td><td class="date">${r.date ? new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}</td><td>${r.route}</td><td class="lodge">${r.lodge}</td><td class="meals">${r.meals}</td></tr>`).join('')}</tbody>
+</table>
+<div class="footer">Ride Down South · ${tour.name} · Generated ${new Date().toLocaleDateString('en-GB')}</div>
+</body></html>`
+    const win = window.open('', '_blank')
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => win.print(), 300)
+  }
+
   return (
     <div>
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, justifyContent: 'flex-end' }}>
+        <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }} onClick={handlePDF} title="Download itinerary as PDF">↓ PDF</button>
         <button className="btn" onClick={onEditItinerary}>
           {hasContent ? 'Edit itinerary' : 'Create itinerary'}
         </button>
