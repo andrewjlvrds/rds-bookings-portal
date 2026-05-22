@@ -3,6 +3,7 @@ import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, getStatus, daysBetwe
 import { cleanEmailBody, looksLikeRawHtml, splitQuotedContent } from '../utils/emailBody'
 import { BookingActivityLog } from './ActivityLog'
 import RoutingPicker from './RoutingPicker'
+import TemplatePicker from './TemplatePicker'
 
 export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead, tours, backLabel, focusEmailId, focusTab }) {
   const [emails, setEmails] = useState([])
@@ -839,6 +840,8 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             rdsRef={rdsRef}
             lodgeRef={lodgeRef}
             tourName={tour ? tour.name : ''}
+            contactName={lodgeContact}
+            checkInDate={checkIn ? fmtDateFull(checkIn) : ''}
             lastSubject={emails.length > 0 ? (emails[0].subject || emails[0].email_subject || '') : ''}
             lastInboundMessageId={(() => {
               var inbound = emails.find(e => e.direction === 'inbound' && e.rfc_message_id)
@@ -1448,7 +1451,7 @@ function GmailResultRow({ email, bookingId, onImported, onDismiss }) {
   )
 }
 
-function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, lodgeRef, tourName, lastSubject, lastInboundMessageId, onSent }) {
+function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, lodgeRef, tourName, contactName, checkInDate, lastSubject, lastInboundMessageId, onSent }) {
   const [open, setOpen] = useState(false)
   const [sent, setSent] = useState(false)
 
@@ -1471,6 +1474,13 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, lodgeRef, tou
   const [subject, setSubject] = useState(defaultSubject)
   const [body, setBody] = useState(defaultSignature)
   const [sending, setSending] = useState(false)
+
+  // Template picker prepends generated body, preserving anything Helen already
+  // typed (and the default signature). Two newlines separate template from
+  // what was below.
+  const handleTemplateInsert = (generated) => {
+    setBody(prev => generated + '\n\n' + prev)
+  }
 
   const handleSend = async () => {
     if (!body.trim() || !toAddr.trim()) return
@@ -1534,6 +1544,16 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, lodgeRef, tou
           }}
         />
       </div>
+      <TemplatePicker
+        context={{
+          contactName: contactName || '',
+          date: checkInDate || '',
+          bookingRef: lodgeRef || rdsRef || '',
+          lodgeName: lodgeName || '',
+          sender: 'Helen',
+        }}
+        onInsert={handleTemplateInsert}
+      />
       <textarea
         value={body} onChange={e => setBody(e.target.value)}
         placeholder="Type your reply..."

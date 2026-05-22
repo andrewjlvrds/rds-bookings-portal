@@ -26,7 +26,7 @@ export function generateSubject(booking, tourName, currentLodgeName) {
 }
 
 // Format date for email display (e.g. "14 April 2027")
-function emailDate(dateStr) {
+export function emailDate(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr + 'T12:00:00')
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -361,16 +361,134 @@ export function cancellationEmail(opts = {}) {
     'Kind regards\n\n' + replySignature(sender)
 }
 
-// Registry — for use by template-picker UI in reply composer
+// Registry — for use by template-picker UI in reply composer.
+//
+// Each template has:
+//   id      — stable string identifier
+//   label   — human-readable label for picker dropdown
+//   fn      — the template function, takes opts object, returns string body
+//   fields  — UI metadata describing what inputs the picker should render
+//
+// Field shape:
+//   { key, label, type, required?, autofillFrom?, placeholder?, helpText? }
+//
+//   type:           'text' | 'textarea' | 'guests' | 'rooming' | 'bool'
+//   autofillFrom:   key in the picker's `context` prop to pre-fill from
+//                   ('contactName', 'date', 'bookingRef', 'lodgeName',
+//                    'leadGuideName' — sender is handled separately)
+//   required:       insert button disabled until this field has a value
+//   placeholder:    placeholder text in the input
+//   helpText:       small grey text below the input
+//
+// 'guests' renders a multi-line input where each line becomes a guest name.
+// 'rooming' renders a textarea pre-filled with formatRoomingList()
+//           output if context.guests is provided, else blank.
+// 'bool'   renders a checkbox.
+
 export const LODGE_REPLY_TEMPLATES = [
-  { id: 'followUpNoResponse', label: 'Follow-up: no response (try alt email)', fn: followUpNoResponseEmail },
-  { id: 'followUpNudge', label: 'Follow-up: gentle nudge', fn: followUpNudgeEmail },
-  { id: 'dateRoomChange', label: 'Date / room change request', fn: dateRoomChangeEmail },
-  { id: 'addExtraGuests', label: 'Add extra guests to confirmed booking', fn: addExtraGuestsEmail },
-  { id: 'finalRoomingList', label: 'Final rooming list', fn: finalRoomingListEmail },
-  { id: 'popDeposit', label: 'Proof of payment (deposit attached)', fn: popDepositEmail },
-  { id: 'paymentInProgress', label: 'Payment authorised, bank pending', fn: paymentInProgressEmail },
-  { id: 'paymentTermsQuery', label: 'Payment terms / deposit query', fn: paymentTermsQueryEmail },
-  { id: 'lateCheckout', label: 'Late check-out / special request', fn: lateCheckoutEmail },
-  { id: 'cancellation', label: 'Cancellation request', fn: cancellationEmail },
+  {
+    id: 'followUpNoResponse',
+    label: 'Follow-up: no response (try alt email)',
+    fn: followUpNoResponseEmail,
+    fields: [
+      { key: 'dateSent', label: 'Date original was sent', type: 'text', required: true, placeholder: 'e.g. 19 March' },
+      { key: 'originalEmail', label: 'Original email address', type: 'text', required: true, placeholder: 'e.g. reservations@lodge.com' },
+    ],
+  },
+  {
+    id: 'followUpNudge',
+    label: 'Follow-up: gentle nudge',
+    fn: followUpNudgeEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName', placeholder: 'leave blank for "Hi"' },
+      { key: 'dateSent', label: 'Date original was sent', type: 'text', required: true, placeholder: 'e.g. 22 April' },
+      { key: 'outstandingAsk', label: 'Outstanding question', type: 'textarea', required: true, placeholder: 'e.g. let me know whether the guide rooms are suitable for guests', helpText: 'Phrase this as a sentence fragment — it follows "Just following up on my email below from {date} —"' },
+    ],
+  },
+  {
+    id: 'dateRoomChange',
+    label: 'Date / room change request',
+    fn: dateRoomChangeEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'originalDate', label: 'Original booking date', type: 'text', required: true, autofillFrom: 'date', placeholder: 'e.g. 14 September 2026' },
+      { key: 'roomingSummary', label: 'New room requirements', type: 'rooming', required: true, helpText: 'Plain text, one room group per block. The format helpers expect lines like "8 pax in single rooms" + names below.' },
+    ],
+  },
+  {
+    id: 'addExtraGuests',
+    label: 'Add extra guests to confirmed booking',
+    fn: addExtraGuestsEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'date', label: 'Booking date', type: 'text', required: true, autofillFrom: 'date' },
+      { key: 'bookingRef', label: 'Booking reference', type: 'text', autofillFrom: 'bookingRef' },
+      { key: 'roomingSummary', label: 'Updated room requirements (including new guests)', type: 'rooming', required: true },
+    ],
+  },
+  {
+    id: 'finalRoomingList',
+    label: 'Final rooming list',
+    fn: finalRoomingListEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'date', label: 'Booking date', type: 'text', required: true, autofillFrom: 'date' },
+      { key: 'bookingRef', label: 'Booking reference', type: 'text', autofillFrom: 'bookingRef' },
+      { key: 'roomingList', label: 'Final rooming list', type: 'rooming', required: true },
+      { key: 'dietaryNote', label: 'Dietary note (optional)', type: 'text', placeholder: "e.g. David Nguyen's dietary requirements", helpText: 'Appears as "Please note {dietary note}." Leave blank to omit.' },
+      { key: 'leadGuideName', label: 'Lead guide first name', type: 'text', autofillFrom: 'leadGuideName', placeholder: 'e.g. Pierre' },
+    ],
+  },
+  {
+    id: 'popDeposit',
+    label: 'Proof of payment (deposit attached)',
+    fn: popDepositEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'date', label: 'Booking date', type: 'text', required: true, autofillFrom: 'date' },
+      { key: 'bookingRef', label: 'Booking reference', type: 'text', autofillFrom: 'bookingRef', placeholder: 'e.g. Proforma 16070' },
+    ],
+  },
+  {
+    id: 'paymentInProgress',
+    label: 'Payment authorised, bank pending',
+    fn: paymentInProgressEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'amount', label: 'Payment description', type: 'text', placeholder: 'e.g. 50% deposit, or NAD 2928 deposit', helpText: 'Defaults to "50% deposit" if blank.' },
+    ],
+  },
+  {
+    id: 'paymentTermsQuery',
+    label: 'Payment terms / deposit query',
+    fn: paymentTermsQueryEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'lodgeName', label: 'Lodge name', type: 'text', autofillFrom: 'lodgeName' },
+      { key: 'missedOnInvoice', label: 'Add "can\u2019t see it on the invoice"', type: 'bool' },
+    ],
+  },
+  {
+    id: 'lateCheckout',
+    label: 'Late check-out / special request',
+    fn: lateCheckoutEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'date', label: 'Departure date', type: 'text', required: true, autofillFrom: 'date' },
+      { key: 'bookingRef', label: 'Reservation number', type: 'text', autofillFrom: 'bookingRef' },
+      { key: 'guests', label: 'Guest names (one per line)', type: 'guests', required: true, placeholder: 'David Nguyen\nOlivier Jeanson' },
+      { key: 'lateUntil', label: 'Until what time (optional)', type: 'text', placeholder: 'e.g. 2pm' },
+    ],
+  },
+  {
+    id: 'cancellation',
+    label: 'Cancellation request',
+    fn: cancellationEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'lodgeName', label: 'Lodge name', type: 'text', required: true, autofillFrom: 'lodgeName' },
+      { key: 'date', label: 'Booking date', type: 'text', required: true, autofillFrom: 'date' },
+      { key: 'bookingRef', label: 'Booking reference', type: 'text', autofillFrom: 'bookingRef' },
+    ],
+  },
 ]

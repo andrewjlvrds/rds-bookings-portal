@@ -3,6 +3,7 @@ import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isC
 import { generateSubject, generateEnquiryEmail, generateConfirmationEmail } from '../utils/emailTemplates'
 import PortalSync from './PortalSync'
 import RoutingPicker from './RoutingPicker'
+import TemplatePicker from './TemplatePicker'
 
 export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh, initialSubTab, tours }) {
   const [activeTab, setActiveTab] = useState(initialSubTab === 'correspondence' ? 'correspondence' : 'bookings')
@@ -2026,6 +2027,20 @@ function InlineComposer({ toEmail, booking, tourName, sender, onSenderChange, on
     })
   }, [sender])
 
+  // Template picker prepends generated body, preserving anything already typed
+  // and the default signature below.
+  const handleTemplateInsert = (generated) => {
+    setBody(prev => generated + '\n\n' + prev)
+  }
+
+  // Booking context for the picker
+  const rawLodge = (booking && (booking.Lodge_Name || booking.Name)) || ''
+  const lodgeName = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
+  const checkIn = booking && (booking.Check_in_Date || booking['Check-in'] || '')
+  const checkInPretty = checkIn ? fmtDateFull(checkIn) : ''
+  const contactName = (booking && booking.Contact_Name) || ''
+  const bookingRef = (booking && (booking.Lodge_Reference || booking.RDS_Reference)) || ''
+
   const handleSend = async () => {
     if (!to) { setError('No recipient email address'); return }
     if (!subject.trim()) { setError('Please add a subject line'); return }
@@ -2110,6 +2125,18 @@ function InlineComposer({ toEmail, booking, tourName, sender, onSenderChange, on
           style={inputStyle}
         />
       </div>
+
+      {/* Template picker */}
+      <TemplatePicker
+        context={{
+          contactName,
+          date: checkInPretty,
+          bookingRef,
+          lodgeName,
+          sender,
+        }}
+        onInsert={handleTemplateInsert}
+      />
 
       {/* Body */}
       <textarea
