@@ -237,7 +237,7 @@ export default async function(req, res) {
     // Fetch recent messages — paginate fully, no arbitrary cap.
     // A 3-day window can easily have 100+ messages; capping at 20 or 50
     // silently dropped emails and was the root cause of missing correspondence.
-    var searchWindow = refetch ? '14d' : '3d';
+    var searchWindow = refetch ? '14d' : '7d';
     var query = 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
     var messages = [];
     var pageToken = null;

@@ -2080,6 +2080,7 @@ function InlineComposer({ toEmail, booking, tourName, sender, onSenderChange, on
           tour_name: tourName,
           lodge_name: lodgeName,
           sender,
+          is_reply: true,
         }),
       })
       const d = await res.json()
