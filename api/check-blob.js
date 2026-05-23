@@ -7,14 +7,7 @@ export default async function handler(req, res) {
   const details = await Promise.all(result.blobs.map(async b => {
     const r = await fetch(b.url);
     const data = await r.json();
-    const body = data.body || data.email_content || '';
-    return {
-      path: b.pathname,
-      direction: data.direction,
-      has_body: !!(body && body.trim()),
-      body_preview: body.substring(0, 100),
-      attachments_count: (data.attachments || []).length,
-    };
+    return { path: b.pathname, keys: Object.keys(data), body_type: typeof data.body, body_len: (data.body || '').length, email_content_len: (data.email_content || '').length };
   }));
   res.json(details);
 }
