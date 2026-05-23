@@ -30,6 +30,13 @@ const LABEL_TOUR_MAP = [
   { pattern: 'FoSA Oct 26', tour: 'FoSA Oct 26' },
   { pattern: 'BoN May 26', tour: 'BoN May 26' },
   { pattern: 'GL Jul 26', tour: 'GL Jul 26' },
+  { pattern: 'EoA14 Nov 26', tour: 'EoA14 Nov 26' },
+  { pattern: 'EoA12 Dec 26', tour: 'EoA12 Dec 26' },
+  { pattern: 'EoA14 Dec 26', tour: 'EoA14 Dec 26' },
+  { pattern: 'FoSA Sep 27', tour: 'FoSA Sep 27' },
+  { pattern: 'FoSA Oct 27', tour: 'FoSA Oct 27' },
+  { pattern: 'FoSA Jan 27', tour: 'FoSA Jan 27' },
+  { pattern: 'FoSA Feb 27', tour: 'FoSA Feb 27' },
 ];
 
 // Labels to skip entirely
@@ -170,7 +177,8 @@ export default async function handler(req, res) {
       
       // Skip system labels
       if (!lname.includes('/') && !['BoN May 26','FoSA 9 Sep 26','FoSA 11 Sep 26',
-        'FoSA Apr 26','FoSA Apr 27','FoSA Mar 27','FoSA Oct 26','GL Jul 26'].includes(lname)) {
+        'FoSA Apr 26','FoSA Apr 27','FoSA Mar 27','FoSA Oct 26','GL Jul 26',
+        'EoA14 Nov 26','EoA12 Dec 26','EoA14 Dec 26','FoSA Sep 27','FoSA Oct 27','FoSA Jan 27','FoSA Feb 27'].includes(lname)) {
         continue;
       }
 
