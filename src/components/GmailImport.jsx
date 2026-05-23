@@ -40,8 +40,11 @@ export default function GmailImport({ tours }) {
   const handleParseUnparsed = () => runBulkReparse('parse_unparsed')
   const handleDeleteEmpty = () => runBulkReparse('delete_empty')
 
+  const [parseLog, setParseLog] = React.useState(null)
+
   React.useEffect(() => {
     fetch('/api/poll-log').then(r => r.json()).then(d => { if (d.found) setPollLog(d) }).catch(() => {})
+    fetch('/api/parse-log').then(r => r.json()).then(d => { if (d.found) setParseLog(d) }).catch(() => {})
   }, [])
 
   const handleScan = async () => {
@@ -332,6 +335,25 @@ export default function GmailImport({ tours }) {
               Errors: {pollLog.errors.map((e, i) => <div key={i}>{e.message || JSON.stringify(e)}</div>)}
             </div>
           )}
+        </div>
+      )}
+      {/* Parse log */}
+      {parseLog && parseLog.entries && parseLog.entries.length > 0 && (
+        <div style={{ marginTop: 16, padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)' }}>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Parse log</div>
+          {parseLog.entries.slice(0, 5).map((e, i) => (
+            <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '6px 0', borderTop: i > 0 ? '0.5px solid var(--border-light)' : 'none' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span><strong>{e.tour}</strong> — {e.mode} — {e.actioned} actioned, {e.skipped} skipped{e.errors > 0 ? <span style={{ color: 'var(--red-text)', marginLeft: 6 }}>{e.errors} errors</span> : ''}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{new Date(e.run_at).toLocaleString('en-GB')}</span>
+              </div>
+              {e.errors_detail && e.errors_detail.length > 0 && (
+                <div style={{ marginTop: 4, fontSize: 11, color: 'var(--red-text)' }}>
+                  {e.errors_detail.map((err, j) => <div key={j}>{err.booking}: {err.error}</div>)}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

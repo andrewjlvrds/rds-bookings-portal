@@ -111,7 +111,21 @@ export default async function handler(req, res) {
       } catch(e) { results.push({ booking: bk.Name, error: e.message }); errors++; }
     }
 
-    res.json({ tour: tour_name || 'all', mode, dry_run: !!dry_run, actioned, skipped, errors, remaining, elapsed_ms: Date.now() - t0, done: remaining === 0, results: results.slice(0, 50) });
+    const summary = { tour: tour_name || 'all', mode, dry_run: !!dry_run, actioned, skipped, errors, remaining, elapsed_ms: Date.now() - t0, done: remaining === 0, run_at: new Date().toISOString() };
+
+    // Append to parse log in blob
+    if (!dry_run && results.length > 0) {
+      try {
+        const logKey = 'parse-log/latest.json';
+        const existing = await fetch('https://blob.vercel-storage.com/' + logKey).then(r => r.ok ? r.json() : null).catch(() => null);
+        const prev = (existing && existing.entries) || [];
+        const entry = { ...summary, errors_detail: results.filter(r => r.action === 'parse_error' || r.error).slice(0, 20) };
+        const log = { entries: [entry, ...prev].slice(0, 50), updated_at: new Date().toISOString() };
+        await put('parse-log/latest.json', JSON.stringify(log), { access: 'public', contentType: 'application/json', addRandomSuffix: false });
+      } catch(e) { console.error('Failed to write parse log:', e.message); }
+    }
+
+    res.json({ ...summary, results: results.slice(0, 50) });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
