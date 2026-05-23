@@ -1,4 +1,4 @@
-import { list, head } from '@vercel/blob';
+import { list } from '@vercel/blob';
 
 export default async function handler(req, res) {
   const bookingId = req.query.booking_id;
@@ -10,11 +10,9 @@ export default async function handler(req, res) {
     return {
       path: b.pathname,
       direction: data.direction,
-      date: data.email_date || data.date,
-      subject: data.email_subject || data.subject,
-      from: data.email_from || data.from,
-      has_attachments: (data.attachments || []).length > 0,
-      ai_parsed: !!data.ai_parsed_flags,
+      body: (data.body || data.email_content || '').substring(0, 200),
+      has_body: !!(data.body && data.body.trim()) || !!(data.email_content && data.email_content.trim()),
+      attachments: data.attachments || [],
     };
   }));
   res.json(details);
