@@ -11,23 +11,25 @@ export default function GmailImport({ tours }) {
   const [parsing, setParsing] = React.useState(false)
   const [parseResult, setParseResult] = React.useState(null)
 
-  const handleParseUnparsed = async () => {
-    if (!filterTour) { alert('Select a tour first'); return }
+  const runBulkReparse = async (mode) => {
     setParsing(true)
     setParseResult(null)
     let totalActioned = 0, totalErrors = 0, runs = 0
+    const tourParam = filterTour || null // null = all tours
     try {
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 30; i++) {
+        const body = { mode, dry_run: false }
+        if (tourParam) body.tour_name = tourParam
         const r = await fetch('/api/bulk-reparse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tour_name: filterTour, mode: 'parse_unparsed', dry_run: false })
+          body: JSON.stringify(body)
         })
         const d = await r.json()
         runs++
         totalActioned += d.actioned || 0
         totalErrors += d.errors || 0
-        setParseResult({ runs, totalActioned, totalErrors, remaining: d.remaining || 0, done: d.done })
+        setParseResult({ mode, runs, totalActioned, totalErrors, remaining: d.remaining || 0, done: d.done, tour: tourParam || 'all tours' })
         if (d.done || d.actioned === 0) break
       }
     } catch(e) {
@@ -35,6 +37,8 @@ export default function GmailImport({ tours }) {
     }
     setParsing(false)
   }
+  const handleParseUnparsed = () => runBulkReparse('parse_unparsed')
+  const handleDeleteEmpty = () => runBulkReparse('delete_empty')
 
   React.useEffect(() => {
     fetch('/api/poll-log').then(r => r.json()).then(d => { if (d.found) setPollLog(d) }).catch(() => {})
@@ -134,14 +138,18 @@ export default function GmailImport({ tours }) {
                 cursor: 'pointer', fontWeight: 500,
               }}
             >{importing ? 'Running…' : importMode === 'dry_run' ? 'Preview' : 'Import'}</button>
-            {filterTour && (
+              <button
+                onClick={handleDeleteEmpty}
+                disabled={parsing || importing}
+                style={{ fontSize: 12, padding: '5px 14px', borderRadius: 3, border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 500 }}
+                title="Delete empty-body inbound blobs so cron reprocesses them with full body + attachment extraction"
+              >{parsing ? 'Running…' : '1. Fix empty emails'}</button>
               <button
                 onClick={handleParseUnparsed}
                 disabled={parsing || importing}
                 style={{ fontSize: 12, padding: '5px 14px', borderRadius: 3, border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 500 }}
-                title="AI parse stored emails that haven't been processed yet — auto-retries until complete"
-              >{parsing ? 'Parsing…' : 'Parse unparsed'}</button>
-            )}
+                title="AI parse stored emails that haven't been parsed yet — auto-retries until complete. Works on selected tour or all tours."
+              >{parsing ? 'Parsing…' : '2. Parse unparsed'}</button>
           </div>
 
           {importResult && (
@@ -231,9 +239,9 @@ export default function GmailImport({ tours }) {
           {parseResult.error
             ? <span style={{ color: 'var(--red-text)' }}>Error: {parseResult.error}</span>
             : <span style={{ color: 'var(--text-secondary)' }}>
-                Parsed {parseResult.totalActioned} emails in {parseResult.runs} run{parseResult.runs !== 1 ? 's' : ''}.
+                {parseResult.mode === 'delete_empty' ? 'Deleted' : 'Parsed'} {parseResult.totalActioned} emails across {parseResult.tour} in {parseResult.runs} run{parseResult.runs !== 1 ? 's' : ''}.
                 {parseResult.totalErrors > 0 && <span style={{ color: 'var(--red-text)', marginLeft: 8 }}>{parseResult.totalErrors} errors.</span>}
-                {parseResult.done ? <span style={{ color: 'var(--green-text)', marginLeft: 8 }}>✓ Done</span> : <span style={{ color: 'var(--amber-text)', marginLeft: 8 }}>{parseResult.remaining} remaining.</span>}
+                {parseResult.done ? <span style={{ color: 'var(--green-text)', marginLeft: 8 }}>✓ Done</span> : <span style={{ color: 'var(--amber-text)', marginLeft: 8 }}>{parseResult.remaining} remaining — will auto-retry.</span>}
               </span>
           }
         </div>
