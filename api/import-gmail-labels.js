@@ -12,8 +12,8 @@ import { storeEmail, isEmailStored } from './_email-store.js';
 
 // Label → tour name mapping
 // These are the known Gmail label names and which portal tour they map to.
-// Matched against Zoho tour names using substring overlap.
-const LABEL_TOUR_MAP = [
+// INBOX date-prefix → tour name fallback for older label formats
+const INBOX_DATE_MAP = [
   { pattern: '2026-04', tour: 'FoSA Apr 26' },
   { pattern: '2026-05', tour: 'BoN May 26' },
   { pattern: '2026-06', tour: 'June 26' },
@@ -22,33 +22,34 @@ const LABEL_TOUR_MAP = [
   { pattern: '2026-09 Sept (9-28)', tour: 'FoSA 9 Sep 26' },
   { pattern: '2026-09-sept--9-28', tour: 'FoSA 9 Sep 26' },
   { pattern: '2026-10', tour: 'FoSA Oct 26' },
-  { pattern: 'FoSA 11 Sep 26', tour: 'FoSA 11 Sep 26' },
-  { pattern: 'FoSA 9 Sep 26', tour: 'FoSA 9 Sep 26' },
-  { pattern: 'FoSA Apr 26', tour: 'FoSA Apr 26' },
-  { pattern: 'FoSA Apr 27', tour: 'FoSA Apr 27' },
-  { pattern: 'FoSA Mar 27', tour: 'FoSA Mar 27' },
-  { pattern: 'FoSA Oct 26', tour: 'FoSA Oct 26' },
-  { pattern: 'BoN May 26', tour: 'BoN May 26' },
-  { pattern: 'GL Jul 26', tour: 'GL Jul 26' },
-  { pattern: 'EoA14 Nov 26', tour: 'EoA14 Nov 26' },
-  { pattern: 'EoA12 Dec 26', tour: 'EoA12 Dec 26' },
-  { pattern: 'EoA14 Dec 26', tour: 'EoA14 Dec 26' },
-  { pattern: 'FoSA Sep 27', tour: 'FoSA Sep 27' },
-  { pattern: 'FoSA Oct 27', tour: 'FoSA Oct 27' },
-  { pattern: 'FoSA Jan 27', tour: 'FoSA Jan 27' },
-  { pattern: 'FoSA Feb 27', tour: 'FoSA Feb 27' },
 ];
 
 // Labels to skip entirely
 const SKIP_PATTERNS = ['Complete 2026', '2025 Archive', 'Finances', 'General', 
   'Lodges and Com', 'Previous 2025', 'Programmes', 'Zoho', 'Guests'];
 
-function labelToTourName(labelName) {
-  const lower = labelName.toLowerCase();
+// Dynamic label → tour name matching against actual Zoho tour names.
+// Called after allTourNames is populated from Zoho bookings.
+// Falls back to INBOX date-prefix map for older label formats.
+function labelToTourName(labelName, allTourNames) {
+  const lower = labelName.toLowerCase().replace(/-/g, ' ').replace(/[()]/g, '');
   for (const skip of SKIP_PATTERNS) {
     if (lower.includes(skip.toLowerCase())) return null;
   }
-  for (const { pattern, tour } of LABEL_TOUR_MAP) {
+  // Direct match against known Zoho tour names
+  if (allTourNames) {
+    // Exact match first
+    for (const t of allTourNames) {
+      if (lower === t.toLowerCase()) return t;
+    }
+    // Substring match — label contains tour name or vice versa
+    for (const t of allTourNames) {
+      const tl = t.toLowerCase().replace(/-/g, ' ');
+      if (lower.includes(tl) || tl.includes(lower)) return t;
+    }
+  }
+  // INBOX date-prefix fallback
+  for (const { pattern, tour } of INBOX_DATE_MAP) {
     if (lower.includes(pattern.toLowerCase())) return tour;
   }
   return null;
@@ -157,6 +158,8 @@ export default async function handler(req, res) {
       if (!bookingsByTour[tourName]) bookingsByTour[tourName] = [];
       bookingsByTour[tourName].push(bk);
     });
+    // All known tour names from Zoho — used for dynamic label matching
+    const allTourNames = Object.keys(bookingsByTour).filter(Boolean);
 
     // 3. Find tour-level labels and their lodge sub-labels
     const results = {
@@ -175,11 +178,10 @@ export default async function handler(req, res) {
     for (const label of allLabels) {
       const lname = label.name || '';
       
-      // Skip system labels
-      if (!lname.includes('/') && !['BoN May 26','FoSA 9 Sep 26','FoSA 11 Sep 26',
-        'FoSA Apr 26','FoSA Apr 27','FoSA Mar 27','FoSA Oct 26','GL Jul 26',
-        'EoA14 Nov 26','EoA12 Dec 26','EoA14 Dec 26','FoSA Sep 27','FoSA Oct 27','FoSA Jan 27','FoSA Feb 27'].includes(lname)) {
-        continue;
+      // Skip system labels (those without '/' that don't match any known tour)
+      // Dynamic check — if labelToTourName returns null it's not a tour label
+      if (!lname.includes('/')) {
+        // Will be evaluated below — don't skip yet
       }
 
       // Check if it's a tour-level label (no lodge sub-part, or is INBOX/tour)
@@ -189,7 +191,7 @@ export default async function handler(req, res) {
 
       if (!lodgePart) {
         // This is a tour-level label
-        const tourName = labelToTourName(topPart);
+        const tourName = labelToTourName(topPart, allTourNames);
         if (tourName && (!filterTourName || tourName === filterTourName)) {
           tourLabels[label.id] = { 
             labelId: label.id, 
