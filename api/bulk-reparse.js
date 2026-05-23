@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
           // Extract body
           let textPlain = '', textHtml = '';
-          function walkBody(part) {
+          const walkBody = (part) => {
             if (!part) return;
             if (part.mimeType === 'text/plain' && part.body && part.body.data && !textPlain) {
               const p = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
@@ -62,13 +62,13 @@ export default async function handler(req, res) {
               textHtml = Buffer.from(p2, 'base64').toString('utf-8');
             }
             if (part.parts) part.parts.forEach(walkBody);
-          }
+          };
           walkBody(fullMsg.payload);
           const body = textPlain || textHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
           // Extract attachments
           const freshAttachments = [];
-          function walkAtts(parts) {
+          const walkAtts = (parts) => {
             if (!parts) return;
             for (const part of parts) {
               if (part.filename && part.filename.length > 0) {
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
               }
               if (part.parts) walkAtts(part.parts);
             }
-          }
+          };
           walkAtts(fullMsg.payload.parts || []);
 
           results.push({
