@@ -876,8 +876,11 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                     {lodge && (() => {
                       const lr = lookupLodge(lodge)
                       if (!lr) return <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>
-                      if (!lr.email) return <div style={{ fontSize: 10, color: 'var(--amber-text)' }}>No email</div>
-                      return <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{lr.email}</div>
+                      const providerTag = lr.provider_type && lr.provider_type !== 'Lodge'
+                        ? <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: lr.provider_type === 'Excursion' ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.12)', color: lr.provider_type === 'Excursion' ? '#4338ca' : '#b45309', border: '0.5px solid ' + (lr.provider_type === 'Excursion' ? '#c7d2fe' : '#fcd34d'), marginLeft: 4, textTransform: 'uppercase', letterSpacing: 0.3 }}>{lr.provider_type}</span>
+                        : null
+                      if (!lr.email) return <div style={{ fontSize: 10, color: 'var(--amber-text)' }}>No email{providerTag}</div>
+                      return <div style={{ fontSize: 10, color: 'var(--green-text)', display: 'flex', alignItems: 'center', gap: 4 }}>{lr.email}{providerTag}</div>
                     })()}
                     {(bk.Previously_Tried || bk['Previously Tried'] || '') && (
                       <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
