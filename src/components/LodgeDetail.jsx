@@ -740,10 +740,9 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
               onClick={async () => {
                 setPolling(true)
                 try {
-                  // 1. Poll Gmail for new replies
-                  await fetch('/api/poll-gmail', { method: 'POST' })
-                  // 2. Search Gmail for any emails not yet in blob
-                  // 3. Re-parse attachments
+                  // 1. Poll Gmail — fire without awaiting (can timeout at 60s, don't block reparse)
+                  fetch('/api/poll-gmail', { method: 'POST' }).catch(() => {})
+                  // 2. Re-parse attachments and fix empty bodies
                   await fetch('/api/reparse-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

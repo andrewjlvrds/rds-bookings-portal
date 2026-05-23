@@ -237,13 +237,13 @@ export default async function(req, res) {
     // Fetch recent messages — paginate fully, no arbitrary cap.
     // A 3-day window can easily have 100+ messages; capping at 20 or 50
     // silently dropped emails and was the root cause of missing correspondence.
-    var searchWindow = refetch ? '14d' : '7d';
+    var searchWindow = refetch ? '14d' : '3d';
     var query = 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
     var messages = [];
     var pageToken = null;
     var pageLimit = 10; // max 10 pages × 100 = 1000 messages per run
     for (var pg = 0; pg < pageLimit; pg++) {
-      if (Date.now() - t0 > 45000) break; // hard deadline
+      if (Date.now() - t0 > 40000) break; // hard deadline — leave headroom for processing
       var pageUrl = 'messages?q=' + encodeURIComponent(query) + '&maxResults=100';
       if (pageToken) pageUrl += '&pageToken=' + pageToken;
       var listResult = await gmailApi(token, pageUrl);
