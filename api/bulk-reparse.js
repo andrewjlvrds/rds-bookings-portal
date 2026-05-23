@@ -49,9 +49,19 @@ export default async function handler(req, res) {
     const t0 = Date.now();
     const DEADLINE = 50000;
 
-    const tourQuery = encodeURIComponent('(Tour.Name:equals:' + tour_name + ')');
-    const bkResult = await zohoApi('GET', 'Lodge_Bookings/search?criteria=' + tourQuery + '&fields=id,Name&per_page=200');
-    const bookings = (bkResult && bkResult.data) || [];
+    // Fetch all bookings and filter by tour name client-side (Zoho search doesn't support Tour.Name criteria)
+    let allBookings = [], bkPage = 1, bkMore = true;
+    while (bkMore && bkPage <= 5) {
+      const bkResult = await zohoApi('GET', 'Lodge_Bookings?fields=id,Name,Tour&per_page=200&page=' + bkPage);
+      const bkData = (bkResult && bkResult.data) || [];
+      allBookings = allBookings.concat(bkData);
+      bkMore = bkResult && bkResult.info && bkResult.info.more_records;
+      bkPage++;
+    }
+    const bookings = allBookings.filter(bk => {
+      const t = bk.Tour && typeof bk.Tour === 'object' ? bk.Tour.name : bk.Tour || '';
+      return t === tour_name;
+    });
 
     const token = await getGmailToken();
     const results = [];
