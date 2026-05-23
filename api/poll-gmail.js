@@ -688,11 +688,16 @@ export default async function(req, res) {
                 var tmBody = tmText || tmHtml || '';
                 if (!tmBody.trim()) continue; // skip empty messages
                 var tmIsFromUs = tmFrom.indexOf('ridedownsouth.com') > -1;
+                // Only backfill outbound messages (Helen's direct-Gmail sends).
+                // Inbound replies must go through the main processing path for
+                // proper attachment extraction and AI parsing. Storing them here
+                // without attachments would block the main path via isEmailStored.
+                if (!tmIsFromUs) continue;
                 await storeEmail({
                   booking_id: bookingId,
                   message_id: tm.id,
-                  type: tmIsFromUs ? 'enquiry' : 'lodge_reply',
-                  direction: tmIsFromUs ? 'outbound' : 'inbound',
+                  type: 'enquiry',
+                  direction: 'outbound',
                   email_from: tmFrom,
                   email_to: tmTo,
                   email_subject: tmSubject,
