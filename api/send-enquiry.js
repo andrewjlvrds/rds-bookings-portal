@@ -133,6 +133,7 @@ export default async function(req, res) {
           await storeSentIndex({
             rfc_message_id: actualMessageId,
             gmail_message_id: gmailMessageId,
+            gmail_thread_id: gmailThreadId,
             booking_ids: bookingIds,
             tour_name: tourName,
             lodge_name: lodgeName,
