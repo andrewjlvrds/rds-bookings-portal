@@ -164,7 +164,7 @@ export default async function(req, res) {
             if (fullMsg && fullMsg.payload) {
               // Re-extract attachments with IDs
               var freshAttachments = [];
-              function walkParts(parts) {
+              const walkParts = (parts) => {
                 if (!parts) return;
                 for (var pi = 0; pi < parts.length; pi++) {
                   var part = parts[pi];
@@ -188,7 +188,7 @@ export default async function(req, res) {
               // Also re-extract body if it was empty
               if (!body || body === '(no content)') {
                 var textPlain = '', textHtml = '';
-                function walkBody(part) {
+                const walkBody = (part) => {
                   if (!part) return;
                   if (part.mimeType === 'text/plain' && part.body && part.body.data && !textPlain) {
                     var padded = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
