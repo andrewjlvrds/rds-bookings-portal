@@ -320,14 +320,18 @@ export default async function(req, res) {
           console.log('Updated booking', bookingId, 'with', Object.keys(zohoUpdates).length, 'fields from reparse');
         }
 
-        // Update the stored email blob with attachment text
+        // Update the stored email blob when body or attachments changed
         var hasNewText = updatedAttachments.some(function(a) { return a.extractedText && !((attachments.find(function(o) { return o.filename === a.filename; }) || {}).extractedText); });
-        if (hasNewText) {
+        var bodyChanged = !!(body && body.trim() && !(email.body || email.email_content || '').trim());
+        var attachmentsChanged = updatedAttachments.length > attachments.length;
+        if (hasNewText || bodyChanged || attachmentsChanged) {
+          if (body && body.trim()) { email.body = body; email.email_content = body; }
           email.attachments = updatedAttachments;
           var safeId = (email.message_id || email.id || '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
           if (safeId) {
             await put('emails/booking/' + bookingId + '/' + safeId + '.json',
               JSON.stringify(email), { access: 'public', contentType: 'application/json', addRandomSuffix: false });
+            console.log('Updated blob for', safeId, '- bodyChanged:', bodyChanged, 'attachmentsChanged:', attachmentsChanged, 'hasNewText:', hasNewText);
           }
         }
 
