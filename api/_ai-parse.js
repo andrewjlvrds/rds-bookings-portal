@@ -320,8 +320,7 @@ export function extractionToZohoFields(extraction, existingZohoValues) {
 
       // For fields that can come from multiple sources, append rather than overwrite
       if ((zohoField === 'Payment_Note' || zohoField === 'Reservation_Comments') && updates[zohoField]) {
-        updates[zohoField] += '
-' + value;
+        updates[zohoField] += '\n' + value;
       } else {
         updates[zohoField] = value;
       }
