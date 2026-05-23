@@ -33,9 +33,10 @@ export default async function handler(req, res) {
 
     const results = [];
     let actioned = 0, skipped = 0, errors = 0;
+    let remaining = 0; // unparsed emails we didn't get to
 
     for (const bk of bookings) {
-      if (Date.now() - t0 > DEADLINE) { results.push('timeout'); break; }
+      if (Date.now() - t0 > DEADLINE) { remaining++; continue; }
       try {
         const blobs = await list({ prefix: 'emails/booking/' + bk.id + '/' });
         for (const blob of blobs.blobs) {
@@ -93,7 +94,7 @@ export default async function handler(req, res) {
       } catch(e) { results.push({ booking: bk.Name, error: e.message }); errors++; }
     }
 
-    res.json({ tour: tour_name, mode, dry_run: !!dry_run, actioned, skipped, errors, elapsed_ms: Date.now() - t0, results });
+    res.json({ tour: tour_name, mode, dry_run: !!dry_run, actioned, skipped, errors, remaining, elapsed_ms: Date.now() - t0, results, done: remaining === 0 });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }

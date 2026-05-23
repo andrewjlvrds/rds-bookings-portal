@@ -8,6 +8,33 @@ export default function GmailImport({ tours }) {
   const [importMode, setImportMode] = useState('dry_run') // 'dry_run' | 'live'
   const [filterTour, setFilterTour] = useState('')
   const [pollLog, setPollLog] = React.useState(null)
+  const [parsing, setParsing] = React.useState(false)
+  const [parseResult, setParseResult] = React.useState(null)
+
+  const handleParseUnparsed = async () => {
+    if (!filterTour) { alert('Select a tour first'); return }
+    setParsing(true)
+    setParseResult(null)
+    let totalActioned = 0, totalErrors = 0, runs = 0
+    try {
+      for (let i = 0; i < 20; i++) {
+        const r = await fetch('/api/bulk-reparse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tour_name: filterTour, mode: 'parse_unparsed', dry_run: false })
+        })
+        const d = await r.json()
+        runs++
+        totalActioned += d.actioned || 0
+        totalErrors += d.errors || 0
+        setParseResult({ runs, totalActioned, totalErrors, remaining: d.remaining || 0, done: d.done })
+        if (d.done || d.actioned === 0) break
+      }
+    } catch(e) {
+      setParseResult({ error: e.message })
+    }
+    setParsing(false)
+  }
 
   React.useEffect(() => {
     fetch('/api/poll-log').then(r => r.json()).then(d => { if (d.found) setPollLog(d) }).catch(() => {})
@@ -107,6 +134,14 @@ export default function GmailImport({ tours }) {
                 cursor: 'pointer', fontWeight: 500,
               }}
             >{importing ? 'Running…' : importMode === 'dry_run' ? 'Preview' : 'Import'}</button>
+            {filterTour && (
+              <button
+                onClick={handleParseUnparsed}
+                disabled={parsing || importing}
+                style={{ fontSize: 12, padding: '5px 14px', borderRadius: 3, border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 500 }}
+                title="AI parse stored emails that haven't been processed yet — auto-retries until complete"
+              >{parsing ? 'Parsing…' : 'Parse unparsed'}</button>
+            )}
           </div>
 
           {importResult && (
@@ -190,6 +225,19 @@ export default function GmailImport({ tours }) {
           )}
         </div>
       </div>
+
+      {parseResult && (
+        <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-default)', background: 'var(--bg-secondary)', fontSize: 12 }}>
+          {parseResult.error
+            ? <span style={{ color: 'var(--red-text)' }}>Error: {parseResult.error}</span>
+            : <span style={{ color: 'var(--text-secondary)' }}>
+                Parsed {parseResult.totalActioned} emails in {parseResult.runs} run{parseResult.runs !== 1 ? 's' : ''}.
+                {parseResult.totalErrors > 0 && <span style={{ color: 'var(--red-text)', marginLeft: 8 }}>{parseResult.totalErrors} errors.</span>}
+                {parseResult.done ? <span style={{ color: 'var(--green-text)', marginLeft: 8 }}>✓ Done</span> : <span style={{ color: 'var(--amber-text)', marginLeft: 8 }}>{parseResult.remaining} remaining.</span>}
+              </span>
+          }
+        </div>
+      )}
 
       {/* Unlabelled scan */}
       <div style={panelStyle}>
