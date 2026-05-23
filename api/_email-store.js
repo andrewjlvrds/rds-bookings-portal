@@ -88,6 +88,7 @@ export async function storeSentIndex(entry) {
   var record = {
     rfc_message_id: normalizeMessageId(rfc),
     gmail_message_id: entry.gmail_message_id || null,
+    gmail_thread_id: entry.gmail_thread_id || null,
     booking_ids: Array.isArray(entry.booking_ids) ? entry.booking_ids : [],
     tour_name: entry.tour_name || null,
     lodge_name: entry.lodge_name || null,
@@ -98,11 +99,33 @@ export async function storeSentIndex(entry) {
   await put('emails/sent-index/' + key + '.json',
     JSON.stringify(record),
     { access: 'public', contentType: 'application/json', addRandomSuffix: false });
+  // Also index by Gmail thread ID so replies without In-Reply-To headers can be matched
+  if (entry.gmail_thread_id) {
+    var threadKey = 'thread-' + entry.gmail_thread_id;
+    await put('emails/sent-index/' + threadKey + '.json',
+      JSON.stringify(record),
+      { access: 'public', contentType: 'application/json', addRandomSuffix: false });
+  }
   return record;
 }
 
 // Look up a sent-index entry by any Message-ID (from In-Reply-To or References).
 // Returns null if not found.
+export async function lookupSentIndexByThreadId(gmailThreadId) {
+  if (!gmailThreadId) return null;
+  var threadKey = 'thread-' + gmailThreadId;
+  try {
+    var result = await list({ prefix: 'emails/sent-index/' + threadKey + '.json', limit: 1 });
+    if (!result.blobs || result.blobs.length === 0) return null;
+    var blob = result.blobs[0];
+    var rr = await fetch(blob.url);
+    if (!rr.ok) return null;
+    return await rr.json();
+  } catch(e) {
+    return null;
+  }
+}
+
 export async function lookupSentIndex(rfcMessageId) {
   var key = safeMessageIdKey(rfcMessageId);
   if (!key) return null;
