@@ -1818,33 +1818,47 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
       .catch(() => setLoading(false))
   }, [tour.id])
 
-  // Group emails by booking_id, newest first per group
+  // Group emails by lodge name (normalised), newest first per group.
+  // This merges sent + received across multiple booking records for the same lodge
+  // (e.g. Hohewarte main tour + Hohewarte pre-tour stay).
   const conversations = React.useMemo(() => {
     if (!allEmails) return []
-    const groups = {}
+    const groups = {} // lodgeKey -> { lodgeName, bookingIds: Set, bks: [], emails: [] }
     allEmails.forEach(em => {
-      if (!groups[em.booking_id]) groups[em.booking_id] = []
-      groups[em.booking_id].push(em)
+      const bk = bookingMap[em.booking_id]
+      const rawLodge = bk ? (bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || bk.Name || '' : ''
+      const lodgeName = rawLodge.split(' - ')[0].trim() || em.booking_id
+      const lodgeKey = lodgeName.toLowerCase()
+      if (!groups[lodgeKey]) groups[lodgeKey] = { lodgeName, bookingIds: new Set(), bks: [], emails: [] }
+      groups[lodgeKey].emails.push(em)
+      if (em.booking_id && !groups[lodgeKey].bookingIds.has(em.booking_id)) {
+        groups[lodgeKey].bookingIds.add(em.booking_id)
+        if (bk) groups[lodgeKey].bks.push(bk)
+      }
     })
     // Sort each group newest first
-    Object.values(groups).forEach(g => g.sort((a, b) => new Date(b.date || b.email_date || 0) - new Date(a.date || a.email_date || 0)))
+    Object.values(groups).forEach(g => g.emails.sort((a, b) => new Date(b.date || b.email_date || 0) - new Date(a.date || a.email_date || 0)))
     // Sort conversations by most recent email
-    return Object.entries(groups).sort((a, b) => {
-      const aDate = a[1][0] ? new Date(a[1][0].date || a[1][0].email_date || 0) : 0
-      const bDate = b[1][0] ? new Date(b[1][0].date || b[1][0].email_date || 0) : 0
+    return Object.values(groups).sort((a, b) => {
+      const aDate = a.emails[0] ? new Date(a.emails[0].date || a.emails[0].email_date || 0) : 0
+      const bDate = b.emails[0] ? new Date(b.emails[0].date || b.emails[0].email_date || 0) : 0
       return bDate - aDate
     })
-  }, [allEmails])
+  }, [allEmails, bookingMap])
 
-  const toggleExpand = async (bookingId) => {
-    const isOpen = expanded[bookingId]
-    setExpanded(prev => ({ ...prev, [bookingId]: !isOpen }))
-    // Load full thread if not cached
-    if (!isOpen && !threadCache[bookingId]) {
+  const toggleExpand = async (lodgeKey, bookingIds) => {
+    const isOpen = expanded[lodgeKey]
+    setExpanded(prev => ({ ...prev, [lodgeKey]: !isOpen }))
+    // Load full threads for all booking IDs in this lodge group, merge and sort
+    if (!isOpen && !threadCache[lodgeKey]) {
       try {
-        const r = await fetch('/api/bp-emails?booking_id=' + bookingId)
-        const d = await r.json()
-        setThreadCache(prev => ({ ...prev, [bookingId]: d.emails || [] }))
+        const ids = Array.from(bookingIds)
+        const results = await Promise.all(ids.map(id =>
+          fetch('/api/bp-emails?booking_id=' + id).then(r => r.json()).catch(() => ({ emails: [] }))
+        ))
+        const merged = results.flatMap(d => d.emails || [])
+        merged.sort((a, b) => new Date(b.date || b.email_date || 0) - new Date(a.date || a.email_date || 0))
+        setThreadCache(prev => ({ ...prev, [lodgeKey]: merged }))
       } catch (e) { /* ignore */ }
     }
   }
@@ -1864,8 +1878,8 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
       // Remove from thread cache
       setThreadCache(prev => {
         const next = { ...prev }
-        if (next[routingEmail.bookingId]) {
-          next[routingEmail.bookingId] = next[routingEmail.bookingId].filter(e => e.id !== routingEmail.email.id)
+        if (next[routingEmail.lodgeKey]) {
+          next[routingEmail.lodgeKey] = next[routingEmail.lodgeKey].filter(e => e.id !== routingEmail.email.id)
         }
         return next
       })
@@ -1880,25 +1894,26 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
   return (
     <>
     <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-      {conversations.map(([bookingId, summaries], ci) => {
-        const bk = bookingMap[bookingId]
-        const lodge = bk
-          ? ((bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || bk.Name || '—')
-          : bookingId
+      {conversations.map((conv, ci) => {
+        const { lodgeName, bookingIds, bks, emails: summaries } = conv
+        const lodgeKey = lodgeName.toLowerCase()
+        const bk = bks[0] || null  // primary booking — used for View button and New_Reply check
+        const lodge = lodgeName
         const latest = summaries[0]
-        const hasNewReply = bk && bk.New_Reply === true
+        const hasNewReply = bks.some(b => b.New_Reply === true)
         const count = summaries.length
-        const isOpen = expanded[bookingId]
-        const thread = threadCache[bookingId]
-        const date = latest && latest.date
-          ? new Date(latest.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+        const isOpen = expanded[lodgeKey]
+        const thread = threadCache[lodgeKey]
+        const latestDateRaw = latest ? (latest.date || latest.email_date || '') : ''
+        const date = latestDateRaw
+          ? new Date(latestDateRaw).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
           : ''
 
         return (
-          <div key={bookingId} style={{ borderBottom: ci < conversations.length - 1 ? '0.5px solid var(--border-light)' : 'none' }}>
+          <div key={lodgeKey} style={{ borderBottom: ci < conversations.length - 1 ? '0.5px solid var(--border-light)' : 'none' }}>
             {/* Conversation row */}
             <div
-              onClick={() => toggleExpand(bookingId)}
+              onClick={() => toggleExpand(lodgeKey, bookingIds)}
               style={{
                 display: 'grid', gridTemplateColumns: '24px 1fr auto auto auto',
                 alignItems: 'center', gap: 10, padding: '10px 14px',
@@ -1924,7 +1939,7 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
               <button
                 onClick={e => { e.stopPropagation(); bk && onSelectBooking(bk, 'itinerary', { focusTab: 'correspondence' }) }}
                 style={{ fontSize: 11, padding: '2px 8px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)' }}
-              >View</button>
+              >{bks.length > 1 ? 'View (' + bks.length + ')' : 'View'}</button>
             </div>
 
             {/* Expanded thread */}
@@ -1966,7 +1981,7 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{emDate}</span>
                         {isInbound && tours && (
                           <button
-                            onClick={e => { e.stopPropagation(); setRoutingEmail({ email: em, bookingId }) }}
+                            onClick={e => { e.stopPropagation(); setRoutingEmail({ email: em, bookingId: em.booking_id, lodgeKey }) }}
                             style={{ fontSize: 10, padding: '2px 6px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0 }}
                           >Reroute</button>
                         )}
