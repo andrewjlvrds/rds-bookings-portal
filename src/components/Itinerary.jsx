@@ -1824,11 +1824,11 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
       groups[em.booking_id].push(em)
     })
     // Sort each group newest first
-    Object.values(groups).forEach(g => g.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)))
+    Object.values(groups).forEach(g => g.sort((a, b) => new Date(b.date || b.email_date || 0) - new Date(a.date || a.email_date || 0)))
     // Sort conversations by most recent email
     return Object.entries(groups).sort((a, b) => {
-      const aDate = a[1][0] ? new Date(a[1][0].date || 0) : 0
-      const bDate = b[1][0] ? new Date(b[1][0].date || 0) : 0
+      const aDate = a[1][0] ? new Date(a[1][0].date || a[1][0].email_date || 0) : 0
+      const bDate = b[1][0] ? new Date(b[1][0].date || b[1][0].email_date || 0) : 0
       return bDate - aDate
     })
   }, [allEmails])
@@ -1937,7 +1937,8 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
                   const emId = em.id || ei
                   const isEmailOpen = expandedEmail[emId]
                   const isInbound = em.direction === 'inbound'
-                  const emDate = em.date ? new Date(em.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+                  const emDateRaw = em.date || em.email_date || ''
+                  const emDate = emDateRaw ? new Date(emDateRaw).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
                   const from = (em.from || '').split('<')[0].trim() || em.from || ''
                   const body = em.body || em.email_content || ''
 

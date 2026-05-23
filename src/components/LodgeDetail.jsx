@@ -95,7 +95,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
   useEffect(() => {
     if (emails.length === 0) return
     const merged = {}
-    const sorted = [...emails].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
+    const sorted = [...emails].sort((a, b) => new Date(a.date || a.email_date || 0) - new Date(b.date || b.email_date || 0))
     sorted.forEach(em => {
       if (em.ai_parsed_flags && typeof em.ai_parsed_flags === 'object') {
         Object.entries(em.ai_parsed_flags).forEach(([key, f]) => {
