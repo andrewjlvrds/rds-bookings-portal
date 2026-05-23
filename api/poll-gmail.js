@@ -1,5 +1,5 @@
 import { getGmailToken, gmailApi, getOrCreateLabel, labelMessage, tourLabelName } from './_gmail.js';
-import { storeEmail, isEmailStored, lookupSentIndex, lookupSentIndexByThreadId, normalizeMessageId } from './_email-store.js';
+import { storeEmail, isEmailStored, lookupSentIndex, normalizeMessageId } from './_email-store.js';
 import { zohoApi } from './_zoho.js';
 import { parseEmail, extractionToZohoFields } from './_ai-parse.js';
 import { tagReplyReceived } from './_activity-log.js';
@@ -363,22 +363,6 @@ export default async function(req, res) {
           } catch (e) {
             // Lookup failure is non-fatal — fall through to existing matchers
           }
-        }
-
-        // ─── Tier 0.5: Gmail thread ID → sent-index ───
-        // Catches replies where the lodge didn't use Reply (no In-Reply-To header)
-        // but Gmail still threaded the reply correctly by subject/conversation.
-        if (!match && threadId) {
-          try {
-            var threadIdx = await lookupSentIndexByThreadId(threadId);
-            if (threadIdx && threadIdx.booking_ids && threadIdx.booking_ids.length > 0) {
-              var bkT = bookingsById[threadIdx.booking_ids[0]];
-              if (bkT) {
-                match = { booking: bkT, method: 'gmail_thread_id', all_booking_ids: threadIdx.booking_ids };
-                tier0Hits++;
-              }
-            }
-          } catch(e) { /* non-fatal */ }
         }
 
         // Fall back to the existing matcher (subject RDS ref, label, date...)
