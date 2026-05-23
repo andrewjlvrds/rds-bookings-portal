@@ -125,7 +125,7 @@ var FIELD_MAP = {
   reservation_comments: { zoho: 'Reservation_Comments' },
   meals: { zoho: 'Meals' },
   suggested_status: { zoho: 'Status' },
-  rooms_offered: { zoho: 'Sgl_Twin_Dbl_Guides' },
+  rooms_offered: { zoho: 'Reservation_Comments', transform: function(v) { return 'Rooms: ' + v; } },
   // Receipt fields — mapped dynamically based on payment_slot
   balance_due: { zoho: 'Balance_Due' },
   receipt_reference: { zoho: 'Payment_Note', transform: function(v) { return 'Receipt: ' + v; } },
