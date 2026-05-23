@@ -741,15 +741,22 @@ export default async function(req, res) {
         )) isAutoReply = true;
 
         // AI parse the email + attachment text to extract booking data (skip for auto-replies)
+        // Also skip if we're past 30s — store the email and let reparse-email handle it later
         var aiResult = null;
         var zohoUpdates = {
           Last_Response_Date: new Date().toISOString().split('T')[0],
           New_Reply: true,
         };
 
+        var timeLeft = Date.now() - t0;
+        var skipAiDueToTime = timeLeft > 30000;
+        if (skipAiDueToTime) {
+          console.log('Skipping AI parse for', matchedBooking.Name || bookingId, '— time limit approaching (' + timeLeft + 'ms)');
+        }
+
         // Use fullContent (body + attachment text) for AI parsing — much richer data source
         var contentForParsing = fullContent || '';
-        if (!isAutoReply && contentForParsing && contentForParsing.trim().length > 10) {
+        if (!isAutoReply && !skipAiDueToTime && contentForParsing && contentForParsing.trim().length > 10) {
           try {
             var tourName = '';
             if (matchedBooking.Tour) {
@@ -897,12 +904,36 @@ export default async function(req, res) {
 
     console.log('poll-gmail: checked', messages.length, 'stored', stored, 'skipped', skipped, 'no-match', noMatch, 'tier0-hits', tier0Hits);
 
+    var elapsed = Date.now() - t0;
+    var timedOut = elapsed >= 40000;
+
+    // Write poll log to blob for portal visibility
+    try {
+      var { put: blobPut } = await import('@vercel/blob');
+      var logEntry = {
+        run_at: new Date().toISOString(),
+        elapsed_ms: elapsed,
+        timed_out: timedOut,
+        checked: messages.length,
+        stored: stored,
+        skipped: skipped,
+        no_match: noMatch,
+        errors: errors.slice(0, 10),
+      };
+      await blobPut('poll-log/latest.json', JSON.stringify(logEntry),
+        { access: 'public', contentType: 'application/json', addRandomSuffix: false });
+    } catch (logErr) {
+      console.error('Failed to write poll log:', logErr.message);
+    }
+
     res.status(200).json({
       success: true,
       checked: messages.length,
       stored: stored,
       skipped: skipped,
       no_match: noMatch,
+      timed_out: timedOut,
+      elapsed_ms: elapsed,
       tier0_message_id_hits: tier0Hits,
       errors: errors.length > 0 ? errors : undefined,
       details: details.length > 0 ? details : undefined,

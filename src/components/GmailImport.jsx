@@ -7,6 +7,11 @@ export default function GmailImport({ tours }) {
   const [importing, setImporting] = useState(false)
   const [importMode, setImportMode] = useState('dry_run') // 'dry_run' | 'live'
   const [filterTour, setFilterTour] = useState('')
+  const [pollLog, setPollLog] = React.useState(null)
+
+  React.useEffect(() => {
+    fetch('/api/poll-log').then(r => r.json()).then(d => { if (d.found) setPollLog(d) }).catch(() => {})
+  }, [])
 
   const handleScan = async () => {
     setScanning(true)
@@ -250,6 +255,29 @@ export default function GmailImport({ tours }) {
           )}
         </div>
       </div>
+      {/* Poll log */}
+      {pollLog && (
+        <div style={{ marginTop: 16, padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '0.5px solid ' + (pollLog.timed_out ? '#f59e0b' : pollLog.errors && pollLog.errors.length > 0 ? '#ef4444' : 'var(--border-default)'), background: pollLog.timed_out ? 'rgba(245,158,11,0.05)' : 'var(--bg-primary)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 500 }}>Last poll run</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(pollLog.run_at).toLocaleString('en-GB')}</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            <span>Checked: {pollLog.checked}</span>
+            <span>Stored: {pollLog.stored}</span>
+            <span>Skipped: {pollLog.skipped}</span>
+            <span>Unmatched: {pollLog.no_match}</span>
+            <span style={{ color: pollLog.timed_out ? '#b45309' : 'var(--text-muted)' }}>
+              {pollLog.timed_out ? '⚠ Timed out' : '✓ Completed'} ({Math.round((pollLog.elapsed_ms || 0) / 1000)}s)
+            </span>
+          </div>
+          {pollLog.errors && pollLog.errors.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: '#ef4444' }}>
+              Errors: {pollLog.errors.map((e, i) => <div key={i}>{e.message || JSON.stringify(e)}</div>)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
