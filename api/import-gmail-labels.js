@@ -249,12 +249,21 @@ export default async function handler(req, res) {
           lodge: getLodgeName(match.booking), confidence: match.confidence,
           imported: 0, skipped: 0 };
 
-        // Fetch messages under this label
+        // Fetch threads under this label, then expand to all messages.
+        // Gmail applies labels at thread level — messages?labelIds only returns
+        // explicitly-labelled messages, missing replies that inherit the label.
         try {
-          const msgsResult = await gmailApi(token, 
-            'messages?labelIds=' + ll.labelId + '&maxResults=100'
+          const threadsResult = await gmailApi(token,
+            'threads?labelIds=' + ll.labelId + '&maxResults=50'
           );
-          const msgs = msgsResult.messages || [];
+          const threads = threadsResult.threads || [];
+          const msgs = [];
+          for (const thread of threads) {
+            const threadData = await gmailApi(token, 'threads/' + thread.id + '?format=metadata&metadataHeaders=Message-ID');
+            for (const tm of (threadData.messages || [])) {
+              msgs.push({ id: tm.id });
+            }
+          }
 
           for (const msg of msgs) {
             if (Date.now() - t0 > maxDuration) break;
