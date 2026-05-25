@@ -28,7 +28,7 @@ export default async function handler(req, res) {
 
   const counts = {};
   const t0 = Date.now();
-  const BATCH = 20;
+  const BATCH = 10; // smaller batch — each booking now fetches multiple blobs
 
   for (let i = 0; i < bookingIds.length; i += BATCH) {
     if (Date.now() - t0 > 25000) break; // hard limit
@@ -40,22 +40,19 @@ export default async function handler(req, res) {
         const result = await list({ prefix: 'emails/booking/' + bookingId + '/' });
         const blobs = result.blobs || [];
 
-        // Count blobs — we use blob uploadedAt as proxy for email date
-        // since we don't need to fetch full content just to count.
-        // Blobs uploaded after last_read_at are "unread".
+        // Only count inbound emails newer than last_read_at.
+        // Must fetch content to check direction field — blobs are small JSON.
         let unread = 0;
-        for (const blob of blobs) {
-          // Only count inbound emails — use filename heuristics or uploadedAt
-          // We can't know direction without fetching, so count all blobs
-          // newer than last_read_at as potentially unread.
-          // This is conservative (may over-count) but fast.
-          if (!since) {
-            unread++;
-          } else {
-            const blobDate = new Date(blob.uploadedAt);
-            if (blobDate > since) unread++;
-          }
-        }
+        await Promise.all(blobs.map(async (blob) => {
+          try {
+            // Skip blobs that predate last_read_at without fetching
+            if (since && new Date(blob.uploadedAt) <= since) return;
+            const r = await fetch(blob.url);
+            if (!r.ok) return;
+            const data = await r.json();
+            if (data.direction === 'inbound') unread++;
+          } catch (e) { /* skip */ }
+        }));
         return { bookingId, unread };
       } catch (e) {
         return { bookingId, unread: 0 };
