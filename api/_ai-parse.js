@@ -140,6 +140,39 @@ var SLOT_FIELD_MAP = {
   '4th_payment': { paid_date: 'th_Payment_Paid_Date', paid_amount: 'th_Payment_Paid_Amount' },
 };
 
+// Status order — AI may only advance status, never regress it.
+// A lodge reply that mentions availability on a "Deposit Paid" booking
+// should not silently reset status to "Availability Confirmed".
+var STATUS_ORDER = [
+  'Not Started',
+  'Ready to Send',
+  'Enquiry Sent',
+  'Availability Confirmed',
+  'Confirmed',
+  'Proforma Received',
+  'Deposit Paid',
+  'Balance Paid',
+  // These sit outside the main flow — AI can set them from any state
+  'Not Available',
+  'Waitlisted',
+  'Cancelled',
+];
+var STATUS_FLOW_ORDER = [
+  'Not Started', 'Ready to Send', 'Enquiry Sent',
+  'Availability Confirmed', 'Confirmed', 'Proforma Received',
+  'Deposit Paid', 'Balance Paid',
+];
+// Returns true if newStatus is an advancement (or a valid side-state)
+function isStatusAdvancement(currentStatus, newStatus) {
+  var sideStates = new Set(['Not Available', 'Waitlisted', 'Cancelled', 'Credit against booking']);
+  if (sideStates.has(newStatus)) return true; // always allow side-states
+  var cur = STATUS_FLOW_ORDER.indexOf(currentStatus);
+  var next = STATUS_FLOW_ORDER.indexOf(newStatus);
+  if (next === -1) return false; // unknown status — don't write
+  if (cur === -1) return true;  // current unknown — allow
+  return next > cur;            // only advance
+}
+
 export async function parseEmail(emailBody, bookingContext) {
   var apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
@@ -244,10 +277,13 @@ var PROTECTED_AMOUNT_FIELDS = new Set([
 // Only includes fields with medium+ confidence.
 // Pass existingZohoValues (object keyed by Zoho field name) to protect
 // financial fields from silent overwrites.
+// existingZohoValues should include Status (as existing.Status) for the
+// forward-only status guard.
 export function extractionToZohoFields(extraction, existingZohoValues) {
   var confidenceLevels = { high: 3, medium: 2, low: 1 };
   var minLevel = 2; // medium or higher
   var existing = existingZohoValues || {};
+  var currentStatus = existing.Status || '';
 
   var extracted = extraction.extracted || {};
   var updates = {};
@@ -316,6 +352,24 @@ export function extractionToZohoFields(extraction, existingZohoValues) {
           reason: zohoField === 'Total_Amount' ? 'total_amount_always_manual' : 'field_already_set',
         };
         continue;
+      }
+
+      // Forward-only status guard: AI may only advance status, never regress.
+      // e.g. a follow-up reply on a "Deposit Paid" booking must not reset to "Availability Confirmed".
+      if (zohoField === 'Status' && currentStatus) {
+        if (!isStatusAdvancement(currentStatus, value)) {
+          flagged[key] = {
+            value: value,
+            confidence: field.confidence,
+            zoho_field: zohoField,
+            existing_value: currentStatus,
+            reason: 'status_regression_blocked',
+          };
+          console.log('Status regression blocked: ' + currentStatus + ' → ' + value);
+          continue;
+        }
+        // Log the advancement for audit trail
+        console.log('Status advancing: ' + currentStatus + ' → ' + value);
       }
 
       // For fields that can come from multiple sources, append rather than overwrite

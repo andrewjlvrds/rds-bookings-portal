@@ -789,6 +789,7 @@ export default async function(req, res) {
             console.log('AI parse result for', matchedBooking.Name || bookingId, ':', JSON.stringify(aiResult).substring(0, 500));
 
             var existingAmounts = {
+              Status: matchedBooking.Status,
               Total_Amount: matchedBooking.Total_Amount,
               Deposit_Amount: matchedBooking.Deposit_Amount,
               Second_Payment_Amount: matchedBooking.Second_Payment_Amount,
