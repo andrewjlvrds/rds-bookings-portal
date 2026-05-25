@@ -5,7 +5,7 @@ import { BookingActivityLog } from './ActivityLog'
 import RoutingPicker from './RoutingPicker'
 import TemplatePicker from './TemplatePicker'
 
-export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, readState, onMarkRead, tours, backLabel, focusEmailId, focusTab }) {
+export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, onMarkBookingDone, readState, onMarkRead, tours, backLabel, focusEmailId, focusTab }) {
   const [emails, setEmails] = useState([])
   const [loadingEmails, setLoadingEmails] = useState(true)
   const [editing, setEditing] = useState(null)
@@ -841,6 +841,14 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
               {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
             </span>
+            {onMarkBookingDone && (
+              <button
+                className="btn btn-sm"
+                onClick={() => onMarkBookingDone(bookingId)}
+                style={{ fontSize: 11, padding: '3px 10px', background: 'var(--green-bg)', color: 'var(--green-text)', border: '0.5px solid var(--green-border)' }}
+                title="Mark all emails in this booking as read — clears the unread badge"
+              >✓ Mark done</button>
+            )}
             <button
               className="btn btn-sm"
               disabled={polling || searchingGmail}

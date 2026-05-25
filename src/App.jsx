@@ -113,6 +113,16 @@ export default function App() {
       })
   }
 
+  // Explicit "Mark done / Mark replied" — clears unread count for a booking.
+  // Not triggered automatically on open — user must click.
+  const markBookingDone = (bookingId) => {
+    if (!bookingId) return
+    try {
+      localStorage.setItem('rds_last_read_' + bookingId, new Date().toISOString())
+    } catch (e) {}
+    setUnreadCounts(prev => prev ? { ...prev, [bookingId]: 0 } : prev)
+  }
+
   const markRead = (emailId) => {
     if (!emailId) return
     setReadState(prev => ({ ...prev, [emailId]: new Date().toISOString() }))
@@ -274,15 +284,7 @@ export default function App() {
     setFocusEmailId(opts && opts.focusEmailId ? opts.focusEmailId : null)
     setFocusTab(opts && opts.focusTab ? opts.focusTab : null)
     setActiveView('lodge-detail')
-    // Record when this booking was last opened so unread counts are accurate
-    const bkId = bk && (bk.id || bk['Record Id'])
-    if (bkId) {
-      try {
-        localStorage.setItem('rds_last_read_' + bkId, new Date().toISOString())
-        // Update unread count for this booking to 0 immediately
-        setUnreadCounts(prev => prev ? { ...prev, [bkId]: 0 } : prev)
-      } catch (e) {}
-    }
+    // Do NOT auto-mark as read on open — user must explicitly mark done
   }
 
   // Refresh unread counts every 10 minutes (in sync with poll-gmail cron)
@@ -379,6 +381,7 @@ export default function App() {
           onRefresh={() => refreshData(activeTour ? activeTour.id : null)}
           readState={readState}
           onMarkRead={markRead}
+          onMarkBookingDone={markBookingDone}
         />
       )
     }
