@@ -540,7 +540,7 @@ h1 { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
 .sub { font-size: 11px; color: #666; margin-bottom: 14px; }
 table { width: 100%; border-collapse: collapse; margin-top: 8px; }
 th { text-align: left; font-size: 10px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1.5px solid #333; }
-td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
+td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
 .day { font-weight: 500; width: 40px; } .date { width: 70px; color: #555; } .lodge { font-weight: 500; } .meals { width: 40px; color: #888; }
 .footer { margin-top: 14px; font-size: 9px; color: #999; }
 @media print { body { padding: 0; } }
@@ -813,11 +813,12 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
       <div className="table-wrap">
         <table style={{ tableLayout: 'fixed', width: '100%' }}>
           <colgroup>
-            <col style={{ width: 44 }} />
-            <col style={{ width: 72 }} />
-            <col style={{ width: '25%' }} />
+            <col style={{ width: 36 }} />
+            <col style={{ width: 62 }} />
+            <col style={{ width: '22%' }} />
             <col style={{ width: '28%' }} />
-            <col style={{ width: 110 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 115 }} />
             <col style={{ width: 140 }} />
           </colgroup>
           <thead>
@@ -1070,7 +1071,8 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                               background: handledBy ? 'var(--blue-bg)' : 'var(--bg-primary)',
                               color: handledBy ? 'var(--blue-text)' : 'var(--text-muted)',
                               fontWeight: handledBy ? 600 : 400,
-                              maxWidth: 100,
+                              maxWidth: 82,
+                              appearance: handledBy ? 'auto' : 'none',
                             }}
                           >
                             <option value=""></option>
