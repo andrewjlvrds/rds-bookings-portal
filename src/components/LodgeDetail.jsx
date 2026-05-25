@@ -11,6 +11,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
   const [editing, setEditing] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [metaTick, setMetaTick] = useState(0) // force re-render on localStorage meta changes
+  const [bookingMeta, setBookingMeta] = useState({ handledBy: '', notes: '' })
   const [polling, setPolling] = useState(false)
   const [gmailResults, setGmailResults] = useState([])
   const [searchingGmail, setSearchingGmail] = useState(false)
@@ -81,6 +82,14 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
   }
 
   useEffect(() => { fetchEmails() }, [bookingId])
+
+  // Fetch blob-based meta (handledBy, notes) for this booking
+  useEffect(() => {
+    fetch('/api/bp-meta?booking_id=' + bookingId)
+      .then(r => r.ok ? r.json() : { handledBy: '', notes: '' })
+      .then(data => setBookingMeta(data))
+      .catch(() => {})
+  }, [bookingId])
 
   // Fetch invoice line items when Details tab is active
   useEffect(() => {
@@ -389,14 +398,16 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
 
       {/* Handled by + Internal notes */}
       {(() => {
-        const lsKey = 'bk_meta_' + bookingId
-        const stored = (() => { try { return JSON.parse(localStorage.getItem(lsKey) || '{}') } catch(e) { return {} } })()
-        const handledBy = stored.handledBy || ''
-        const notes = stored.notes || ''
+        const handledBy = bookingMeta.handledBy || ''
+        const notes = bookingMeta.notes || ''
         const saveMeta = (field, value) => {
-          const cur = (() => { try { return JSON.parse(localStorage.getItem(lsKey) || '{}') } catch(e) { return {} } })()
-          localStorage.setItem(lsKey, JSON.stringify({ ...cur, [field]: value }))
-          setMetaTick(t => t + 1)
+          fetch('/api/bp-meta', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ booking_id: bookingId, [field]: value }),
+          }).then(r => r.ok ? r.json() : null).then(data => {
+            if (data) setBookingMeta(prev => ({ ...prev, [field]: value }))
+          })
         }
         return (
           <div style={{

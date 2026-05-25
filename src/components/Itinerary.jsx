@@ -23,7 +23,8 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [showCancelled, setShowCancelled] = useState(false) // toggle cancelled rows in the list
   const [checkingReplies, setCheckingReplies] = useState(false) // tour-level check replies
   const [checkRepliesResult, setCheckRepliesResult] = useState(null) // { new_emails, parsed, status_updates, errors }
-  const [metaTick, setMetaTick] = useState(0) // force re-render on localStorage meta changes
+  const [metaTick, setMetaTick] = useState(0) // force re-render on meta saves
+  const [bookingMeta, setBookingMeta] = useState({}) // { [bookingId]: { handledBy, notes } }
 
   // Utility: date string math in UTC to avoid timezone off-by-one (ZA is UTC+2)
   const parseYMD = (s) => {
@@ -425,6 +426,19 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const roomConfig = firstBk ? (firstBk['Sgl/Twin/Dbl/Guides'] || firstBk.Sgl_Twin_Dbl_Guides || '') : ''
 
   // Tour-level check replies: poll Gmail for new messages, then bulk-reparse unparsed emails for this tour
+  // Fetch blob-based booking meta (handledBy, notes) for all bookings in this tour
+  React.useEffect(() => {
+    const ids = (tour.bookings || []).map(b => b.id || b['Record Id']).filter(Boolean)
+    if (!ids.length) return
+    Promise.all(ids.map(id =>
+      fetch('/api/bp-meta?booking_id=' + id).then(r => r.ok ? r.json() : { handledBy: '', notes: '' }).catch(() => ({ handledBy: '', notes: '' }))
+    )).then(results => {
+      const map = {}
+      ids.forEach((id, i) => { map[id] = results[i] })
+      setBookingMeta(map)
+    })
+  }, [tour.id, metaTick])
+
   const handleCheckReplies = async () => {
     setCheckingReplies(true)
     setCheckRepliesResult(null)
@@ -1051,14 +1065,17 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                   <td onClick={(e) => e.stopPropagation()} style={{ verticalAlign: 'top', minWidth: 110 }}>
                     {(() => {
                       const bookingId = bk.id || bk['Record Id']
-                      const lsKey = 'bk_meta_' + bookingId
-                      const stored = (() => { try { return JSON.parse(localStorage.getItem(lsKey) || '{}') } catch(e) { return {} } })()
-                      const handledBy = stored.handledBy || ''
-                      const notes = stored.notes || ''
+                      const meta = bookingMeta[bookingId] || {}
+                      const handledBy = meta.handledBy || ''
+                      const notes = meta.notes || ''
                       const saveField = (field, value) => {
-                        const cur = (() => { try { return JSON.parse(localStorage.getItem(lsKey) || '{}') } catch(e) { return {} } })()
-                        localStorage.setItem(lsKey, JSON.stringify({ ...cur, [field]: value }))
-                        setMetaTick(t => t + 1)
+                        fetch('/api/bp-meta', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ booking_id: bookingId, [field]: value }),
+                        }).then(r => r.ok ? r.json() : null).then(data => {
+                          if (data) setBookingMeta(prev => ({ ...prev, [bookingId]: { ...prev[bookingId], [field]: value } }))
+                        })
                       }
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
