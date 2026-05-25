@@ -813,13 +813,13 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
       <div className="table-wrap">
         <table style={{ tableLayout: 'fixed', width: '100%' }}>
           <colgroup>
-            <col style={{ width: 36 }} />
-            <col style={{ width: 62 }} />
-            <col style={{ width: '22%' }} />
-            <col style={{ width: '28%' }} />
-            <col style={{ width: 90 }} />
-            <col style={{ width: 115 }} />
-            <col style={{ width: 140 }} />
+            <col style={{ width: 40 }} />
+            <col style={{ width: 68 }} />
+            <col style={{ width: '24%' }} />
+            <col />
+            <col style={{ width: 72 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 150 }} />
           </colgroup>
           <thead>
             <tr>
@@ -1061,26 +1061,26 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                       }
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <select
-                            value={handledBy}
-                            onClick={e => e.stopPropagation()}
-                            onChange={e => { e.stopPropagation(); saveField('Last_Handled_By', e.target.value) }}
-                            style={{
-                              fontSize: 11, padding: '2px 4px', borderRadius: 4, cursor: 'pointer',
-                              border: handledBy ? '0.5px solid var(--blue-mid)' : '0.5px solid var(--border-default)',
-                              background: handledBy ? 'var(--blue-bg)' : 'var(--bg-primary)',
-                              color: handledBy ? 'var(--blue-text)' : 'var(--text-muted)',
-                              fontWeight: handledBy ? 600 : 400,
-                              maxWidth: 82,
-                              appearance: handledBy ? 'auto' : 'none',
-                            }}
-                          >
-                            <option value=""></option>
-                            <option value="Helen">Helen</option>
-                            <option value="Greg">Greg</option>
-                            <option value="Andrew">Andrew</option>
-                            <option value="Darren">Darren</option>
-                          </select>
+                          {(() => {
+                            const NAMES = ['Helen', 'Greg', 'Andrew', 'Darren']
+                            const idx = NAMES.indexOf(handledBy)
+                            const next = NAMES[(idx + 1) % NAMES.length]
+                            return (
+                              <button
+                                onClick={e => { e.stopPropagation(); saveField('Last_Handled_By', handledBy ? (idx === NAMES.length - 1 ? '' : next) : NAMES[0]) }}
+                                onContextMenu={e => { e.preventDefault(); e.stopPropagation(); saveField('Last_Handled_By', '') }}
+                                title={handledBy ? 'Click to change · Right-click to clear' : 'Click to assign'}
+                                style={{
+                                  fontSize: 11, padding: '2px 6px', borderRadius: 4, cursor: 'pointer',
+                                  border: handledBy ? '0.5px solid var(--blue-mid)' : '0.5px solid var(--border-default)',
+                                  background: handledBy ? 'var(--blue-bg)' : 'transparent',
+                                  color: handledBy ? 'var(--blue-text)' : 'var(--text-muted)',
+                                  fontWeight: handledBy ? 600 : 400,
+                                  whiteSpace: 'nowrap', width: '100%', textAlign: 'left',
+                                }}
+                              >{handledBy || '+'}</button>
+                            )
+                          })()}
                           <div
                             onClick={e => {
                               e.stopPropagation()
