@@ -817,7 +817,7 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
             <col style={{ width: 68 }} />
             <col style={{ width: 220 }} />
             <col style={{ width: 280 }} />
-            <col style={{ width: 80 }} />
+            <col style={{ width: 100 }} />
             <col style={{ width: 130 }} />
             <col style={{ width: 160 }} />
           </colgroup>
@@ -827,7 +827,7 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
               <th>Date</th>
               <th>Route</th>
               <th>Lodge</th>
-              <th>Handled</th>
+              <th>Handled By</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -1061,26 +1061,25 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                       }
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          {(() => {
-                            const NAMES = ['Helen', 'Greg', 'Andrew', 'Darren']
-                            const idx = NAMES.indexOf(handledBy)
-                            const next = NAMES[(idx + 1) % NAMES.length]
-                            return (
-                              <button
-                                onClick={e => { e.stopPropagation(); saveField('Last_Handled_By', handledBy ? (idx === NAMES.length - 1 ? '' : next) : NAMES[0]) }}
-                                onContextMenu={e => { e.preventDefault(); e.stopPropagation(); saveField('Last_Handled_By', '') }}
-                                title={handledBy ? 'Click to change · Right-click to clear' : 'Click to assign'}
-                                style={{
-                                  fontSize: 11, padding: '2px 6px', borderRadius: 4, cursor: 'pointer',
-                                  border: handledBy ? '0.5px solid var(--blue-mid)' : '0.5px solid var(--border-default)',
-                                  background: handledBy ? 'var(--blue-bg)' : 'transparent',
-                                  color: handledBy ? 'var(--blue-text)' : 'var(--text-muted)',
-                                  fontWeight: handledBy ? 600 : 400,
-                                  whiteSpace: 'nowrap', width: '100%', minWidth: 52, textAlign: 'left',
-                                }}
-                              >{handledBy || '+'}</button>
-                            )
-                          })()}
+                          <select
+                            value={handledBy}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => { e.stopPropagation(); saveField('Last_Handled_By', e.target.value) }}
+                            style={{
+                              fontSize: 11, padding: '2px 4px', borderRadius: 4, cursor: 'pointer',
+                              border: handledBy ? '0.5px solid var(--blue-mid)' : '0.5px solid var(--border-default)',
+                              background: handledBy ? 'var(--blue-bg)' : 'var(--bg-primary)',
+                              color: handledBy ? 'var(--blue-text)' : 'var(--text-muted)',
+                              fontWeight: handledBy ? 600 : 400,
+                              width: '100%',
+                            }}
+                          >
+                            <option value=""></option>
+                            <option value="Helen">Helen</option>
+                            <option value="Greg">Greg</option>
+                            <option value="Andrew">Andrew</option>
+                            <option value="Darren">Darren</option>
+                          </select>
                           <div
                             onClick={e => {
                               e.stopPropagation()
