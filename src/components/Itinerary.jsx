@@ -1076,9 +1076,8 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                           >
                             <option value=""></option>
                             <option value="Helen">Helen</option>
-                            <option value="Greg">Greg</option>
                             <option value="Andrew">Andrew</option>
-                            <option value="Darren">Darren</option>
+                            <option value="Mike">Mike</option>
                           </select>
                           <div
                             onClick={e => {

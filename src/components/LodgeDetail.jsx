@@ -407,9 +407,8 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
           >
             <option value="">— unassigned —</option>
             <option value="Helen">Helen</option>
-            <option value="Greg">Greg</option>
             <option value="Andrew">Andrew</option>
-            <option value="Darren">Darren</option>
+            <option value="Mike">Mike</option>
           </select>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
