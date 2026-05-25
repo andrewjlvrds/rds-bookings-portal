@@ -23,6 +23,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [showCancelled, setShowCancelled] = useState(false) // toggle cancelled rows in the list
   const [checkingReplies, setCheckingReplies] = useState(false) // tour-level check replies
   const [checkRepliesResult, setCheckRepliesResult] = useState(null) // { new_emails, parsed, status_updates, errors }
+  const [metaTick, setMetaTick] = useState(0) // force re-render on localStorage meta changes
 
   // Utility: date string math in UTC to avoid timezone off-by-one (ZA is UTC+2)
   const parseYMD = (s) => {
@@ -1050,21 +1051,21 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                   <td onClick={(e) => e.stopPropagation()} style={{ verticalAlign: 'top', minWidth: 110 }}>
                     {(() => {
                       const bookingId = bk.id || bk['Record Id']
-                      const handledBy = bk.Last_Handled_By || ''
-                      const notes = bk.Internal_Notes || ''
+                      const lsKey = 'bk_meta_' + bookingId
+                      const stored = (() => { try { return JSON.parse(localStorage.getItem(lsKey) || '{}') } catch(e) { return {} } })()
+                      const handledBy = stored.handledBy || ''
+                      const notes = stored.notes || ''
                       const saveField = (field, value) => {
-                        fetch('/api/bp-update', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ booking_id: bookingId, updates: { [field]: value } }),
-                        }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1000) })
+                        const cur = (() => { try { return JSON.parse(localStorage.getItem(lsKey) || '{}') } catch(e) { return {} } })()
+                        localStorage.setItem(lsKey, JSON.stringify({ ...cur, [field]: value }))
+                        setMetaTick(t => t + 1)
                       }
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           <select
                             value={handledBy}
                             onClick={e => e.stopPropagation()}
-                            onChange={e => { e.stopPropagation(); saveField('Last_Handled_By', e.target.value) }}
+                            onChange={e => { e.stopPropagation(); saveField('handledBy', e.target.value) }}
                             style={{
                               fontSize: 11, padding: '2px 4px', borderRadius: 4, cursor: 'pointer',
                               border: handledBy ? '0.5px solid var(--blue-mid)' : '0.5px solid var(--border-default)',
@@ -1083,7 +1084,7 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                             onClick={e => {
                               e.stopPropagation()
                               const val = window.prompt('Internal notes for ' + (lodge || 'this booking') + ':', notes)
-                              if (val !== null) saveField('Internal_Notes', val)
+                              if (val !== null) saveField('notes', val)
                             }}
                             title={notes || 'Add internal note…'}
                             style={{

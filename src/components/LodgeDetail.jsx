@@ -10,6 +10,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
   const [loadingEmails, setLoadingEmails] = useState(true)
   const [editing, setEditing] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  const [metaTick, setMetaTick] = useState(0) // force re-render on localStorage meta changes
   const [polling, setPolling] = useState(false)
   const [gmailResults, setGmailResults] = useState([])
   const [searchingGmail, setSearchingGmail] = useState(false)
@@ -387,36 +388,58 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
       </div>
 
       {/* Handled by + Internal notes */}
-      <div style={{
-        display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 16,
-        padding: '8px 14px', background: 'var(--bg-secondary)',
-        borderRadius: 'var(--radius-md)', fontSize: 12,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={{ color: 'var(--text-muted)' }}>Handled by:</span>
-          <select
-            value={booking.Last_Handled_By || ''}
-            onChange={e => handleSave('Last_Handled_By', e.target.value)}
-            style={{
-              fontSize: 12, padding: '2px 6px', borderRadius: 4, cursor: 'pointer',
-              border: booking.Last_Handled_By ? '0.5px solid var(--blue-mid)' : '0.5px solid var(--border-default)',
-              background: booking.Last_Handled_By ? 'var(--blue-bg)' : 'var(--bg-primary)',
-              color: booking.Last_Handled_By ? 'var(--blue-text)' : 'var(--text-muted)',
-              fontWeight: booking.Last_Handled_By ? 600 : 400,
-            }}
-          >
-            <option value="">— unassigned —</option>
-            <option value="Helen">Helen</option>
-            <option value="Andrew">Andrew</option>
-            <option value="Mike">Mike</option>
-          </select>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <DetailRows onEdit={handleSave} rows={[
-            { label: 'Internal notes', value: booking.Internal_Notes || '—', field: 'Internal_Notes', type: 'multiline', raw: booking.Internal_Notes || '' },
-          ]} />
-        </div>
-      </div>
+      {(() => {
+        const lsKey = 'bk_meta_' + bookingId
+        const stored = (() => { try { return JSON.parse(localStorage.getItem(lsKey) || '{}') } catch(e) { return {} } })()
+        const handledBy = stored.handledBy || ''
+        const notes = stored.notes || ''
+        const saveMeta = (field, value) => {
+          const cur = (() => { try { return JSON.parse(localStorage.getItem(lsKey) || '{}') } catch(e) { return {} } })()
+          localStorage.setItem(lsKey, JSON.stringify({ ...cur, [field]: value }))
+          setMetaTick(t => t + 1)
+        }
+        return (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 16,
+            padding: '8px 14px', background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)', fontSize: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span style={{ color: 'var(--text-muted)' }}>Handled by:</span>
+              <select
+                value={handledBy}
+                onChange={e => saveMeta('handledBy', e.target.value)}
+                style={{
+                  fontSize: 12, padding: '2px 6px', borderRadius: 4, cursor: 'pointer',
+                  border: handledBy ? '0.5px solid var(--blue-mid)' : '0.5px solid var(--border-default)',
+                  background: handledBy ? 'var(--blue-bg)' : 'var(--bg-primary)',
+                  color: handledBy ? 'var(--blue-text)' : 'var(--text-muted)',
+                  fontWeight: handledBy ? 600 : 400,
+                }}
+              >
+                <option value=""></option>
+                <option value="Helen">Helen</option>
+                <option value="Andrew">Andrew</option>
+                <option value="Mike">Mike</option>
+              </select>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Internal notes</div>
+              <textarea
+                value={notes}
+                onChange={e => saveMeta('notes', e.target.value)}
+                placeholder="Add internal note…"
+                rows={2}
+                style={{
+                  width: '100%', fontSize: 12, padding: '4px 6px', borderRadius: 4,
+                  border: '0.5px solid var(--border-default)', background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)', resize: 'vertical', fontFamily: 'inherit',
+                }}
+              />
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Internal tab bar: Details | Correspondence */}
       <div style={{
