@@ -827,6 +827,7 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
               <th>Route</th>
               <th>Lodge</th>
               <th>Status</th>
+              <th>Handled</th>
               <th></th>
             </tr>
           </thead>
@@ -1043,7 +1044,9 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                         </select>
                       )
                     })()}
-                    {/* Handled by + Internal notes */}
+                    {/* Handled by + Internal notes — moved to Handled column */}
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()} style={{ verticalAlign: 'top', minWidth: 110 }}>
                     {(() => {
                       const bookingId = bk.id || bk['Record Id']
                       const handledBy = bk.Last_Handled_By || ''
@@ -1056,21 +1059,21 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                         }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1000) })
                       }
                       return (
-                        <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           <select
                             value={handledBy}
                             onClick={e => e.stopPropagation()}
                             onChange={e => { e.stopPropagation(); saveField('Last_Handled_By', e.target.value) }}
                             style={{
-                              fontSize: 9, padding: '1px 2px', borderRadius: 3, cursor: 'pointer',
-                              border: handledBy ? '0.5px solid var(--blue-mid)' : 'none',
-                              background: handledBy ? 'var(--blue-bg)' : 'transparent',
+                              fontSize: 11, padding: '2px 4px', borderRadius: 4, cursor: 'pointer',
+                              border: handledBy ? '0.5px solid var(--blue-mid)' : '0.5px solid var(--border-default)',
+                              background: handledBy ? 'var(--blue-bg)' : 'var(--bg-primary)',
                               color: handledBy ? 'var(--blue-text)' : 'var(--text-muted)',
                               fontWeight: handledBy ? 600 : 400,
-                              appearance: handledBy ? 'auto' : 'none',
+                              maxWidth: 100,
                             }}
                           >
-                            <option value="">Handled by…</option>
+                            <option value="">— assign —</option>
                             <option value="Helen">Helen</option>
                             <option value="Greg">Greg</option>
                             <option value="Andrew">Andrew</option>
@@ -1084,8 +1087,8 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                             }}
                             title={notes || 'Add internal note…'}
                             style={{
-                              fontSize: 9, color: notes ? 'var(--text-primary)' : 'var(--text-muted)',
-                              cursor: 'pointer', maxWidth: 180,
+                              fontSize: 11, color: notes ? 'var(--text-primary)' : 'var(--text-muted)',
+                              cursor: 'pointer', maxWidth: 110,
                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                               fontStyle: notes ? 'normal' : 'italic',
                             }}
@@ -1278,7 +1281,7 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
 
                   return (
                     <tr>
-                      <td colSpan="6" style={{ padding: 0 }}>
+                      <td colSpan="7" style={{ padding: 0 }}>
                         <InlineComposer
                           toEmail={toEmail}
                           booking={bk}
@@ -1307,7 +1310,7 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
 
                   return (
                     <tr>
-                      <td colSpan="6" style={{ padding: 0 }}>
+                      <td colSpan="7" style={{ padding: 0 }}>
                         <div style={{
                           margin: '0 16px 8px', padding: '12px 16px',
                           background: '#f0fdf4', borderRadius: 'var(--radius-md)',
