@@ -1043,6 +1043,58 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                         </select>
                       )
                     })()}
+                    {/* Handled by + Internal notes */}
+                    {(() => {
+                      const bookingId = bk.id || bk['Record Id']
+                      const handledBy = bk.Last_Handled_By || ''
+                      const notes = bk.Internal_Notes || ''
+                      const saveField = (field, value) => {
+                        fetch('/api/bp-update', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ booking_id: bookingId, updates: { [field]: value } }),
+                        }).then(r => { if (r.ok) setTimeout(() => onRefresh && onRefresh(), 1000) })
+                      }
+                      return (
+                        <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <select
+                            value={handledBy}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => { e.stopPropagation(); saveField('Last_Handled_By', e.target.value) }}
+                            style={{
+                              fontSize: 9, padding: '1px 2px', borderRadius: 3, cursor: 'pointer',
+                              border: handledBy ? '0.5px solid var(--blue-mid)' : 'none',
+                              background: handledBy ? 'var(--blue-bg)' : 'transparent',
+                              color: handledBy ? 'var(--blue-text)' : 'var(--text-muted)',
+                              fontWeight: handledBy ? 600 : 400,
+                              appearance: handledBy ? 'auto' : 'none',
+                            }}
+                          >
+                            <option value="">Handled by…</option>
+                            <option value="Helen">Helen</option>
+                            <option value="Greg">Greg</option>
+                            <option value="Andrew">Andrew</option>
+                            <option value="Darren">Darren</option>
+                          </select>
+                          <div
+                            onClick={e => {
+                              e.stopPropagation()
+                              const val = window.prompt('Internal notes for ' + (lodge || 'this booking') + ':', notes)
+                              if (val !== null) saveField('Internal_Notes', val)
+                            }}
+                            title={notes || 'Add internal note…'}
+                            style={{
+                              fontSize: 9, color: notes ? 'var(--text-primary)' : 'var(--text-muted)',
+                              cursor: 'pointer', maxWidth: 180,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              fontStyle: notes ? 'normal' : 'italic',
+                            }}
+                          >
+                            {notes || '+ note'}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     {editing && editing.id === (bk.id || bk['Record Id']) && editing.field === 'status' ? (

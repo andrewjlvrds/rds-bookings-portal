@@ -58,7 +58,8 @@ export default async function(req, res) {
       'Deposit_Paid_Amount','nd_Payment_Paid_Amount','rd_Payment_Paid_Amount','th_Payment_Paid_Amount',
       'Fourth_Payment_Amount','Fourth_Payment_Due_Date',
       'Email','Contact_Name','Payment_Note',
-      'Day_Description','Booking_Type','Lodge_Priority','New_Reply','id'
+      'Day_Description','Booking_Type','Lodge_Priority','New_Reply',
+      'Internal_Notes','Last_Handled_By','id'
     ].join(',');
 
     var allBookings = [];

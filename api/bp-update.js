@@ -14,6 +14,7 @@ const ALLOWED_FIELDS = new Set([
   'Third_Payment_Amount', 'Third_Payment_Due_Date',
   'Fourth_Payment_Amount', 'Fourth_Payment_Due_Date',
   'Total_Amount', 'Lodge_Currency',
+  'Internal_Notes', 'Last_Handled_By',
 ]);
 
 export default async function handler(req, res) {
