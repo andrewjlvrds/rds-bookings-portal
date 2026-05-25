@@ -372,6 +372,27 @@ export function extractionToZohoFields(extraction, existingZohoValues) {
         console.log('Status advancing: ' + currentStatus + ' → ' + value);
       }
 
+      // Whitelist guard: only write Status values that are valid Zoho picklist values.
+      // Prevents AI hallucinations (e.g. "Wise Payment") from corrupting booking status.
+      if (zohoField === 'Status') {
+        var VALID_STATUSES = new Set([
+          'Not Started', 'Ready to Send', 'Enquiry Sent', 'Availability Confirmed',
+          'Confirmed', 'Proforma Received', 'Deposit Paid', 'Balance Paid',
+          'Not Available', 'Cancelled', 'Waitlisted', 'Credit against booking',
+        ]);
+        if (!VALID_STATUSES.has(value)) {
+          flagged[key] = {
+            value: value,
+            confidence: field.confidence,
+            zoho_field: zohoField,
+            existing_value: currentStatus,
+            reason: 'invalid_status_value',
+          };
+          console.log('Invalid status value blocked: "' + value + '" (not in picklist)');
+          continue;
+        }
+      }
+
       // For fields that can come from multiple sources, append rather than overwrite
       if ((zohoField === 'Payment_Note' || zohoField === 'Reservation_Comments') && updates[zohoField]) {
         updates[zohoField] += '\n' + value;
