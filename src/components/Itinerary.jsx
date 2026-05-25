@@ -815,11 +815,11 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
           <colgroup>
             <col style={{ width: 40 }} />
             <col style={{ width: 68 }} />
-            <col style={{ width: '24%' }} />
-            <col />
-            <col style={{ width: 72 }} />
+            <col style={{ width: 220 }} />
+            <col style={{ width: 280 }} />
+            <col style={{ width: 80 }} />
             <col style={{ width: 130 }} />
-            <col style={{ width: 150 }} />
+            <col style={{ width: 160 }} />
           </colgroup>
           <thead>
             <tr>
@@ -1076,7 +1076,7 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                                   background: handledBy ? 'var(--blue-bg)' : 'transparent',
                                   color: handledBy ? 'var(--blue-text)' : 'var(--text-muted)',
                                   fontWeight: handledBy ? 600 : 400,
-                                  whiteSpace: 'nowrap', width: '100%', textAlign: 'left',
+                                  whiteSpace: 'nowrap', width: '100%', minWidth: 52, textAlign: 'left',
                                 }}
                               >{handledBy || '+'}</button>
                             )
