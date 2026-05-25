@@ -84,6 +84,7 @@ export default async function handler(req, res) {
               };
               const aiResult = await parseEmail(body, bookingContext);
               const existingAmounts = {
+                Status: bk.Status,
                 Total_Amount: bk.Total_Amount, Deposit_Amount: bk.Deposit_Amount,
                 Second_Payment_Amount: bk.Second_Payment_Amount, Third_Payment_Amount: bk.Third_Payment_Amount,
                 Fourth_Payment_Amount: bk.Fourth_Payment_Amount, Deposit_Due_Date: bk.Deposit_Due_Date,

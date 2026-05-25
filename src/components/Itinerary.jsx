@@ -21,6 +21,8 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [sender, setSender] = useState('Helen')
   const [narrativeState, setNarrativeState] = useState({}) // { [bookingId]: { loading, text, confidence, saved, error, editing } }
   const [showCancelled, setShowCancelled] = useState(false) // toggle cancelled rows in the list
+  const [checkingReplies, setCheckingReplies] = useState(false) // tour-level check replies
+  const [checkRepliesResult, setCheckRepliesResult] = useState(null) // { new_emails, parsed, status_updates, errors }
 
   // Utility: date string math in UTC to avoid timezone off-by-one (ZA is UTC+2)
   const parseYMD = (s) => {
@@ -421,6 +423,46 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const firstBk = sorted[0]
   const roomConfig = firstBk ? (firstBk['Sgl/Twin/Dbl/Guides'] || firstBk.Sgl_Twin_Dbl_Guides || '') : ''
 
+  // Tour-level check replies: poll Gmail for new messages, then bulk-reparse unparsed emails for this tour
+  const handleCheckReplies = async () => {
+    setCheckingReplies(true)
+    setCheckRepliesResult(null)
+    const tourName = tour.name || tour.Name || ''
+    let newEmails = 0
+    let parseResult = null
+    try {
+      // Step 1: Poll Gmail for new messages (global — picks up any new replies)
+      const pollRes = await fetch('/api/poll-gmail', { method: 'POST' })
+      if (pollRes.ok) {
+        const pollData = await pollRes.json()
+        newEmails = pollData.stored || 0
+      }
+    } catch (e) { console.error('Poll failed:', e) }
+    try {
+      // Step 2: Bulk-reparse unparsed emails for this tour specifically
+      const reparseRes = await fetch('/api/bulk-reparse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_name: tourName, mode: 'parse_unparsed' }),
+      })
+      if (reparseRes.ok) {
+        parseResult = await reparseRes.json()
+      }
+    } catch (e) { console.error('Bulk reparse failed:', e) }
+
+    const statusUpdates = (parseResult?.results || []).filter(r => r.fields && r.fields.includes('Status')).length
+    setCheckRepliesResult({
+      new_emails: newEmails,
+      parsed: parseResult?.actioned || 0,
+      skipped: parseResult?.skipped || 0,
+      status_updates: statusUpdates,
+      errors: parseResult?.errors || 0,
+      remaining: parseResult?.remaining || 0,
+    })
+    setCheckingReplies(false)
+    if (onRefresh) onRefresh()
+  }
+
   // Mark all "Not Started" bookings as "Ready to send"
   const handleMarkAllReady = async () => {
     const toMark = sorted
@@ -541,7 +583,49 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
             title="Refresh data from Zoho"
           >↻</button>
         )}
+        <button
+          className="btn"
+          onClick={handleCheckReplies}
+          disabled={checkingReplies}
+          style={{ fontSize: 12, padding: '4px 10px', opacity: checkingReplies ? 0.6 : 1 }}
+          title="Poll Gmail for new replies, then AI-parse all unprocessed emails for this tour"
+        >{checkingReplies ? 'Checking…' : 'Check replies'}</button>
       </div>
+
+      {/* Check replies result banner */}
+      {checkRepliesResult && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 12px', marginBottom: 12,
+          background: checkRepliesResult.errors > 0 ? 'var(--red-bg, #FEF2F2)' : 'var(--green-bg, #F0FDF4)',
+          border: '0.5px solid ' + (checkRepliesResult.errors > 0 ? 'var(--red-border, #FCA5A5)' : 'var(--green-border, #86EFAC)'),
+          borderRadius: 'var(--radius-md)', fontSize: 12,
+        }}>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <span style={{ color: 'var(--text-primary)' }}>
+              <strong>{checkRepliesResult.new_emails}</strong> new {checkRepliesResult.new_emails === 1 ? 'email' : 'emails'} fetched
+            </span>
+            <span style={{ color: 'var(--text-primary)' }}>
+              <strong>{checkRepliesResult.parsed}</strong> parsed
+            </span>
+            {checkRepliesResult.status_updates > 0 && (
+              <span style={{ color: 'var(--green-text, #166534)', fontWeight: 500 }}>
+                ✦ {checkRepliesResult.status_updates} status {checkRepliesResult.status_updates === 1 ? 'update' : 'updates'}
+              </span>
+            )}
+            {checkRepliesResult.errors > 0 && (
+              <span style={{ color: 'var(--red-text, #991B1B)' }}>{checkRepliesResult.errors} errors</span>
+            )}
+            {checkRepliesResult.remaining > 0 && (
+              <span style={{ color: 'var(--amber-text, #92400E)' }}>{checkRepliesResult.remaining} remaining — run again</span>
+            )}
+          </div>
+          <button
+            onClick={() => setCheckRepliesResult(null)}
+            style={{ fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}
+          >✕</button>
+        </div>
+      )}
 
       {activeTab === 'portal-sync' && <PortalSync tour={tour} />}
 
