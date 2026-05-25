@@ -826,8 +826,8 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
               <th>Date</th>
               <th>Route</th>
               <th>Lodge</th>
-              <th>Status</th>
               <th>Handled</th>
+              <th>Status</th>
               <th></th>
             </tr>
           </thead>
@@ -1073,7 +1073,7 @@ td { padding: 7px 8px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                               maxWidth: 100,
                             }}
                           >
-                            <option value="">— assign —</option>
+                            <option value=""></option>
                             <option value="Helen">Helen</option>
                             <option value="Greg">Greg</option>
                             <option value="Andrew">Andrew</option>
