@@ -361,6 +361,18 @@ export function cancellationEmail(opts = {}) {
     'Kind regards\n\n' + replySignature(sender)
 }
 
+// 11. Confirm booking — "please book us in"
+export function confirmBookingEmail(opts = {}) {
+  const { sender = 'Helen', contactName = '', date = '', bookingRef = '', depositNote = '' } = opts
+  const refPart = bookingRef ? ' (Ref ' + bookingRef + ')' : ''
+  const depositLine = depositNote ? '\n\n' + depositNote : ''
+  return replyGreeting(contactName) + '\n\n' +
+    'Thanks for confirming availability. Please go ahead and book us in for ' + date + refPart + '.' +
+    depositLine + '\n\n' +
+    'We\u2019ll be in touch closer to the date with a final rooming list.\n\n' +
+    'Many thanks\n\n' + replySignature(sender)
+}
+
 // Registry — for use by template-picker UI in reply composer.
 //
 // Each template has:
@@ -489,6 +501,17 @@ export const LODGE_REPLY_TEMPLATES = [
       { key: 'lodgeName', label: 'Lodge name', type: 'text', required: true, autofillFrom: 'lodgeName' },
       { key: 'date', label: 'Booking date', type: 'text', required: true, autofillFrom: 'date' },
       { key: 'bookingRef', label: 'Booking reference', type: 'text', autofillFrom: 'bookingRef' },
+    ],
+  },
+  {
+    id: 'confirmBooking',
+    label: 'Please book us in',
+    fn: confirmBookingEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'date', label: 'Booking date', type: 'text', required: true, autofillFrom: 'date' },
+      { key: 'bookingRef', label: 'Booking / proforma reference', type: 'text', autofillFrom: 'bookingRef' },
+      { key: 'depositNote', label: 'Deposit note (optional)', type: 'text', placeholder: 'e.g. I\u2019ll arrange the deposit payment this week.', helpText: 'Appears as its own paragraph. Leave blank to omit.' },
     ],
   },
 ]
