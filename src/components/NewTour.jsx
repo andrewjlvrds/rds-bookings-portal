@@ -6,8 +6,8 @@ import { getAllTemplates } from '../utils/templates'
 // null = no auto-fill (Custom)
 const TOUR_TYPES = [
   { value: 'FoSA 21', daysOffset: 20 },
-  { value: 'FoSA 20', daysOffset: 19 },
   { value: 'FoSA 15', daysOffset: 14 },
+  { value: 'Edge 21', daysOffset: 20 },
   { value: 'Edge 14', daysOffset: 13 },
   { value: 'Edge 12', daysOffset: 11 },
   { value: 'Custom',  daysOffset: null },
