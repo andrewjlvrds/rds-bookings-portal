@@ -21,6 +21,10 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
   const [templateName, setTemplateName] = useState('')
   const [templateCode, setTemplateCode] = useState('')
   const [templateRefresh, setTemplateRefresh] = useState(0)
+  const [deletedRow, setDeletedRow] = useState(null) // { night, idx } — undo last delete
+  const [undoTimer, setUndoTimer] = useState(null)
+  const dragIdx = React.useRef(null)
+  const dragOverIdx = React.useRef(null)
 
   // All templates (built-in + custom)
   const allTemplates = useMemo(() => getAllTemplates(), [templateRefresh])
@@ -308,9 +312,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
 
   // Remove a night — shifts all subsequent dates back
   const removeNight = (idx) => {
+    const removed = nights[idx]
     const updated = nights.filter((_, i) => i !== idx)
-
-    // Recalculate all dates from departure date
     const dep = new Date(departureDate)
     updated.forEach((n, i) => {
       n.night_number = i + 1
@@ -319,10 +322,55 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
       d.setDate(d.getDate() + i)
       n.date = d.toISOString().split('T')[0]
     })
-
     setNights(updated)
     setDirty(true)
     setPushed(false)
+    // Store for undo — auto-clears after 10s
+    setDeletedRow({ night: removed, idx })
+    if (undoTimer) clearTimeout(undoTimer)
+    setUndoTimer(setTimeout(() => setDeletedRow(null), 10000))
+  }
+
+  // Undo last deleted row
+  const undoDelete = () => {
+    if (!deletedRow) return
+    if (undoTimer) clearTimeout(undoTimer)
+    setUndoTimer(null)
+    setNights(prev => {
+      const reinserted = [...prev]
+      reinserted.splice(deletedRow.idx, 0, deletedRow.night)
+      const dep = new Date(departureDate)
+      return reinserted.map((n, i) => {
+        const d = new Date(dep)
+        d.setDate(d.getDate() + i)
+        return { ...n, day: i + 1, night_number: i + 1, date: d.toISOString().split('T')[0] }
+      })
+    })
+    setDeletedRow(null)
+    setDirty(true)
+  }
+
+  // Drag-to-reorder handlers
+  const handleDragStart = (idx) => { dragIdx.current = idx }
+  const handleDragOver = (e, idx) => { e.preventDefault(); dragOverIdx.current = idx }
+  const handleDrop = () => {
+    const from = dragIdx.current
+    const to = dragOverIdx.current
+    if (from === null || to === null || from === to) return
+    setNights(prev => {
+      const reordered = [...prev]
+      const [moved] = reordered.splice(from, 1)
+      reordered.splice(to, 0, moved)
+      const dep = new Date(departureDate)
+      return reordered.map((n, i) => {
+        const d = new Date(dep)
+        d.setDate(d.getDate() + i)
+        return { ...n, day: i + 1, night_number: i + 1, date: d.toISOString().split('T')[0] }
+      })
+    })
+    dragIdx.current = null
+    dragOverIdx.current = null
+    setDirty(true)
   }
 
   // Clear draft from localStorage
@@ -1320,6 +1368,28 @@ ${nights.map(n => {
         </div>
       )}
 
+      {/* Undo delete toast */}
+      {deletedRow && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 14px', marginBottom: 8,
+          background: 'var(--amber-bg, #FFFBEB)', border: '0.5px solid var(--amber-border, #FCD34D)',
+          borderRadius: 'var(--radius-md)', fontSize: 12,
+        }}>
+          <span style={{ color: 'var(--amber-text, #92400E)' }}>
+            Day {deletedRow.night.day} ({deletedRow.night.route || 'unnamed'}) deleted
+          </span>
+          <button
+            onClick={undoDelete}
+            style={{
+              fontSize: 12, padding: '3px 12px', borderRadius: 4, cursor: 'pointer',
+              border: '0.5px solid var(--amber-border, #FCD34D)',
+              background: 'white', fontWeight: 600, color: 'var(--amber-text, #92400E)',
+            }}
+          >Undo</button>
+        </div>
+      )}
+
       {/* Itinerary table */}
       {nights.length > 0 && (
         <div className="table-wrap">
@@ -1345,8 +1415,15 @@ ${nights.map(n => {
             <tbody>
               {nights.map((n, i) => (
                 <React.Fragment key={n.id}>
-                <tr style={n.pre_tour ? { opacity: 0.6 } : {}}>
+                <tr
+                  draggable
+                  onDragStart={() => handleDragStart(i)}
+                  onDragOver={(e) => handleDragOver(e, i)}
+                  onDrop={handleDrop}
+                  style={{ ...(n.pre_tour ? { opacity: 0.6 } : {}), cursor: 'grab' }}
+                >
                   <td style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
+                    <span style={{ color: 'var(--text-muted)', marginRight: 4, cursor: 'grab', userSelect: 'none' }}>⠿</span>
                     {n.pre_tour ? 'Pre' : n.day}
                   </td>
                   <td style={{ fontSize: 12 }}>{fmtDate(n.date)}</td>
