@@ -496,6 +496,7 @@ export default function App() {
           tour={activeTour}
           lodges={lodges}
           onBack={() => setActiveView('tour-panel')}
+          onUpdateTour={(updates) => setActiveTour(prev => ({ ...prev, ...updates }))}
           onSave={(result) => {
             // If this was a local tour that just got pushed to Zoho, the id has changed.
             // Refresh against the new Zoho id so activeTour reflects the real record.

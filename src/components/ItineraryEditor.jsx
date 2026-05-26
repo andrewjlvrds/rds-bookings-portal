@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { TEMPLATES, generateDates, generateRdsRef, getAllTemplates, saveCustomTemplate, deleteCustomTemplate } from '../utils/templates'
 import { fmtDate, fmtDateFull } from '../utils/helpers'
 
-export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
+export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdateTour }) {
   // Cancelled Zoho bookings are preserved as an audit trail but must never be
   // loaded back into the editor — otherwise removing a night and re-opening
   // the editor reverts to the original list.
@@ -1018,8 +1018,42 @@ ${nights.map(n => {
           <h1 style={{ fontSize: 18, fontWeight: 500 }}>
             {nights.length > 0 ? 'Edit itinerary' : 'Create itinerary'} — {tour.name}
           </h1>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
-            Departure: {departureDate ? fmtDateFull(departureDate) : 'Not set in Zoho'}
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Departure:
+            <input
+              type="date"
+              value={departureDate}
+              onChange={e => {
+                const newDate = e.target.value
+                if (!newDate) return
+                // Shift all night dates relative to new departure
+                setNights(prev => prev.map((n, i) => {
+                  const d = new Date(newDate)
+                  d.setDate(d.getDate() + i)
+                  return { ...n, date: d.toISOString().slice(0, 10) }
+                }))
+                // Auto-calc end date from nights count
+                const endD = new Date(newDate)
+                endD.setDate(endD.getDate() + Math.max(0, nights.length - 1))
+                const endDate = endD.toISOString().slice(0, 10)
+                // Update tour in App and persist to localStorage/Zoho for local drafts
+                if (onUpdateTour) onUpdateTour({ departure_date: newDate, end_date: endDate })
+                // For local drafts, also update via api
+                if (tour.id && String(tour.id).startsWith('local_')) {
+                  fetch('/api/update-tour', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: tour.id, departure_date: newDate, end_date: endDate }),
+                  }).catch(() => {})
+                }
+                setDirty(true)
+              }}
+              style={{
+                fontSize: 13, border: 'none', borderBottom: '0.5px solid var(--border-default)',
+                background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer',
+                padding: '0 2px', outline: 'none',
+              }}
+            />
             {tour.tour_type ? ' · ' + tour.tour_type : ''}
           </div>
         </div>
