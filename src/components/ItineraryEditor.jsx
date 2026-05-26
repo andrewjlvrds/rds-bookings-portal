@@ -1068,8 +1068,41 @@ ${nights.map(n => {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 18, fontWeight: 500 }}>
-            {nights.length > 0 ? 'Edit itinerary' : 'Create itinerary'} — {tour.name}
+          <h1 style={{ fontSize: 18, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {nights.length > 0 ? 'Edit itinerary' : 'Create itinerary'} —
+            <input
+              type="text"
+              value={zohoTourName}
+              onChange={e => {
+                setZohoTourName(e.target.value)
+                if (onUpdateTour) onUpdateTour({ name: e.target.value })
+              }}
+              onBlur={e => {
+                const newName = e.target.value.trim()
+                if (!newName || newName === tour.name) return
+                if (isLocalTour) {
+                  try {
+                    const locals = JSON.parse(localStorage.getItem('rds_local_tours') || '[]')
+                    const updated = locals.map(t => t.id === tour.id ? { ...t, name: newName } : t)
+                    localStorage.setItem('rds_local_tours', JSON.stringify(updated))
+                  } catch(e) {}
+                } else {
+                  fetch('/api/update-tour', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tour_id: tour.id, updates: { Name: newName } }),
+                  }).catch(() => {})
+                }
+              }}
+              style={{
+                fontSize: 18, fontWeight: 500, border: 'none',
+                borderBottom: '0.5px solid var(--border-default)',
+                background: 'transparent', color: 'var(--text-primary)',
+                outline: 'none', padding: '0 2px', minWidth: 120,
+                width: Math.max(120, (zohoTourName || '').length * 11) + 'px',
+              }}
+              title="Click to rename tour"
+            />
           </h1>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
             Departure:
