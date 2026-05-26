@@ -527,6 +527,10 @@ export default function App() {
           onEnquireReady={() => setActiveView('enquiry-preview')}
           onRefresh={() => refreshData(activeTour.id)}
           onBack={() => { setActiveTour(null); setActiveView('dashboard') }}
+          onUpdateTour={(updates) => {
+            setActiveTour(prev => ({ ...prev, ...updates }))
+            if (updates.name) setTours(prev => prev.map(t => t.id === activeTour.id ? { ...t, name: updates.name } : t))
+          }}
         />
       )
     }

@@ -1079,7 +1079,7 @@ ${nights.map(n => {
               }}
               onBlur={e => {
                 const newName = e.target.value.trim()
-                if (!newName || newName === tour.name) return
+                if (!newName) return
                 if (onUpdateTour) onUpdateTour({ name: newName })
                 if (isLocalTour) {
                   try {
@@ -1087,7 +1087,7 @@ ${nights.map(n => {
                     const updated = locals.map(t => t.id === tour.id ? { ...t, name: newName } : t)
                     localStorage.setItem('rds_local_tours', JSON.stringify(updated))
                   } catch(e) {}
-                } else {
+                } else if (!isTemplateEdit) {
                   fetch('/api/update-tour', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

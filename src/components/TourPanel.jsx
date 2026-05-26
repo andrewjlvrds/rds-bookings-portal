@@ -24,6 +24,7 @@ export default function TourPanel({
   onEnquireReady,
   onRefresh,
   onBack,
+  onUpdateTour,
 }) {
   const VALID_TABS = ['correspondence', 'itinerary', 'payments']
   const safeInitial = VALID_TABS.indexOf(initialTab) >= 0 ? initialTab : 'itinerary'
@@ -73,7 +74,41 @@ export default function TourPanel({
       )}
       {/* Tour header strip */}
       <div style={{ marginBottom: 12 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 500, letterSpacing: -0.2 }}>{tour.name}</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 500, letterSpacing: -0.2, display: 'flex', alignItems: 'center' }}>
+          <input
+            type="text"
+            defaultValue={tour.name}
+            key={tour.id}
+            onBlur={e => {
+              const newName = e.target.value.trim()
+              if (!newName) return
+              if (onUpdateTour) onUpdateTour({ name: newName })
+              const isLocal = (tour.id || '').startsWith('local_') || tour.local
+              if (isLocal) {
+                try {
+                  const locals = JSON.parse(localStorage.getItem('rds_local_tours') || '[]')
+                  localStorage.setItem('rds_local_tours', JSON.stringify(locals.map(t => t.id === tour.id ? { ...t, name: newName } : t)))
+                } catch(e) {}
+              } else {
+                fetch('/api/update-tour', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ tour_id: tour.id, updates: { Name: newName } }),
+                }).then(r => r.ok && onRefresh && onRefresh()).catch(() => {})
+              }
+            }}
+            style={{
+              fontSize: 18, fontWeight: 500, letterSpacing: -0.2,
+              border: 'none', borderBottom: '0.5px solid transparent',
+              background: 'transparent', color: 'var(--text-primary)',
+              outline: 'none', padding: '0 2px',
+              width: Math.max(120, (tour.name || '').length * 11) + 'px',
+            }}
+            onFocus={e => e.target.style.borderBottomColor = 'var(--border-default)'}
+            onBlurCapture={e => e.target.style.borderBottomColor = 'transparent'}
+            title="Click to rename tour"
+          />
+        </h1>
         <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
           {tour.departure_date && (
             <span>
