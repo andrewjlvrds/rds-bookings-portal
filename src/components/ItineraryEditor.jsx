@@ -101,6 +101,20 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave }) {
     }
   }, [nights, draftKey])
 
+  // Auto-apply pending template on mount (set when user clicks "Use template" in Tour Planner)
+  useEffect(() => {
+    try {
+      const pending = localStorage.getItem('rds_pending_template')
+      if (!pending || !departureDate) return
+      const template = allTemplates[pending]
+      if (!template) return
+      localStorage.removeItem('rds_pending_template')
+      // Only auto-apply if itinerary is empty (fresh draft)
+      if (nights.length > 1) return
+      handleApplyTemplate(pending)
+    } catch(e) {}
+  }, []) // mount only
+
   // Build lodge list for fuzzy matching
   const lodgeList = useMemo(() => {
     return (lodges || []).filter(l => l.name).map(l => ({

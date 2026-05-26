@@ -1,6 +1,7 @@
 import React from 'react'
 import { fmtDateFull } from '../utils/helpers'
 import { categorizeTours } from './Layout'
+import { getAllTemplates } from '../utils/templates'
 
 const MONTH = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 function fmtShort(d) {
@@ -91,7 +92,7 @@ function Section({ title, tours, onSelectTour, onSelectView, isDraft, extra }) {
   )
 }
 
-export default function PlannerDashboard({ tours, onSelectTour, onSelectView }) {
+export default function PlannerDashboard({ tours, onSelectTour, onSelectView, onSelectTemplate }) {
   const { newBuild, drafts, yearGroups, years } = categorizeTours(tours)
 
   // Confirmed Zoho tours across all years
@@ -162,6 +163,46 @@ export default function PlannerDashboard({ tours, onSelectTour, onSelectView }) 
           {newTourBtn}
         </div>
       )}
+
+      {/* Itinerary templates */}
+      {(() => {
+        const allTemplates = getAllTemplates()
+        const entries = Object.entries(allTemplates)
+        if (!entries.length) return null
+        return (
+          <div style={{ marginTop: 32 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Templates</h2>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Start a new tour from a saved itinerary template</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+              {entries.map(([key, tpl]) => (
+                <div key={key} style={{
+                  padding: '14px 16px', borderRadius: 'var(--radius-md)',
+                  border: '0.5px solid var(--border-default)', background: 'var(--bg-secondary)',
+                  display: 'flex', flexDirection: 'column', gap: 6,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{tpl.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {tpl.nights ? tpl.nights.length + ' nights' : ''}
+                    {tpl.code ? ' · ' + tpl.code : ''}
+                    {key.startsWith('custom-') ? ' · custom' : ''}
+                  </div>
+                  <button
+                    onClick={() => onSelectTemplate ? onSelectTemplate(key) : onSelectView('new-tour')}
+                    style={{
+                      marginTop: 4, fontSize: 12, padding: '5px 10px',
+                      border: '0.5px solid var(--blue-mid)', borderRadius: 4,
+                      background: 'var(--blue-bg)', color: 'var(--blue-text)',
+                      cursor: 'pointer', fontWeight: 500, alignSelf: 'flex-start',
+                    }}
+                  >Use template</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

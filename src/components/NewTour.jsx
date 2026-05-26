@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { getAllTemplates } from '../utils/templates'
 
 // Tour types. daysOffset = days to add to departure date to get end date.
 // A 21-day tour starts on day 1 and ends on day 21 = departure + 20 days.
@@ -23,12 +24,16 @@ function addDays(dateStr, days) {
   return dt.toISOString().slice(0, 10)
 }
 
-export default function NewTour({ onCreate, onCancel }) {
+export default function NewTour({ onCreate, onCancel, initialTemplate }) {
   const [name, setName] = useState('')
   const [departureDate, setDepartureDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [endDateEdited, setEndDateEdited] = useState(false)
-  const [tourType, setTourType] = useState('')
+  const [tourType, setTourType] = useState(() => {
+    if (!initialTemplate) return ''
+    const tpl = getAllTemplates()[initialTemplate]
+    return (tpl && tpl.tour_type) ? tpl.tour_type : ''
+  })
   const [saving, setSaving] = useState(false)
 
   // Auto-fill end date from departure + tour type, unless user has manually edited it
@@ -46,6 +51,10 @@ export default function NewTour({ onCreate, onCancel }) {
     if (!canSubmit) return
     setSaving(true)
     try {
+      // Store template key so ItineraryEditor auto-applies it after creation
+      if (initialTemplate) {
+        try { localStorage.setItem('rds_pending_template', initialTemplate) } catch(e) {}
+      }
       await onCreate({
         name: name.trim(),
         departure_date: departureDate,
@@ -74,6 +83,14 @@ export default function NewTour({ onCreate, onCancel }) {
     <div style={{ maxWidth: 520 }}>
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>New tour</h1>
+        {initialTemplate && (() => {
+          const tpl = getAllTemplates()[initialTemplate]
+          return tpl ? (
+            <div style={{ fontSize: 13, color: 'var(--blue-text)', background: 'var(--blue-bg)', border: '0.5px solid var(--blue-mid)', borderRadius: 4, padding: '4px 10px', display: 'inline-block', marginBottom: 8 }}>
+              Template: {tpl.name}
+            </div>
+          ) : null
+        })()}
         <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>
           Create a local draft. It won't be written to Zoho until you push the itinerary.
         </p>

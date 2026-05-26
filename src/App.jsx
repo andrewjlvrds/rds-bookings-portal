@@ -543,10 +543,12 @@ export default function App() {
     }
 
     if (activeView === 'new-tour') {
+      const pendingTemplate = (() => { try { return localStorage.getItem('rds_pending_template') || '' } catch(e) { return '' } })()
       return (
         <NewTour
           onCreate={handleCreateTour}
-          onCancel={() => setActiveView('dashboard')}
+          onCancel={() => { try { localStorage.removeItem('rds_pending_template') } catch(e) {} setActiveView('dashboard') }}
+          initialTemplate={pendingTemplate}
         />
       )
     }
@@ -556,6 +558,10 @@ export default function App() {
         tours={tours}
         onSelectTour={(tour) => { setActiveTour(tour); setActiveView('itinerary') }}
         onSelectView={setActiveView}
+        onSelectTemplate={(key) => {
+          try { localStorage.setItem('rds_pending_template', key) } catch(e) {}
+          setActiveView('new-tour')
+        }}
       />
     )
   }
