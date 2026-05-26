@@ -3,6 +3,7 @@ import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isC
 import { generateSubject, generateEnquiryEmail, generateConfirmationEmail } from '../utils/emailTemplates'
 import PortalSync from './PortalSync'
 import RoutingPicker from './RoutingPicker'
+import NewLodgeModal from './NewLodgeModal'
 import TemplatePicker from './TemplatePicker'
 
 export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh, initialSubTab, tours }) {
@@ -25,6 +26,7 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [checkRepliesResult, setCheckRepliesResult] = useState(null) // { new_emails, parsed, status_updates, errors }
   const [metaTick, setMetaTick] = useState(0) // force re-render on meta saves
   const [bookingMeta, setBookingMeta] = useState({}) // { [bookingId]: { handledBy, notes } }
+  const [newLodgeModal, setNewLodgeModal] = useState(null) // { prefill: name }
 
   // Utility: date string math in UTC to avoid timezone off-by-one (ZA is UTC+2)
   const parseYMD = (s) => {
@@ -976,7 +978,10 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                     )}
                     {lodge && (() => {
                       const lr = lookupLodge(lodge)
-                      if (!lr) return <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>
+                      if (!lr) return <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ color: 'var(--red-text)' }}>Not in Zoho</span>
+                          <button onClick={e => { e.stopPropagation(); setNewLodgeModal({ prefill: lodge }) }} style={{ fontSize: 10, padding: '0 4px', borderRadius: 3, border: '0.5px solid var(--blue-mid)', background: 'var(--blue-bg)', color: 'var(--blue-text)', cursor: 'pointer', lineHeight: 1.6 }}>+ Add</button>
+                        </div>
                       const providerTag = lr.provider_type && lr.provider_type !== 'Lodge'
                         ? <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: lr.provider_type === 'Excursion' ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.12)', color: lr.provider_type === 'Excursion' ? '#4338ca' : '#b45309', border: '0.5px solid ' + (lr.provider_type === 'Excursion' ? '#c7d2fe' : '#fcd34d'), marginLeft: 4, textTransform: 'uppercase', letterSpacing: 0.3 }}>{lr.provider_type}</span>
                         : null
@@ -1625,7 +1630,10 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                       <td>
                         <div style={{ fontWeight: 500 }}>{n.lodge || '—'}</div>
                         {n.lodge && lr && lr.email && <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{lr.email}</div>}
-                        {n.lodge && !lr && <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>}
+                        {n.lodge && !lr && <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ color: 'var(--red-text)' }}>Not in Zoho</span>
+                          <button onClick={e => { e.stopPropagation(); setNewLodgeModal({ prefill: n.lodge }) }} style={{ fontSize: 10, padding: '0 4px', borderRadius: 3, border: '0.5px solid var(--blue-mid)', background: 'var(--blue-bg)', color: 'var(--blue-text)', cursor: 'pointer', lineHeight: 1.6 }}>+ Add</button>
+                        </div>}
                         {n.backup && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Backup: {n.backup}</div>}
                       </td>
                       <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{n.meals || ''}</td>
@@ -1932,7 +1940,10 @@ function DraftPreview({ tour, draftNights, lookupLodge, onEditItinerary, onRefre
                     <div style={{ fontWeight: 500 }}>{lodge}</div>
                     {lodge && lr && lr.email && <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{lr.email}</div>}
                     {lodge && lr && !lr.email && <div style={{ fontSize: 10, color: 'var(--amber-text)' }}>No email</div>}
-                    {lodge && !lr && <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>}
+                    {lodge && !lr && <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ color: 'var(--red-text)' }}>Not in Zoho</span>
+                          <button onClick={e => { e.stopPropagation(); setNewLodgeModal({ prefill: lodge }) }} style={{ fontSize: 10, padding: '0 4px', borderRadius: 3, border: '0.5px solid var(--blue-mid)', background: 'var(--blue-bg)', color: 'var(--blue-text)', cursor: 'pointer', lineHeight: 1.6 }}>+ Add</button>
+                        </div>}
                     {n.backup && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Backup: {n.backup}</div>}
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{n.meals || ''}</td>
@@ -2337,6 +2348,17 @@ function InlineComposer({ toEmail, booking, tourName, sender, onSenderChange, on
           style={{ fontSize: 11, padding: '4px 14px' }}
         >{sending ? 'Sending…' : 'Send'}</button>
       </div>
+
+      {newLodgeModal && (
+        <NewLodgeModal
+          prefill={newLodgeModal.prefill}
+          onClose={() => setNewLodgeModal(null)}
+          onSaved={() => {
+            setNewLodgeModal(null)
+            alert('Lodge added to Zoho. Refresh the page to see it update.')
+          }}
+        />
+      )}
     </div>
   )
 }
