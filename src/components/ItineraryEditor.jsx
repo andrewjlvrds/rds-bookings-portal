@@ -1080,6 +1080,7 @@ ${nights.map(n => {
               onBlur={e => {
                 const newName = e.target.value.trim()
                 if (!newName || newName === tour.name) return
+                if (onUpdateTour) onUpdateTour({ name: newName })
                 if (isLocalTour) {
                   try {
                     const locals = JSON.parse(localStorage.getItem('rds_local_tours') || '[]')

@@ -496,7 +496,13 @@ export default function App() {
           tour={activeTour}
           lodges={lodges}
           onBack={() => setActiveView('tour-panel')}
-          onUpdateTour={(updates) => setActiveTour(prev => ({ ...prev, ...updates }))}
+          onUpdateTour={(updates) => {
+            setActiveTour(prev => ({ ...prev, ...updates }))
+            // Also update the tours array so the sidebar reflects the new name immediately
+            if (updates.name) {
+              setTours(prev => prev.map(t => t.id === activeTour.id ? { ...t, name: updates.name } : t))
+            }
+          }}
           onSave={(result) => {
             // If this was a local tour that just got pushed to Zoho, the id has changed.
             // Refresh against the new Zoho id so activeTour reflects the real record.
