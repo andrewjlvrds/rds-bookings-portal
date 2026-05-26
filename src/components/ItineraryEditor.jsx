@@ -25,6 +25,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
   const [undoTimer, setUndoTimer] = useState(null)
   const dragIdx = React.useRef(null)
   const dragOverIdx = React.useRef(null)
+  const [newLodgeModal, setNewLodgeModal] = useState(null) // { prefill: name } | null
+  const [newLodgeSaving, setNewLodgeSaving] = useState(false)
 
   // All templates (built-in + custom)
   const allTemplates = useMemo(() => getAllTemplates(), [templateRefresh])
@@ -1604,7 +1606,15 @@ ${nights.map(n => {
                     )}
                     {n.lodge && (() => {
                       const ls = getLodgeStatus(n.lodge)
-                      if (!ls.found) return <div style={{ fontSize: 10, color: 'var(--red-text)' }}>Not in Zoho</div>
+                      if (!ls.found) return (
+                        <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ color: 'var(--red-text)' }}>Not in Zoho</span>
+                          <button
+                            onClick={e => { e.stopPropagation(); setNewLodgeModal({ prefill: n.lodge }) }}
+                            style={{ fontSize: 10, padding: '0 4px', borderRadius: 3, border: '0.5px solid var(--blue-mid)', background: 'var(--blue-bg)', color: 'var(--blue-text)', cursor: 'pointer', lineHeight: 1.6 }}
+                          >+ Add</button>
+                        </div>
+                      )
                       if (!ls.hasEmail) return <div style={{ fontSize: 10, color: 'var(--amber-text)' }}>No email</div>
                       return <div style={{ fontSize: 10, color: 'var(--green-text)' }}>{ls.email}{ls.contact ? ' · ' + ls.contact : ''}</div>
                     })()}
@@ -1744,6 +1754,89 @@ ${nights.map(n => {
           </div>
         )
       })()}
+
+      {/* Add new lodge modal */}
+      {newLodgeModal && (
+        <NewLodgeModal
+          prefill={newLodgeModal.prefill}
+          onClose={() => setNewLodgeModal(null)}
+          onSaved={() => {
+            setNewLodgeModal(null)
+            alert('Lodge added to Zoho. Refresh the page to see email status update.')
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function NewLodgeModal({ prefill, onClose, onSaved }) {
+  const [form, setForm] = React.useState({
+    name: prefill || '',
+    email: '',
+    contact_first_name: '',
+    country: '',
+    lodge_currency: '',
+  })
+  const [saving, setSaving] = React.useState(false)
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return
+    setSaving(true)
+    try {
+      const r = await fetch('/api/create-lodge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await r.json()
+      if (!r.ok || !data.success) { alert('Error: ' + (data.error || 'Unknown')); setSaving(false); return }
+      onSaved()
+    } catch(e) { alert('Error: ' + e.message); setSaving(false) }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }} onClick={onClose}>
+      <div style={{
+        background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)',
+        padding: 24, width: 400, boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+      }} onClick={e => e.stopPropagation()}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, marginTop: 0 }}>Add new lodge to Zoho</h2>
+        {[
+          { key: 'name', label: 'Lodge name *', placeholder: 'e.g. Karoo View Cottages' },
+          { key: 'email', label: 'Email', placeholder: 'reservations@...' },
+          { key: 'contact_first_name', label: 'Contact first name', placeholder: 'e.g. Howard' },
+          { key: 'country', label: 'Country', placeholder: 'e.g. South Africa' },
+          { key: 'lodge_currency', label: 'Currency', placeholder: 'e.g. ZAR' },
+        ].map(f => (
+          <div key={f.key} style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>{f.label}</label>
+            <input
+              type="text"
+              value={form[f.key]}
+              onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+              placeholder={f.placeholder}
+              style={{
+                width: '100%', boxSizing: 'border-box', fontSize: 13,
+                padding: '6px 8px', borderRadius: 4,
+                border: '0.5px solid var(--border-default)',
+                background: 'var(--bg-primary)', color: 'var(--text-primary)',
+              }}
+            />
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button onClick={onClose} style={{ fontSize: 13, padding: '6px 14px', borderRadius: 4, border: '0.5px solid var(--border-default)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={!form.name.trim() || saving}
+            style={{ fontSize: 13, padding: '6px 16px', borderRadius: 4, border: 'none', background: 'var(--blue-mid)', color: '#fff', cursor: 'pointer', opacity: (!form.name.trim() || saving) ? 0.6 : 1 }}
+          >{saving ? 'Saving…' : 'Add to Zoho'}</button>
+        </div>
+      </div>
     </div>
   )
 }
