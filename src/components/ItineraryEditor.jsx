@@ -1368,6 +1368,11 @@ ${nights.map(n => {
         </div>
       )}
 
+      {/* Lodge name datalist — shared by all lodge inputs in the editor */}
+      <datalist id="lodge-names">
+        {lodgeList.map(l => <option key={l.id || l.name} value={l.name} />)}
+      </datalist>
+
       {/* Undo delete toast */}
       {deletedRow && (
         <div style={{
@@ -1534,6 +1539,7 @@ ${nights.map(n => {
                           type="text"
                           value={n.alt.lodge || ''}
                           onChange={e => updateAlt(i, 'lodge', e.target.value)}
+                            list="lodge-names"
                           style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 0', outline: 'none', color: 'var(--amber-text, #92400E)', marginTop: 4, borderTop: '0.5px dashed var(--border-light)' }}
                           placeholder="Alt lodge"
                         />
@@ -1569,6 +1575,7 @@ ${nights.map(n => {
                         {!(n.lodges || []).includes(n.lodge) && n.lodge && (
                           <input
                             type="text"
+                            list="lodge-names"
                             value={n.lodge}
                             onChange={e => updateNight(i, 'lodge', e.target.value)}
                             style={{
@@ -1579,11 +1586,12 @@ ${nights.map(n => {
                             placeholder="Type lodge name"
                             autoFocus
                           />
-                        )}
+                        )}\
                       </div>
                     ) : (
                       <input
                         type="text"
+                        list="lodge-names"
                         value={n.lodge}
                         onChange={e => updateNight(i, 'lodge', e.target.value)}
                         style={{
