@@ -117,29 +117,9 @@ export default function PlannerDashboard({ tours, onSelectTour, onSelectView, on
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Tour Planner</h1>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          Select a confirmed tour to build its itinerary, or create a new draft.
+          Create a new draft tour, or start from a template.
         </p>
       </div>
-
-      {/* Confirmed Zoho tours */}
-      {confirmedTours.length > 0 && (
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Confirmed tours</h2>
-            {!hasDrafts && newTourBtn}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
-            {confirmedTours.map(tour => (
-              <TourCard
-                key={tour.id}
-                tour={tour}
-                isDraft={false}
-                onClick={() => { onSelectTour(tour); onSelectView('itinerary') }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Draft / local tours */}
       {hasDrafts && (
