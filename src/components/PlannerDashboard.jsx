@@ -1,7 +1,7 @@
 import React from 'react'
 import { fmtDateFull } from '../utils/helpers'
 import { categorizeTours } from './Layout'
-import { getAllTemplates } from '../utils/templates'
+import { getAllTemplates, deleteCustomTemplate } from '../utils/templates'
 
 const MONTH = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 function fmtShort(d) {
@@ -92,7 +92,7 @@ function Section({ title, tours, onSelectTour, onSelectView, isDraft, extra }) {
   )
 }
 
-export default function PlannerDashboard({ tours, onSelectTour, onSelectView, onSelectTemplate }) {
+export default function PlannerDashboard({ tours, onSelectTour, onSelectView, onSelectTemplate, onEditTemplate }) {
   const { newBuild, drafts, yearGroups, years } = categorizeTours(tours)
 
   // Confirmed Zoho tours across all years
@@ -162,7 +162,27 @@ export default function PlannerDashboard({ tours, onSelectTour, onSelectView, on
                   border: '0.5px solid var(--border-default)', background: 'var(--bg-secondary)',
                   display: 'flex', flexDirection: 'column', gap: 6,
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{tpl.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{tpl.name}</div>
+                    {key.startsWith('custom-') && (
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <button
+                          onClick={() => onEditTemplate && onEditTemplate(key)}
+                          title="Edit this template in the itinerary editor"
+                          style={{ fontSize: 11, padding: '2px 8px', borderRadius: 3, border: '0.5px solid var(--border-default)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)' }}
+                        >Edit</button>
+                        <button
+                          onClick={() => {
+                            if (!confirm('Delete template "' + tpl.name + '"?')) return
+                            deleteCustomTemplate(key)
+                            onSelectView('dashboard')
+                          }}
+                          title="Delete this template"
+                          style={{ fontSize: 11, padding: '2px 8px', borderRadius: 3, border: '0.5px solid var(--border-default)', background: 'transparent', cursor: 'pointer', color: 'var(--red-text, #c0392b)' }}
+                        >×</button>
+                      </div>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {tpl.nights ? tpl.nights.length + ' nights' : ''}
                     {tpl.code ? ' · ' + tpl.code : ''}

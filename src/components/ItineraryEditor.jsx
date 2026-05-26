@@ -413,6 +413,8 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
 
   // Whether this is a local (not-yet-in-Zoho) tour
   const isLocalTour = (tour.id || '').startsWith('local_') || tour.local
+  const isTemplateEdit = (tour.id || '').startsWith('template_edit_')
+  const templateEditKey = isTemplateEdit ? (tour._templateKey || tour.id.replace('template_edit_', '')) : null
   const [zohoTourName, setZohoTourName] = useState(tour.name || '')
 
   // Sync to Zoho — creates new nights, cancels orphaned/swapped bookings
@@ -1169,24 +1171,53 @@ ${nights.map(n => {
                 }}
               />
             )}
-            <button
-              className="btn btn-primary"
-              onClick={handlePushToZoho}
-              disabled={pushing || pushed || !departureDate || (isLocalTour && !zohoTourName.trim())}
-            >
-              {pushing
-                ? 'Syncing...'
-                : pushed
-                  ? 'Synced to Zoho'
-                  : !hasChanges
-                    ? 'All in Zoho'
-                    : (cancelBookings.length > 0 || updateBookings.length > 0)
-                      ? 'Sync to Zoho (+' + newNights.length + ' / ~' + updateBookings.length + ' / −' + cancelBookings.length + ')'
-                      : newNights.length === nights.length
-                        ? 'Push to Zoho (' + nights.length + ' nights)'
-                        : 'Push ' + newNights.length + ' new night' + (newNights.length !== 1 ? 's' : '') + ' to Zoho'
-              }
-            </button>
+            {isTemplateEdit ? (
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  if (!templateEditKey || nights.length === 0) return
+                  const updated = {
+                    ...getAllTemplates()[templateEditKey],
+                    nights: nights.map(n => ({
+                      day: n.day,
+                      route: n.route || '',
+                      region: n.region || '',
+                      meals: n.meals || 'BB',
+                      km: n.km || '',
+                      route_notes: n.route_notes || '',
+                      excursion: n.excursion || '',
+                      notes: n.notes || '',
+                      lodges: [n.lodge, n.backup].filter(Boolean),
+                    })),
+                    custom: true,
+                  }
+                  saveCustomTemplate(templateEditKey, updated)
+                  try { localStorage.removeItem('rds_editing_template') } catch(e) {}
+                  alert('Template updated.')
+                  if (onSave) onSave({})
+                }}
+                disabled={nights.length === 0}
+              >Update template</button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                onClick={handlePushToZoho}
+                disabled={pushing || pushed || !departureDate || (isLocalTour && !zohoTourName.trim())}
+              >
+                {pushing
+                  ? 'Syncing...'
+                  : pushed
+                    ? 'Synced to Zoho'
+                    : !hasChanges
+                      ? 'All in Zoho'
+                      : (cancelBookings.length > 0 || updateBookings.length > 0)
+                        ? 'Sync to Zoho (+' + newNights.length + ' / ~' + updateBookings.length + ' / −' + cancelBookings.length + ')'
+                        : newNights.length === nights.length
+                          ? 'Push to Zoho (' + nights.length + ' nights)'
+                          : 'Push ' + newNights.length + ' new night' + (newNights.length !== 1 ? 's' : '') + ' to Zoho'
+                }
+              </button>
+            )}
           </div>
         )}
       </div>

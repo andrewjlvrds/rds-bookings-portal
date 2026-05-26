@@ -563,6 +563,26 @@ export default function App() {
           try { localStorage.setItem('rds_pending_template', key) } catch(e) {}
           setActiveView('new-tour')
         }}
+        onEditTemplate={(key) => {
+          // Create a temporary in-memory tour to host the template in the editor
+          // The editor's Save as template will overwrite the original key
+          try {
+            localStorage.setItem('rds_editing_template', key)
+            const allTpl = JSON.parse(localStorage.getItem('rds_custom_templates') || '{}')
+            const tpl = allTpl[key]
+            if (!tpl) return
+            const tempTour = {
+              id: 'template_edit_' + key,
+              name: 'Editing: ' + tpl.name,
+              departure_date: new Date().toISOString().slice(0, 10),
+              tour_type: tpl.tour_type || '',
+              _templateKey: key,
+            }
+            setActiveTour(tempTour)
+            localStorage.setItem('rds_pending_template', key)
+            setActiveView('edit-itinerary')
+          } catch(e) {}
+        }}
       />
     )
   }
