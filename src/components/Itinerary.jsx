@@ -6,7 +6,7 @@ import RoutingPicker from './RoutingPicker'
 import NewLodgeModal from './NewLodgeModal'
 import TemplatePicker from './TemplatePicker'
 
-export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh, initialSubTab, tours }) {
+export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinerary, onDeleteTour, onEnquireReady, onRefresh, onDateChangeEmails, initialSubTab, tours }) {
   const [activeTab, setActiveTab] = useState(initialSubTab === 'correspondence' ? 'correspondence' : 'bookings')
   const [marking, setMarking] = useState(false)
   const [editing, setEditing] = useState(null) // { id, field, value }
@@ -586,6 +586,9 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
     setTimeout(() => win.print(), 300)
   }
 
+  // Count Date Change Required bookings
+  const dateChangeRequired = (tour.bookings || []).filter(b => getStatus(b) === 'Date Change Required').length
+
   return (
     <div>
       {/* Action buttons */}
@@ -604,7 +607,16 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
             Enquire all ready ({readyToSend})
           </button>
         )}
-{onRefresh && (
+{dateChangeRequired > 0 && onDateChangeEmails && (
+          <button
+            className="btn btn-primary"
+            onClick={onDateChangeEmails}
+            style={{ background: 'var(--amber-bg)', color: 'var(--amber-text)', border: '0.5px solid var(--amber-border)' }}
+          >
+            Send date change emails ({dateChangeRequired})
+          </button>
+        )}
+        {onRefresh && (
           <button
             className="btn"
             onClick={onRefresh}

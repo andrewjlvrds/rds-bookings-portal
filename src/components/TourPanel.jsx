@@ -22,6 +22,7 @@ export default function TourPanel({
   onEditItinerary,
   onDeleteTour,
   onEnquireReady,
+  onDateChangeEmails,
   onRefresh,
   onBack,
   onUpdateTour,
@@ -206,6 +207,7 @@ export default function TourPanel({
           onEditItinerary={onEditItinerary}
           onDeleteTour={onDeleteTour}
           onEnquireReady={onEnquireReady}
+          onDateChangeEmails={onDateChangeEmails}
           onRefresh={onRefresh}
           initialSubTab="correspondence"
         />
@@ -220,6 +222,7 @@ export default function TourPanel({
           onEditItinerary={onEditItinerary}
           onDeleteTour={onDeleteTour}
           onEnquireReady={onEnquireReady}
+          onDateChangeEmails={onDateChangeEmails}
           onRefresh={onRefresh}
         />
       )}

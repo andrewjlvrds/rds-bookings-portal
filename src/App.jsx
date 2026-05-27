@@ -547,6 +547,25 @@ export default function App() {
           onEditItinerary={() => setActiveView('edit-itinerary')}
           onDeleteTour={() => handleDeleteTour(activeTour.id, activeTour.name)}
           onEnquireReady={() => setActiveView('enquiry-preview')}
+          onDateChangeEmails={() => {
+            const bookings = (activeTour.bookings || []).filter(b => {
+              const s = b.Status || ''
+              return s === 'Date Change Required'
+            })
+            const dcb = bookings.map(b => {
+              const comments = b.Reservation_Comments || ''
+              const m = comments.match(/Previous check-in: ([\d-]+)/)
+              const oldCheckIn = m ? m[1] : ''
+              const newCheckIn = b.Check_in_Date || ''
+              const newCheckOut = b.Check_out_Date || ''
+              const oldCheckOut = oldCheckIn ? (() => {
+                try { const d = new Date(oldCheckIn); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] } catch(e) { return '' }
+              })() : ''
+              return { booking: b, oldCheckIn, oldCheckOut, newCheckIn, newCheckOut, night: {} }
+            })
+            setPendingDateChanges(dcb)
+            setActiveView('date-change-preview')
+          }}
           onRefresh={() => refreshData(activeTour.id)}
           onBack={() => { setActiveTour(null); setActiveView('dashboard') }}
           onUpdateTour={(updates) => {
