@@ -93,6 +93,7 @@ export default function App() {
   // to the badge without an extra refetch.
   const inboxStats = inboxData?.stats || { unread: 0, unmatched: 0, tour_bucket: 0 }
   const [unreadCounts, setUnreadCounts] = useState(null) // { [bookingId]: number }
+  const [flagCounts, setFlagCounts] = useState({}) // { [bookingId]: number }
 
   const fetchInboxStats = (force) => {
     // Skip refetch if we already have fresh data, unless force=true
@@ -182,6 +183,7 @@ export default function App() {
       })
       const d = await r.json()
       if (d.counts) setUnreadCounts(d.counts)
+      if (d.flagCounts) setFlagCounts(d.flagCounts)
     } catch (e) {
       console.error('unread-counts fetch failed:', e)
     }
@@ -629,6 +631,7 @@ export default function App() {
         onCreateTour={handleCreateTour}
         inboxStats={inboxStats}
         unreadCounts={unreadCounts}
+        flagCounts={flagCounts}
       >
         {renderContent()}
       </Layout>

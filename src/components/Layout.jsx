@@ -50,7 +50,7 @@ const TABS = [
   { id: 'guests', label: 'Guest bookings', defaultView: 'guest-dashboard' },
 ]
 
-export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats, unreadCounts, children }) {
+export default function Layout({ tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats, unreadCounts, flagCounts, children }) {
   const currentSection = getSection(activeView)
 
   const handleTabClick = (tab) => {
@@ -127,6 +127,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
           onCreateTour={onCreateTour}
           inboxStats={inboxStats}
           unreadCounts={unreadCounts}
+          flagCounts={flagCounts}
         />
         <main style={{ flex: 1, padding: '20px 24px', overflow: 'auto', minWidth: 0, boxSizing: 'border-box' }}>
           {children}
@@ -137,7 +138,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
 }
 
 
-function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats, unreadCounts }) {
+function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelectView, onCreateTour, inboxStats, unreadCounts, flagCounts }) {
   // Filter tours for committed-only sections
   const committedTours = (tours || []).filter(t => {
     if (typeof t.id === 'string' && t.id.startsWith('local_')) return false
@@ -203,7 +204,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
 }
 
 
-function TourList({ tours, activeTour, onTourClick, onCreateTour, mode, unreadCounts }) {
+function TourList({ tours, activeTour, onTourClick, onCreateTour, mode, unreadCounts, flagCounts }) {
   const [showPast, setShowPast] = useState(false)
   const [collapsedYears, setCollapsedYears] = useState({})
   const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
@@ -245,7 +246,7 @@ function TourList({ tours, activeTour, onTourClick, onCreateTour, mode, unreadCo
                 <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: collapsedYears[year] ? 'rotate(0deg)' : 'rotate(180deg)', display: 'inline-block' }}>▾</span>
               </button>
               {!collapsedYears[year] && yearGroups[year].map(tour => (
-                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} onClick={() => onTourClick(tour)} />
+                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} flagCounts={flagCounts} onClick={() => onTourClick(tour)} />
               ))}
             </div>
           ))}
@@ -266,7 +267,7 @@ function TourList({ tours, activeTour, onTourClick, onCreateTour, mode, unreadCo
                 <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: showPast ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▾</span>
               </button>
               {showPast && past.map(tour => (
-                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} onClick={() => onTourClick(tour)} dimmed />
+                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} flagCounts={flagCounts} onClick={() => onTourClick(tour)} dimmed />
               ))}
             </div>
           )}
@@ -391,12 +392,15 @@ function TourGroup({ label, tours, activeTour, onTourClick, onAdd, drafts }) {
 }
 
 
-function TourItem({ tour, active, onClick, dimmed, isDraft, unreadCounts }) {
+function TourItem({ tour, active, onClick, dimmed, isDraft, unreadCounts, flagCounts }) {
   const bookings = tour.bookings || []
   // Use blob-based unread counts if available, fall back to Zoho New_Reply
   const newReplies = unreadCounts != null
     ? bookings.reduce((sum, b) => sum + (unreadCounts[(b.id || b['Record Id'])] || 0), 0)
     : bookings.filter(b => b && b.New_Reply === true).length
+  const flaggedCount = flagCounts != null
+    ? bookings.reduce((sum, b) => sum + (flagCounts[(b.id || b['Record Id'])] || 0), 0)
+    : 0
 
   // Count overdue payments across all bookings
   const now = new Date().toISOString().slice(0, 10)
@@ -452,6 +456,19 @@ function TourItem({ tour, active, onClick, dimmed, isDraft, unreadCounts }) {
             }}
           >
             {newReplies}
+          </span>
+        )}
+        {flaggedCount > 0 && (
+          <span
+            title={flaggedCount + ' flagged for review'}
+            style={{
+              fontSize: 10, fontWeight: 600,
+              background: '#E05C2A', color: '#fff',
+              padding: '1px 6px', borderRadius: 9, lineHeight: 1.3,
+              minWidth: 16, textAlign: 'center',
+            }}
+          >
+            🚩{flaggedCount}
           </span>
         )}
         {overdueCount > 0 && (

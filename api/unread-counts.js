@@ -9,6 +9,7 @@
 
 import { list } from '@vercel/blob';
 import { loadReadState } from './_read-state.js';
+import { loadFlags } from './_flags.js';
 
 export const config = { maxDuration: 30 };
 
@@ -24,10 +25,10 @@ export default async function handler(req, res) {
 
   if (!bookingIds.length) return res.status(200).json({ counts: {} });
 
-  // Load read-state once — single blob fetch shared across all bookings
-  const readState = await loadReadState();
+  // Load read-state and flags once — single blob fetch each
+  const [readState, flags] = await Promise.all([loadReadState(), loadFlags()]);
 
-  const counts = {};
+  const counts = {}, flagCounts = {};
   const t0 = Date.now();
   const BATCH = 10;
 
@@ -40,7 +41,7 @@ export default async function handler(req, res) {
         const result = await list({ prefix: 'emails/booking/' + bookingId + '/' });
         const blobs = result.blobs || [];
 
-        let unread = 0;
+        let unread = 0, flagged = 0;
         await Promise.all(blobs.map(async (blob) => {
           try {
             const r = await fetch(blob.url);
@@ -54,18 +55,20 @@ export default async function handler(req, res) {
             const hasBody = data.body && data.body.trim() && data.body !== '(no content)';
             if (!hasBody) return;
             unread++;
+            if (emailId && flags[emailId]) flagged++;
           } catch (e) { /* skip */ }
         }));
-        return { bookingId, unread };
+        return { bookingId, unread, flagged };
       } catch (e) {
-        return { bookingId, unread: 0 };
+        return { bookingId, unread: 0, flagged: 0 };
       }
     }));
 
-    results.forEach(({ bookingId, unread }) => {
+    results.forEach(({ bookingId, unread, flagged }) => {
       counts[bookingId] = unread;
+      if (flagged) flagCounts[bookingId] = flagged;
     });
   }
 
-  return res.status(200).json({ counts });
+  return res.status(200).json({ counts, flagCounts });
 }

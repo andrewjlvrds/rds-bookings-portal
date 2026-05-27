@@ -1138,6 +1138,26 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
   const isOutbound = email.direction === 'outbound'
   const isUnread = !isOutbound && email.id && readState && !readState[email.id]
 
+  // Flag state — stored in blob, shared across users
+  const [flagged, setFlagged] = React.useState(
+    !!(email.id && typeof window !== 'undefined' && localStorage.getItem('rds_flagged_' + email.id))
+  )
+  const toggleFlag = async (e) => {
+    e.stopPropagation()
+    if (!email.id) return
+    const newFlagged = !flagged
+    setFlagged(newFlagged)
+    try { 
+      if (newFlagged) localStorage.setItem('rds_flagged_' + email.id, '1')
+      else localStorage.removeItem('rds_flagged_' + email.id)
+    } catch(e) {}
+    fetch('/api/toggle-flag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email_id: email.id }),
+    }).catch(() => {})
+  }
+
   // Reply sent — marks email as handled in read-state blob (shared across users)
   const handledKey = email.id ? 'rds_handled_' + email.id : null
   const [handled, setHandled] = useState(() => {
@@ -1368,6 +1388,19 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
               title="Mark as handled — we've responded to this"
             >Reply sent</button>
           )
+        )}
+        {!isOutbound && email.id && (
+          <button
+            onClick={toggleFlag}
+            style={{
+              fontSize: 10, padding: '2px 6px', flexShrink: 0, whiteSpace: 'nowrap',
+              border: flagged ? '0.5px solid #C07A2A' : '0.5px solid var(--border-default)',
+              borderRadius: 3, cursor: 'pointer',
+              background: flagged ? '#FEF3C7' : 'var(--bg-primary)',
+              color: flagged ? '#92400E' : 'var(--text-muted)',
+            }}
+            title={flagged ? 'Clear flag' : 'Flag for review'}
+          >{flagged ? '🚩 Flagged' : '⚑ Flag'}</button>
         )}
         {!isOutbound && tours && email.id && (
           <button
