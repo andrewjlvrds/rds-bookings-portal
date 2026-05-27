@@ -28,41 +28,56 @@ function decodeBase64Url(str) {
 }
 
 // Extract plain text body from Gmail message payload
-function extractBody(payload) {
+// extractBody: async so it can fetch attachment-referenced body parts.
+// Gmail sometimes stores text/plain or text/html content with an attachmentId
+// instead of inline body.data (common when message has attachments). This fetches
+// the content via the attachments API when inline data is missing.
+async function extractBody(payload, token, msgId) {
   if (!payload) return '';
 
   var textPlain = '';
   var textHtml = '';
+  var textPlainAttId = '';
+  var textHtmlAttId = '';
 
   function walkParts(part) {
     if (!part) return;
-    // Check this part directly
-    if (part.mimeType === 'text/plain' && part.body && part.body.data && !textPlain) {
-      textPlain = decodeBase64Url(part.body.data);
+    if (part.mimeType === 'text/plain' && part.body) {
+      if (part.body.data && !textPlain) textPlain = decodeBase64Url(part.body.data);
+      else if (part.body.attachmentId && !textPlainAttId) textPlainAttId = part.body.attachmentId;
     }
-    if (part.mimeType === 'text/html' && part.body && part.body.data && !textHtml) {
-      textHtml = decodeBase64Url(part.body.data);
+    if (part.mimeType === 'text/html' && part.body) {
+      if (part.body.data && !textHtml) textHtml = decodeBase64Url(part.body.data);
+      else if (part.body.attachmentId && !textHtmlAttId) textHtmlAttId = part.body.attachmentId;
     }
-    // Recurse into sub-parts
     if (part.parts) {
-      for (var i = 0; i < part.parts.length; i++) {
-        walkParts(part.parts[i]);
-      }
+      for (var i = 0; i < part.parts.length; i++) walkParts(part.parts[i]);
     }
   }
 
-  // Start: check top-level body
-  if (payload.mimeType === 'text/plain' && payload.body && payload.body.data) {
-    return decodeBase64Url(payload.body.data);
+  if (payload.mimeType === 'text/plain' && payload.body) {
+    if (payload.body.data) return decodeBase64Url(payload.body.data);
+    if (payload.body.attachmentId && token && msgId) textPlainAttId = payload.body.attachmentId;
   }
 
-  // Walk all parts recursively
   walkParts(payload);
 
-  // Prefer plain text, fall back to stripped HTML
+  // Fetch attachment-referenced body parts if needed
+  if (!textPlain && textPlainAttId && token && msgId) {
+    try {
+      var attResult = await gmailApi(token, 'messages/' + msgId + '/attachments/' + textPlainAttId);
+      if (attResult && attResult.data) textPlain = decodeBase64Url(attResult.data);
+    } catch(e) { /* non-fatal */ }
+  }
+  if (!textHtml && textHtmlAttId && token && msgId) {
+    try {
+      var attResult2 = await gmailApi(token, 'messages/' + msgId + '/attachments/' + textHtmlAttId);
+      if (attResult2 && attResult2.data) textHtml = decodeBase64Url(attResult2.data);
+    } catch(e) { /* non-fatal */ }
+  }
+
   if (textPlain) return textPlain;
   if (textHtml) return textHtml.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
-
   return '';
 }
 
@@ -348,7 +363,7 @@ export default async function(req, res) {
         }
 
         // Try to match to a booking
-        var body = extractBody(msg.payload);
+        var body = await extractBody(msg.payload, token, msgId);
 
         // ─── Tier 0: RFC Message-ID header → sent-index ───
         // If this inbound is a reply to an email we sent from the portal,

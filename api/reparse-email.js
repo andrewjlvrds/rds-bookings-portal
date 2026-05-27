@@ -188,19 +188,41 @@ export default async function(req, res) {
               // Also re-extract body if it was empty
               if (!body || body === '(no content)') {
                 var textPlain = '', textHtml = '';
+                var textPlainAttId = '', textHtmlAttId = '';
                 const walkBody = (part) => {
                   if (!part) return;
-                  if (part.mimeType === 'text/plain' && part.body && part.body.data && !textPlain) {
-                    var padded = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
-                    textPlain = Buffer.from(padded, 'base64').toString('utf-8');
+                  if (part.mimeType === 'text/plain' && part.body) {
+                    if (part.body.data && !textPlain) {
+                      var padded = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
+                      textPlain = Buffer.from(padded, 'base64').toString('utf-8');
+                    } else if (part.body.attachmentId && !textPlainAttId) {
+                      textPlainAttId = part.body.attachmentId;
+                    }
                   }
-                  if (part.mimeType === 'text/html' && part.body && part.body.data && !textHtml) {
-                    var padded2 = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
-                    textHtml = Buffer.from(padded2, 'base64').toString('utf-8');
+                  if (part.mimeType === 'text/html' && part.body) {
+                    if (part.body.data && !textHtml) {
+                      var padded2 = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
+                      textHtml = Buffer.from(padded2, 'base64').toString('utf-8');
+                    } else if (part.body.attachmentId && !textHtmlAttId) {
+                      textHtmlAttId = part.body.attachmentId;
+                    }
                   }
                   if (part.parts) part.parts.forEach(walkBody);
-                }
+                };
                 walkBody(fullMsg.payload);
+                // Fetch attachment-referenced body parts if inline data was missing
+                if (!textPlain && textPlainAttId) {
+                  try {
+                    var att = await gmailApi(token, 'messages/' + gmailMsgId + '/attachments/' + textPlainAttId);
+                    if (att && att.data) textPlain = Buffer.from(att.data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+                  } catch(e) { /* non-fatal */ }
+                }
+                if (!textHtml && textHtmlAttId) {
+                  try {
+                    var att2 = await gmailApi(token, 'messages/' + gmailMsgId + '/attachments/' + textHtmlAttId);
+                    if (att2 && att2.data) textHtml = Buffer.from(att2.data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+                  } catch(e) { /* non-fatal */ }
+                }
                 if (textPlain) body = textPlain;
                 else if (textHtml) body = textHtml.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
               }
