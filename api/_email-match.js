@@ -165,6 +165,58 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailM
     }
   }
 
+  // 2b. RDS ref present but booking has no RDS_Reference in Zoho (field was blank).
+  // Parse the lodge name out of the ref and try a nameMap lookup, using the
+  // date in the ref to disambiguate. Format: RDS-TourCode-MonYY-LodgeName-YY/MM/DD
+  // LodgeName is CamelCase with no spaces — split on capital letters to recover words.
+  if (rdsRef) {
+    var parts = rdsRef.split('-');
+    // parts[0]=RDS parts[1]=TourCode parts[2]=MonYY parts[3]=LodgeName parts[4]=date
+    if (parts.length >= 4) {
+      // Recover lodge name: split CamelCase back into words
+      var camel = parts[3] || '';
+      var lodgeWords = camel.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+      // Try full name, then progressively shorter prefixes
+      var candidates2 = nameMap[lodgeWords];
+      if (!candidates2) {
+        // Try matching any nameMap key that the camel string starts with (without spaces)
+        var camelLow = camel.toLowerCase();
+        for (var nk = 0; nk < Object.keys(nameMap).length; nk++) {
+          var nkey = Object.keys(nameMap)[nk];
+          var nkNoSpace = nkey.replace(/\s+/g, '');
+          if (camelLow === nkNoSpace || camelLow.startsWith(nkNoSpace) || nkNoSpace.startsWith(camelLow)) {
+            candidates2 = nameMap[nkey];
+            break;
+          }
+        }
+      }
+      if (candidates2 && candidates2.length > 0) {
+        // Extract date from ref part (YY/MM/DD → YYYY-MM-DD)
+        var refDatePart = parts[4] || '';
+        var refDateMatch = refDatePart.match(/(\d{2})\/(\d{2})\/(\d{2})/);
+        if (refDateMatch) {
+          var refIso = '20' + refDateMatch[1] + '-' + refDateMatch[2] + '-' + refDateMatch[3];
+          var refD = new Date(refIso);
+          var best2 = null, bestScore2 = 9999;
+          for (var ci2 = 0; ci2 < candidates2.length; ci2++) {
+            var cand = candidates2[ci2];
+            var cIn = cand.Check_in_Date ? new Date(cand.Check_in_Date) : null;
+            if (cIn && !isNaN(cIn) && !isNaN(refD)) {
+              var diff = Math.abs(refD - cIn) / 86400000;
+              if (diff < bestScore2) { bestScore2 = diff; best2 = cand; }
+            }
+          }
+          if (best2 && bestScore2 <= 3) {
+            return { booking: best2, method: 'rds_ref_camel_parse' };
+          }
+        }
+        if (candidates2.length === 1) {
+          return { booking: candidates2[0], method: 'rds_ref_camel_parse_unique' };
+        }
+      }
+    }
+  }
+
   // 3. Lodge name + date score
   var subjectLower = subj.toLowerCase();
   var fromLower = frm.toLowerCase();

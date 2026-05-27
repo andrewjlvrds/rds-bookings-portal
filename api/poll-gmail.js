@@ -748,6 +748,17 @@ export default async function(req, res) {
           New_Reply: true,
         };
 
+        // Self-heal: if this booking matched via RDS ref camelCase parse but has
+        // no RDS_Reference in Zoho, write it back now so future emails hit Tier 1.
+        if ((match.method === 'rds_ref_camel_parse' || match.method === 'rds_ref_camel_parse_unique')
+            && !matchedBooking.RDS_Reference) {
+          var subjectRefForBackfill = extractRdsRef(subject);
+          if (subjectRefForBackfill) {
+            zohoUpdates.RDS_Reference = subjectRefForBackfill;
+            console.log('Backfilling RDS_Reference', subjectRefForBackfill, 'on booking', bookingId);
+          }
+        }
+
         var timeLeft = Date.now() - t0;
         var skipAiDueToTime = timeLeft > 30000;
         if (skipAiDueToTime) {
