@@ -338,46 +338,6 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
         </div>
       </div>
 
-      {/* AI suggested status — shown when AI parsed a status change from an email */}
-      {aiParsedFields.suggested_status && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '8px 12px', marginBottom: 12,
-          background: 'var(--amber-bg, #FFFBEB)', border: '0.5px solid var(--amber-border, #FCD34D)',
-          borderRadius: 'var(--radius-md)', fontSize: 12,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 13 }}>✦</span>
-            <span style={{ color: 'var(--amber-text, #92400E)', fontWeight: 500 }}>
-              Update status to <strong>{aiParsedFields.suggested_status.value}</strong>?
-            </span>
-            {aiParsedFields.suggested_status.reason === 'status_regression_blocked' && (
-              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(blocked — would regress from {aiParsedFields.suggested_status.existing_value})</span>
-            )}
-            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-              · {aiParsedFields.suggested_status.confidence} confidence
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              onClick={() => handleCopyAiField('Status', aiParsedFields.suggested_status.value)}
-              style={{
-                fontSize: 11, padding: '3px 10px',
-                border: '0.5px solid var(--blue-mid)', borderRadius: 3,
-                background: 'var(--blue-bg)', cursor: 'pointer', color: 'var(--blue-text)',
-              }}
-            >Update status</button>
-            <button
-              onClick={() => setAiParsedFields(prev => { const n = {...prev}; delete n.suggested_status; return n })}
-              style={{
-                fontSize: 11, padding: '3px 8px',
-                border: '0.5px solid var(--border-mid)', borderRadius: 3,
-                background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)',
-              }}
-            >Dismiss</button>
-          </div>
-        </div>
-      )}
 
       {/* Booking Type toggle */}
       <div style={{
