@@ -297,9 +297,6 @@ export default async function(req, res) {
     if (messages.length === 0) {
       return res.status(200).json({ success: true, checked: 0, stored: 0, message: 'No new messages' });
     }
-    } catch (lodgeErr) {
-      console.error('Failed to fetch lodges for email matching:', lodgeErr.message);
-    }
 
     // Booking-by-id map, for Tier 0 (Message-ID header → booking)
     var bookingsById = {};
