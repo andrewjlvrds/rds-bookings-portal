@@ -245,7 +245,7 @@ function TourList({ tours, activeTour, onTourClick, onCreateTour, mode, unreadCo
                 <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: collapsedYears[year] ? 'rotate(0deg)' : 'rotate(180deg)', display: 'inline-block' }}>▾</span>
               </button>
               {!collapsedYears[year] && yearGroups[year].map(tour => (
-                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} onClick={() => onTourClick(tour)} unreadCounts={unreadCounts} />
+                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} onClick={() => onTourClick(tour)} />
               ))}
             </div>
           ))}
@@ -266,7 +266,7 @@ function TourList({ tours, activeTour, onTourClick, onCreateTour, mode, unreadCo
                 <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: showPast ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▾</span>
               </button>
               {showPast && past.map(tour => (
-                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} onClick={() => onTourClick(tour)} dimmed unreadCounts={unreadCounts} />
+                <TourItem key={tour.id} tour={tour} active={activeTour && activeTour.id === tour.id} unreadCounts={unreadCounts} onClick={() => onTourClick(tour)} dimmed />
               ))}
             </div>
           )}
