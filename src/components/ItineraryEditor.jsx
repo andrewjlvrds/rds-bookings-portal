@@ -24,6 +24,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
   const [templateRefresh, setTemplateRefresh] = useState(0)
   const [deletedRow, setDeletedRow] = useState(null) // { night, idx } — undo last delete
   const [undoTimer, setUndoTimer] = useState(null)
+  const [removedNights, setRemovedNights] = useState([]) // nights removed that had enquired+ bookings — shown as pending cancellation
   const dragIdx = React.useRef(null)
   const dragOverIdx = React.useRef(null)
   const [newLodgeModal, setNewLodgeModal] = useState(null) // { prefill: name } | null
@@ -316,6 +317,33 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
   // Remove a night — shifts all subsequent dates back
   const removeNight = (idx) => {
     const removed = nights[idx]
+
+    // If this night has a Zoho booking at Enquired or later, keep it visible
+    // as a pending cancellation rather than silently dropping it.
+    const POST_ENQUIRY_STATUSES = new Set([
+      'Enquiry Sent', 'Availability Confirmed', 'Confirmed',
+      'Proforma Received', 'Deposit Paid', 'Balance Paid',
+    ])
+    if (removed.zoho_id) {
+      const bk = activeBookings.find(b => String(b.id || b['Record Id']) === String(removed.zoho_id))
+      if (bk && POST_ENQUIRY_STATUSES.has(getStatus(bk))) {
+        setRemovedNights(prev => [...prev, { night: removed, booking: bk }])
+        const updated = nights.filter((_, i) => i !== idx)
+        const dep = new Date(departureDate)
+        updated.forEach((n, i) => {
+          n.night_number = i + 1
+          n.day = i + 1
+          const d = new Date(dep)
+          d.setDate(d.getDate() + i)
+          n.date = d.toISOString().split('T')[0]
+        })
+        setNights(updated)
+        setDirty(true)
+        setPushed(false)
+        return
+      }
+    }
+
     const updated = nights.filter((_, i) => i !== idx)
     const dep = new Date(departureDate)
     updated.forEach((n, i) => {
@@ -1719,6 +1747,79 @@ ${nights.map(n => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pending cancellations — nights removed that had enquired+ bookings */}
+      {removedNights.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
+            fontSize: 12, fontWeight: 600, color: 'var(--red-text)',
+          }}>
+            <span>⚠ Pending cancellation ({removedNights.length})</span>
+            <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>— these nights were removed but have active bookings. They will be marked Cancelled on next push.</span>
+          </div>
+          <div style={{
+            border: '0.5px solid var(--red-border, #FCA5A5)',
+            borderRadius: 'var(--radius-md)',
+            overflow: 'hidden',
+            background: 'var(--red-bg, #FEF2F2)',
+          }}>
+            {removedNights.map((entry, ri) => {
+              const bk = entry.booking
+              const n = entry.night
+              const rawLodge = bk.Lodge_Name || bk.Name || ''
+              const lodgeName = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
+              const status = getStatus(bk)
+              const checkIn = bk.Check_in_Date || bk['Check-in'] || n.date || ''
+              const checkOut = bk.Check_out_Date || bk['Check-out'] || ''
+              return (
+                <div key={ri} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  borderBottom: ri < removedNights.length - 1 ? '0.5px solid var(--red-border, #FCA5A5)' : 'none',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                      Day {n.day} — {lodgeName || n.lodge || 'Unknown lodge'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {checkIn}{checkOut ? ' – ' + checkOut : ''} · <span style={{ color: 'var(--red-text)', fontWeight: 500 }}>{status}</span>
+                      {bk.Lodge_Reference ? ' · Ref: ' + bk.Lodge_Reference : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      // Restore: put the night back into draft at its original position
+                      setNights(prev => {
+                        const restored = [...prev]
+                        const insertAt = Math.min(n.day - 1, restored.length)
+                        restored.splice(insertAt, 0, { ...n })
+                        const dep = new Date(departureDate)
+                        restored.forEach((r, i) => {
+                          r.night_number = i + 1
+                          r.day = i + 1
+                          const d = new Date(dep)
+                          d.setDate(d.getDate() + i)
+                          r.date = d.toISOString().split('T')[0]
+                        })
+                        return restored
+                      })
+                      setRemovedNights(prev => prev.filter((_, i) => i !== ri))
+                      setDirty(true)
+                      setPushed(false)
+                    }}
+                    style={{
+                      fontSize: 11, padding: '3px 12px', borderRadius: 4, cursor: 'pointer',
+                      border: '0.5px solid var(--red-border, #FCA5A5)',
+                      background: 'white', color: 'var(--red-text)', fontWeight: 500,
+                    }}
+                  >Restore</button>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
