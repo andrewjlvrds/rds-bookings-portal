@@ -64,7 +64,12 @@ export async function isEmailStored(bookingId, messageId) {
 // Then alphanumeric-only for the filesystem path.
 export function normalizeMessageId(raw) {
   if (!raw) return '';
-  var trimmed = String(raw).trim().replace(/^</, '').replace(/>$/, '').trim();
+  // Strip all whitespace, then strip angle brackets from both ends (handles
+  // cases like "  <foo@bar>  " or "<foo@bar> " where trailing space prevents
+  // a naive /> $/ replace from working)
+  var trimmed = String(raw).trim();
+  // Remove all angle brackets — some mail clients include extra ones
+  trimmed = trimmed.replace(/^[<\s]+/, '').replace(/[>\s]+$/, '').trim();
   return trimmed;
 }
 export function safeMessageIdKey(raw) {
