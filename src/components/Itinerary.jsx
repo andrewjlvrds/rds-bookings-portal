@@ -2186,23 +2186,17 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
 // Blank email composer that opens inline in the itinerary row.
 // To, Subject, Body all editable. Sender toggle Helen/Andrew.
 
-const SIGNATURES = {
-  Helen: `Kind regards,
-Helen Baker
-Lodge Bookings | Ride Down South
-bookings@ridedownsouth.com
-www.ridedownsouth.com`,
-  Andrew: `Kind regards,
-Andrew Vaughan
-Director | Ride Down South
-bookings@ridedownsouth.com
-www.ridedownsouth.com`,
+const SENDER_SIGS = {
+  Helen:  'Kind regards,\nHelen Baker\nLodge Bookings | Ride Down South\nbookings@ridedownsouth.com\nwww.ridedownsouth.com',
+  Andrew: 'Kind regards,\nAndrew Vaughan\nDirector | Ride Down South\nbookings@ridedownsouth.com\nwww.ridedownsouth.com',
+  Mike:   'Kind regards,\nMike Joubert\nLead Guide | Ride Down South\nbookings@ridedownsouth.com\nwww.ridedownsouth.com',
+  Rogan:  'Kind regards,\nRogan Muller\nTour Guide & Fleet Manager | Ride Down South\nbookings@ridedownsouth.com\nwww.ridedownsouth.com',
 }
 
 function InlineComposer({ toEmail, booking, tourName, sender, onSenderChange, onClose, onSent }) {
   const [to, setTo] = React.useState(toEmail || '')
   const [subject, setSubject] = React.useState('')
-  const [body, setBody] = React.useState('\n\n' + SIGNATURES[sender] || '')
+  const [body, setBody] = React.useState('\n\n' + SENDER_SIGS[sender] || '')
   const [sending, setSending] = React.useState(false)
   const [error, setError] = React.useState(null)
 
@@ -2211,14 +2205,23 @@ function InlineComposer({ toEmail, booking, tourName, sender, onSenderChange, on
     setBody(prev => {
       const sigStart = prev.lastIndexOf('Kind regards,')
       const beforeSig = sigStart > 0 ? prev.slice(0, sigStart) : prev + '\n\n'
-      return beforeSig + SIGNATURES[sender]
+      return beforeSig + SENDER_SIGS[sender]
     })
   }, [sender])
 
   // Template picker prepends generated body, preserving anything already typed
   // and the default signature below.
+  // Strip any trailing signature from the generated body — the composer
+  // already has one; inserting twice produces duplicates.
   const handleTemplateInsert = (generated) => {
-    setBody(prev => generated + '\n\n' + prev)
+    const sigIdx = generated.lastIndexOf('Kind regards,')
+    const bodyOnly = sigIdx > 0 ? generated.slice(0, sigIdx).trimEnd() : generated.trimEnd()
+    setBody(prev => {
+      // Keep composer signature at the end
+      const existingSigIdx = prev.lastIndexOf('Kind regards,')
+      const existingSig = existingSigIdx >= 0 ? prev.slice(existingSigIdx) : SENDER_SIGS[sender]
+      return bodyOnly + '\n\n' + existingSig
+    })
   }
 
   // Booking context for the picker
@@ -2280,7 +2283,7 @@ function InlineComposer({ toEmail, booking, tourName, sender, onSenderChange, on
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {/* Sender toggle */}
           <div style={{ display: 'flex', border: '0.5px solid var(--border-default)', borderRadius: 3, overflow: 'hidden' }}>
-            {['Helen', 'Andrew'].map(s => (
+            {['Helen', 'Andrew', 'Mike', 'Rogan'].map(s => (
               <button key={s} onClick={() => onSenderChange(s)} style={{
                 fontSize: 10, padding: '2px 10px', border: 'none', cursor: 'pointer',
                 background: sender === s ? 'var(--blue-bg)' : 'transparent',

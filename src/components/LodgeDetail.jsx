@@ -4,6 +4,7 @@ import { cleanEmailBody, looksLikeRawHtml, splitQuotedContent } from '../utils/e
 import { BookingActivityLog } from './ActivityLog'
 import RoutingPicker from './RoutingPicker'
 import TemplatePicker from './TemplatePicker'
+import { SENDER_PROFILES } from '../utils/emailTemplates'
 
 export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, onMarkBookingDone, readState, onMarkRead, tours, backLabel, focusEmailId, focusTab }) {
   const [emails, setEmails] = useState([])
@@ -1167,6 +1168,21 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
   const rowRef = React.useRef(null)
   const isOutbound = email.direction === 'outbound'
   const isUnread = !isOutbound && email.id && readState && !readState[email.id]
+
+  // Mark handled — local state persisted to localStorage
+  const handledKey = email.id ? 'rds_handled_' + email.id : null
+  const [handled, setHandled] = useState(() => {
+    if (!handledKey) return false
+    try { return !!localStorage.getItem(handledKey) } catch (e) { return false }
+  })
+  const markHandled = (e) => {
+    e.stopPropagation()
+    if (!handledKey) return
+    try { localStorage.setItem(handledKey, new Date().toISOString()) } catch (e) {}
+    setHandled(true)
+    // Also mark read if still unread
+    if (isUnread && onMarkRead && email.id) onMarkRead(email.id)
+  }
   const date = email.date || email.email_date || ''
   const from = email.from || email.email_from || ''
   const subject = email.subject || email.email_subject || ''
@@ -1359,16 +1375,23 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
         <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
           {date ? fmtDate(date) : ''}
         </span>
-        {!isOutbound && email.id && isUnread && onMarkRead && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onMarkRead(email.id) }}
-            style={{
-              fontSize: 10, padding: '2px 6px', border: '0.5px solid var(--green-border, #86EFAC)',
-              borderRadius: 3, background: 'var(--green-bg)', cursor: 'pointer',
-              color: 'var(--green-text)', flexShrink: 0, whiteSpace: 'nowrap',
-            }}
-            title="Mark this email as read"
-          >✓ Read</button>
+        {!isOutbound && email.id && (
+          handled ? (
+            <span style={{
+              fontSize: 10, padding: '2px 6px', borderRadius: 3, flexShrink: 0,
+              color: 'var(--green-text)', whiteSpace: 'nowrap',
+            }} title="Marked as handled">✓ Handled</span>
+          ) : (
+            <button
+              onClick={markHandled}
+              style={{
+                fontSize: 10, padding: '2px 6px', border: '0.5px solid var(--green-border, #86EFAC)',
+                borderRadius: 3, background: 'var(--green-bg)', cursor: 'pointer',
+                color: 'var(--green-text)', flexShrink: 0, whiteSpace: 'nowrap',
+              }}
+              title="Mark as handled — we've responded to this"
+            >Mark handled</button>
+          )
         )}
         {!isOutbound && tours && email.id && (
           <button
@@ -1687,18 +1710,36 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, lodgeRef, tou
     return base
   }
   const defaultSubject = buildDefaultSubject()
-  const defaultSignature = '\n\nTake care,\nHelen Baker\nLodge Bookings | Ride Down South\nbookings@ridedownsouth.com'
+  const [sender, setSender] = useState('Helen')
+
+  const buildSig = (s) => {
+    const p = SENDER_PROFILES[s] || SENDER_PROFILES.Helen
+    return '\n\nKind regards,\n' + p.name + '\n' + p.role + ' | Ride Down South\nbookings@ridedownsouth.com\nwww.ridedownsouth.com'
+  }
 
   const [toAddr, setToAddr] = useState(lodgeEmail || '')
   const [subject, setSubject] = useState(defaultSubject)
-  const [body, setBody] = useState(defaultSignature)
+  const [body, setBody] = useState(buildSig('Helen'))
   const [sending, setSending] = useState(false)
 
-  // Template picker prepends generated body, preserving anything Helen already
-  // typed (and the default signature). Two newlines separate template from
-  // what was below.
+  // Keep signature in sync with sender toggle
+  React.useEffect(() => {
+    setBody(prev => {
+      const sigIdx = prev.lastIndexOf('Kind regards,')
+      const beforeSig = sigIdx > 0 ? prev.slice(0, sigIdx) : prev + '\n\n'
+      return beforeSig + 'Kind regards,' + buildSig(sender).replace('\n\nKind regards,', '')
+    })
+  }, [sender])
+
+  // Strip signature from generated template to avoid duplicates, then prepend.
   const handleTemplateInsert = (generated) => {
-    setBody(prev => generated + '\n\n' + prev)
+    const sigIdx = generated.lastIndexOf('Kind regards,')
+    const bodyOnly = sigIdx > 0 ? generated.slice(0, sigIdx).trimEnd() : generated.trimEnd()
+    setBody(prev => {
+      const existingSigIdx = prev.lastIndexOf('Kind regards,')
+      const existingSig = existingSigIdx >= 0 ? prev.slice(existingSigIdx) : 'Kind regards,' + buildSig(sender).replace('\n\nKind regards,', '')
+      return bodyOnly + '\n\n' + existingSig
+    })
   }
 
   const handleSend = async () => {
@@ -1711,12 +1752,13 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, lodgeRef, tou
         body: JSON.stringify({
           to: toAddr, subject, body: body.trim(),
           booking_ids: [bookingId], lodge_name: lodgeName, tour_name: tourName, is_reply: true,
+          sender,
           in_reply_to_message_id: lastInboundMessageId || null,
         }),
       })
       const result = await res.json()
       if (result.email_sent) {
-        setBody(defaultSignature)
+        setBody(buildSig(sender))
         setSent(true)
         setTimeout(() => { setSent(false); setOpen(false) }, 2000)
         if (onSent) onSent()
@@ -1763,13 +1805,27 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, lodgeRef, tou
           }}
         />
       </div>
+      {/* Sender toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>From:</span>
+        <div style={{ display: 'flex', border: '0.5px solid var(--border-default)', borderRadius: 3, overflow: 'hidden' }}>
+          {['Helen', 'Andrew', 'Mike', 'Rogan'].map(s => (
+            <button key={s} onClick={() => setSender(s)} style={{
+              fontSize: 10, padding: '2px 10px', border: 'none', cursor: 'pointer',
+              background: sender === s ? 'var(--blue-bg)' : 'transparent',
+              color: sender === s ? 'var(--blue-text)' : 'var(--text-secondary)',
+              fontWeight: sender === s ? 600 : 400,
+            }}>{s}</button>
+          ))}
+        </div>
+      </div>
       <TemplatePicker
         context={{
           contactName: contactName || '',
           date: checkInDate || '',
           bookingRef: lodgeRef || rdsRef || '',
           lodgeName: lodgeName || '',
-          sender: 'Helen',
+          sender,
         }}
         onInsert={handleTemplateInsert}
       />

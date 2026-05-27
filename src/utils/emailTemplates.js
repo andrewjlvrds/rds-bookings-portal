@@ -156,9 +156,19 @@ bookings@ridedownsouth.com`
 // a uniform-looking thread regardless of who's writing.
 
 // Build the sender signature block used across all reply templates.
+// Shared sender definitions — used by all reply templates and composers
+export const SENDER_PROFILES = {
+  Helen:  { name: 'Helen Baker',    role: 'Lodge Bookings' },
+  Andrew: { name: 'Andrew Vaughan', role: 'Director' },
+  Mike:   { name: 'Mike Joubert',   role: 'Lead Guide' },
+  Rogan:  { name: 'Rogan Muller',   role: 'Tour Guide & Fleet Manager' },
+}
+
+export const SENDER_NAMES = Object.keys(SENDER_PROFILES)
+
 function replySignature(sender = 'Helen') {
-  const name = sender === 'Andrew' ? 'Andrew Vaughan' : 'Helen Baker'
-  return name + '\nLodge Bookings | Ride Down South\nbookings@ridedownsouth.com'
+  const p = SENDER_PROFILES[sender] || SENDER_PROFILES.Helen
+  return p.name + '\n' + p.role + ' | Ride Down South\nbookings@ridedownsouth.com'
 }
 
 // Build an opening greeting. Falls back to bare 'Hi' if no contact known.
