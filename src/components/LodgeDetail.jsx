@@ -349,7 +349,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 13 }}>✦</span>
             <span style={{ color: 'var(--amber-text, #92400E)', fontWeight: 500 }}>
-              AI suggests: <strong>{aiParsedFields.suggested_status.value}</strong>
+              Update status to <strong>{aiParsedFields.suggested_status.value}</strong>?
             </span>
             {aiParsedFields.suggested_status.reason === 'status_regression_blocked' && (
               <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(blocked — would regress from {aiParsedFields.suggested_status.existing_value})</span>
@@ -366,7 +366,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
                 border: '0.5px solid var(--blue-mid)', borderRadius: 3,
                 background: 'var(--blue-bg)', cursor: 'pointer', color: 'var(--blue-text)',
               }}
-            >Apply</button>
+            >Update status</button>
             <button
               onClick={() => setAiParsedFields(prev => { const n = {...prev}; delete n.suggested_status; return n })}
               style={{
@@ -815,48 +815,82 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             const calcTotal = hasRoomPrices
               ? (paxSgl * sgl + Math.ceil(paxTwin / 2) * twin + Math.ceil(paxDbl / 2) * dbl + guideRooms * guide) * nights
               : 0
-            if (!hasRoomPrices && Object.keys(aiParsedFields).filter(k => !['suggested_status','total_amount','deposit_amount','deposit_due_date'].includes(k)).length === 0) return null
+            const depAmt = parseFloat(booking.Deposit_Amount) || 0
+            const depDue = booking.Deposit_Due_Date || ''
+            const cancelBefore2 = booking.Cancel_Free_Before || ''
+            const invoiceTotal = parseFloat(booking.Total_Amount) || 0
+            const hasAnyData = hasRoomPrices || invoiceTotal || depAmt || depDue || cancelBefore2
+            if (!hasAnyData) return null
+            const rowStyle = { display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '4px 0', borderBottom: '0.5px solid var(--border-light)' }
+            const labelStyle = { color: 'var(--text-muted)' }
+            const valStyle = { fontWeight: 500, textAlign: 'right' }
             return (
-              <div style={{ minWidth: 200, maxWidth: 240, borderLeft: '0.5px solid var(--border-light)', paddingLeft: 16, marginLeft: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Proforma rates</div>
-                {hasRoomPrices ? (
+              <div style={{ minWidth: 210, maxWidth: 250, borderLeft: '0.5px solid var(--border-light)', paddingLeft: 16, marginLeft: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>From invoice</div>
+
+                {/* Totals */}
+                {invoiceTotal > 0 && (
+                  <div style={rowStyle}>
+                    <span style={labelStyle}>Total</span>
+                    <span style={{ ...valStyle, fontWeight: 600 }}>{fmtCurrency(invoiceTotal, currency)}</span>
+                  </div>
+                )}
+                {depAmt > 0 && (
+                  <div style={rowStyle}>
+                    <span style={labelStyle}>Deposit</span>
+                    <span style={valStyle}>{fmtCurrency(depAmt, currency)}</span>
+                  </div>
+                )}
+                {depDue && (
+                  <div style={rowStyle}>
+                    <span style={labelStyle}>Deposit due</span>
+                    <span style={valStyle}>{fmtDateFull(depDue)}</span>
+                  </div>
+                )}
+                {cancelBefore2 && (
+                  <div style={rowStyle}>
+                    <span style={labelStyle}>Free cancel before</span>
+                    <span style={valStyle}>{fmtDateFull(cancelBefore2)}</span>
+                  </div>
+                )}
+
+                {/* Room rates */}
+                {hasRoomPrices && (
                   <>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 10, marginBottom: 4 }}>Room rates / night</div>
                     {[['Single', sgl, paxSgl], ['Twin (shared)', twin, Math.ceil(paxTwin/2)], ['Double (shared)', dbl, Math.ceil(paxDbl/2)], ['Guide room', guide, guideRooms]].map(([label, price, qty]) =>
                       price > 0 ? (
-                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0', borderBottom: '0.5px solid var(--border-light)' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>{label}{qty > 0 ? <span style={{ color: 'var(--text-muted)', fontSize: 10 }}> ×{qty}</span> : ''}</span>
-                          <span style={{ fontWeight: 500 }}>{fmtCurrency(price, currency)}</span>
+                        <div key={label} style={rowStyle}>
+                          <span style={labelStyle}>{label}{qty > 0 ? <span style={{ fontSize: 10 }}> ×{qty}</span> : ''}</span>
+                          <span style={valStyle}>{fmtCurrency(price, currency)}</span>
                         </div>
                       ) : null
                     )}
-                    {calcTotal > 0 && nights > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '5px 0', marginTop: 2 }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Est. total ({nights}N)</span>
-                        <span style={{ fontWeight: 600 }}>{fmtCurrency(calcTotal, currency)}</span>
+                    {calcTotal > 0 && !invoiceTotal && (
+                      <div style={{ ...rowStyle, borderBottom: 'none' }}>
+                        <span style={labelStyle}>Est. total ({nights}N)</span>
+                        <span style={{ ...valStyle, fontWeight: 600 }}>{fmtCurrency(calcTotal, currency)}</span>
                       </div>
                     )}
-                    <button
-                      onClick={() => handleSave('Single_Room_Price', sgl || null) && handleSave('Shared_Twin_Room_Price', twin || null)}
-                      style={{ display: 'none' }}
-                    />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-                      {[['Single_Room_Price','Single'], ['Shared_Twin_Room_Price','Twin'], ['Shared_Double_Room_Price','Double'], ['Guide_Room_Price','Guide']].map(([field, label]) =>
-                        <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 52 }}>{label}</span>
-                          <input
-                            type="number"
-                            defaultValue={parseFloat(booking[field]) || ''}
-                            placeholder="—"
-                            onBlur={e => { const v = parseFloat(e.target.value); handleSave(field, isNaN(v) ? null : v) }}
-                            style={{ width: 80, fontSize: 11, padding: '2px 5px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)' }}
-                          />
-                        </div>
-                      )}
-                    </div>
                   </>
-                ) : (
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No rates extracted yet</div>
                 )}
+
+                {/* Editable rate inputs */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 10, paddingTop: 8, borderTop: '0.5px solid var(--border-light)' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>Edit rates</div>
+                  {[['Single_Room_Price','Single'], ['Shared_Twin_Room_Price','Twin'], ['Shared_Double_Room_Price','Double'], ['Guide_Room_Price','Guide']].map(([field, label]) =>
+                    <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 52 }}>{label}</span>
+                      <input
+                        type="number"
+                        defaultValue={parseFloat(booking[field]) || ''}
+                        placeholder="—"
+                        onBlur={e => { const v = parseFloat(e.target.value); handleSave(field, isNaN(v) ? null : v) }}
+                        style={{ width: 80, fontSize: 11, padding: '2px 5px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)' }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )
           })()}
