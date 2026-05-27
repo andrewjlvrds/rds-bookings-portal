@@ -231,8 +231,9 @@ export default async function(req, res) {
             continue;
           }
 
-          // Try to download and extract
-          if (att.attachmentId && gmailMsgId && isExtractable(att.mimeType) && (att.size || 0) < 5 * 1024 * 1024) {
+          // Skip attachment downloads — they consume the entire 60s budget.
+          // cron-reparse handles extraction separately.
+          if (false && att.attachmentId && gmailMsgId && isExtractable(att.mimeType) && (att.size || 0) < 5 * 1024 * 1024) {
             try {
               console.log('Downloading attachment:', att.filename, 'from message', gmailMsgId);
               var attData = await downloadAttachment(token, gmailMsgId, att.attachmentId);
