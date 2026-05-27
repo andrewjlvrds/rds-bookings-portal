@@ -25,6 +25,8 @@ export async function storeEmail(emailData) {
     ai_summary: emailData.ai_summary || null,
     ai_extractions: emailData.ai_extractions || null,
     ai_flags: emailData.ai_flags || [],
+    ai_parsed_flags: emailData.ai_parsed_flags || null,
+    parsed_at: emailData.parsed_at || null,
     match_method: emailData.match_method || null,
     processed_at: new Date().toISOString(),
   };

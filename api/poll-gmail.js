@@ -807,31 +807,28 @@ export default async function(req, res) {
               zohoUpdates[fieldKeys[fk]] = fieldResult.updates[fieldKeys[fk]];
             }
 
-            if (fieldResult.has_flags) {
-              console.log('AI flagged fields for review:', JSON.stringify(fieldResult.flagged));
-              // Store flags on the email blob so the UI can surface them to Helen.
-              // Re-store with the same message_id — storeEmail overwrites the blob.
-              try {
-                await storeEmail({
-                  booking_id: bookingId,
-                  message_id: msgId,
-                  type: 'lodge_reply',
-                  direction: 'inbound',
-                  email_from: from,
-                  email_to: to,
-                  email_subject: subject,
-                  email_content: body,
-                  email_date: date ? new Date(date).toISOString() : new Date().toISOString(),
-                  gmail_thread_id: threadId,
-                  gmail_message_id: msgId,
-                  rfc_message_id: rfcMessageId,
-                  attachments: attachmentsWithText,
-                  match_method: matchMethod,
-                  ai_parsed_flags: fieldResult.flagged,
-                });
-              } catch (flagStoreErr) {
-                console.error('Failed to store AI flags on blob:', flagStoreErr.message);
-              }
+            // Mark as parsed so cron-reparse skips it
+            try {
+              await storeEmail({
+                booking_id: bookingId,
+                message_id: msgId,
+                type: 'lodge_reply',
+                direction: 'inbound',
+                email_from: from,
+                email_to: to,
+                email_subject: subject,
+                email_content: body,
+                email_date: date ? new Date(date).toISOString() : new Date().toISOString(),
+                gmail_thread_id: threadId,
+                gmail_message_id: msgId,
+                rfc_message_id: rfcMessageId,
+                attachments: attachmentsWithText,
+                match_method: matchMethod,
+                parsed_at: new Date().toISOString(),
+                ai_parsed_flags: fieldResult.has_flags ? fieldResult.flagged : null,
+              });
+            } catch (parsedStoreErr) {
+              console.error('Failed to store parsed_at on blob:', parsedStoreErr.message);
             }
             if (fieldResult.discrepancies && fieldResult.discrepancies.length > 0) {
               console.log('⚠ DISCREPANCIES detected for', matchedBooking.Name || bookingId, ':', JSON.stringify(fieldResult.discrepancies));

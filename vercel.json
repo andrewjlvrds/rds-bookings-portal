@@ -3,9 +3,16 @@
     {
       "path": "/api/poll-gmail",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron-reparse",
+      "schedule": "*/10 * * * *"
     }
   ],
   "functions": {
+    "api/cron-reparse.js": {
+      "maxDuration": 60
+    },
     "api/poll-gmail.js": {
       "maxDuration": 60
     },
