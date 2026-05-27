@@ -968,15 +968,7 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                         style={{ fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                         title="Click to edit lodge"
                       >
-                        {bk.New_Reply === true && (
-                          <span
-                            title="New reply from lodge — needs response"
-                            style={{
-                              width: 7, height: 7, borderRadius: '50%',
-                              background: '#C62828', flexShrink: 0,
-                            }}
-                          />
-                        )}
+
                         {(bk.Reservation_Comments || '').includes('⚠') && (
                           <span
                             title={(bk.Reservation_Comments || '').split('|')[0].trim()}
@@ -1259,6 +1251,19 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
                         onClick={() => onSelectBooking(bk)}
                         style={{ fontSize: 11, padding: '3px 6px' }}
                       >View</button>
+                      {bk.New_Reply === true && (
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => onSelectBooking(bk)}
+                          style={{
+                            fontSize: 10, padding: '3px 6px',
+                            background: '#FFEBEE', border: '0.5px solid #C62828',
+                            color: '#C62828', borderRadius: 4, cursor: 'pointer',
+                            fontWeight: 600, whiteSpace: 'nowrap',
+                          }}
+                          title="New reply from lodge — needs response"
+                        >● Reply</button>
+                      )}
                       {(() => {
                         const bkId = bk.id || bk['Record Id']
                         const s = getStatus(bk)
