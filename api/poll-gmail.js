@@ -232,13 +232,18 @@ export default async function(req, res) {
   try {
     var t0 = Date.now();
     var refetch = req.query && req.query.refetch === 'true';
+    var labelFilter = (req.body && req.body.label) || (req.query && req.query.label) || null;
     var token = await getGmailToken();
 
     // Fetch recent messages — paginate fully, no arbitrary cap.
     // A 3-day window can easily have 100+ messages; capping at 20 or 50
     // silently dropped emails and was the root cause of missing correspondence.
+    // If a label is specified (e.g. from a booking-specific Refresh), search only
+    // that label — far fewer messages, avoids timeout on busy inboxes.
     var searchWindow = refetch ? '14d' : '3d';
-    var query = 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
+    var query = labelFilter
+      ? 'label:' + labelFilter.replace(/[/\s]/g, '-').toLowerCase() + ' -from:bookings@ridedownsouth.com'
+      : 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
     var messages = [];
     var pageToken = null;
     var pageLimit = 10; // max 10 pages × 100 = 1000 messages per run

@@ -950,8 +950,9 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
               onClick={async () => {
                 setPolling(true)
                 try {
-                  // 1. Poll Gmail — fire without awaiting (can timeout at 60s, don't block reparse)
-                  fetch('/api/poll-gmail', { method: 'POST' }).catch(() => {})
+                  // 1. Poll Gmail with refetch=true — bypasses dedup, uses 14-day window
+                  // so recently-arrived emails that were missed on first pass get picked up.
+                  fetch('/api/poll-gmail?refetch=true', { method: 'POST' }).catch(() => {})
                   // 2. Re-parse attachments and fix empty bodies
                   await fetch('/api/reparse-email', {
                     method: 'POST',
