@@ -534,12 +534,20 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
       {booking.Reservation_Comments && booking.Reservation_Comments.includes('⚠') && (
         <div style={{
           background: '#FFF3E0', border: '1px solid #FFB74D', borderRadius: 6,
-          padding: '10px 14px', marginBottom: 16, fontSize: 13, lineHeight: 1.5
+          padding: '10px 14px', marginBottom: 16, fontSize: 13, lineHeight: 1.5,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12
         }}>
-          <span style={{ fontWeight: 600, color: '#E65100' }}>⚠ Lodge response mismatch</span>
-          <span style={{ color: '#BF360C', marginLeft: 8 }}>
-            {booking.Reservation_Comments.split('|')[0].trim()}
-          </span>
+          <div>
+            <span style={{ fontWeight: 600, color: '#E65100' }}>⚠ Lodge response mismatch</span>
+            <span style={{ color: '#BF360C', marginLeft: 8 }}>
+              {booking.Reservation_Comments.split('|')[0].trim()}
+            </span>
+          </div>
+          <button
+            onClick={() => handleSave('Reservation_Comments', '')}
+            style={{ fontSize: 11, padding: '2px 8px', border: '0.5px solid #FFB74D', borderRadius: 3,
+              background: 'transparent', cursor: 'pointer', color: '#E65100', whiteSpace: 'nowrap', flexShrink: 0 }}
+          >Clear</button>
         </div>
       )}
       {/* Row 1: Tour details + Booking details */}
