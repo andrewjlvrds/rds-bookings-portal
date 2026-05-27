@@ -42,9 +42,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // Silently drop stale blobs from old reindex runs — no body = not useful.
+    // Silently drop stale inbound blobs with no body — keep outbound regardless.
     var staleCount = 0;
     emails = emails.filter(function(e) {
+      if (e.direction === 'outbound') return true;
       var hasBody = (e.body && e.body.trim()) || (e.email_content && e.email_content.trim());
       if (!hasBody) { staleCount++; return false; }
       return true;
