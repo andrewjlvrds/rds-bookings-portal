@@ -2,6 +2,8 @@ import { zohoApi } from './_zoho.js';
 import { storeEmail, storeSentIndex } from './_email-store.js';
 import { getGmailToken, getOrCreateLabel, labelMessage, tourLabelName } from './_gmail.js';
 import { appendEntry } from './_activity-log.js';
+import { list } from '@vercel/blob';
+import { markManyRead } from './_read-state.js';
 
 // Build RFC 2822 email and base64url encode it.
 // Caller must provide messageId (RFC 5322 format, including angle brackets).
@@ -247,6 +249,22 @@ export default async function(req, res) {
       } catch (logErr) {
         // Logging failure should not break the send — log it and move on.
         console.error('activity-log auto-entry failed:', logErr.message);
+      }
+    }
+
+    // When a reply is sent, auto-mark all stored inbound emails for these
+    // bookings as read — replying is implicit acknowledgement.
+    if (emailSent && isReply && bookingIds.length) {
+      try {
+        const blobs = (await Promise.all(
+          bookingIds.map(id => list({ prefix: 'emails/booking/' + id + '/' }))
+        )).flatMap(r => r.blobs || []);
+        const inboundIds = blobs
+          .map(b => { const m = b.pathname.match(/\/([^/]+)\.json$/); return m ? m[1] : null; })
+          .filter(Boolean);
+        if (inboundIds.length) await markManyRead(inboundIds);
+      } catch (readErr) {
+        console.error('auto mark-read after reply failed:', readErr.message);
       }
     }
 
