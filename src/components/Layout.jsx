@@ -197,7 +197,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
             onClick={() => { onSelectTour(null); onSelectView('activity-log') }}
           />
           <NavItem label="Payments" active={activeView === 'payments'} onClick={() => { onSelectTour(null); onSelectView('payments') }} badge={globalPaymentCount > 0 ? globalPaymentCount : null} />
-          <NavItem label="Gmail import" active={activeView === 'gmail-import'} onClick={() => { onSelectTour(null); onSelectView('gmail-import') }} />
+          <NavItem label="Lodges" active={activeView === 'lodges'} onClick={() => { onSelectTour(null); onSelectView('lodges') }} />
         </div>
       )}
 

@@ -59,36 +59,7 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
         </p>
       </div>
 
-      {/* Navigation panels */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
-        <NavPanel
-          title="Payments"
-          icon="💰"
-          desc={payments.overdue > 0 ? `${payments.overdue} overdue · R ${payments.overdueTotal.toLocaleString()}` : 'All payments up to date'}
-          detail={`${payments.upcoming} upcoming · ${payments.dueSoon} due this week`}
-          color={payments.overdue > 0 ? '#C62828' : '#2E7D32'}
-          bg={payments.overdue > 0 ? '#FFEBEE' : '#E8F5E9'}
-          onClick={() => onSelectView('payments')}
-        />
-        <NavPanel
-          title="Correspondence"
-          icon="📧"
-          desc="Lodge email inbox"
-          detail="View and manage all lodge communications"
-          color="#6A1B9A"
-          bg="#F3E5F5"
-          onClick={() => onSelectView('inbox')}
-        />
-        <NavPanel
-          title="Lodges"
-          icon="🏨"
-          desc="Lodge directory"
-          detail="Contact details, STO rates, guide room policies"
-          color="#2E7D32"
-          bg="#E8F5E9"
-          onClick={() => onSelectView('lodges')}
-        />
-      </div>
+
 
 
 
