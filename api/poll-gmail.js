@@ -593,7 +593,7 @@ export default async function(req, res) {
           email_from: from,
           email_to: to,
           email_subject: subject,
-          email_content: body,
+          email_content: body || '(no content)',
           email_date: date ? new Date(date).toISOString() : new Date().toISOString(),
           gmail_thread_id: threadId,
           gmail_message_id: msgId,
