@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isActiveBooking, isConfirmed, getStatus } from '../utils/helpers'
-import { generateSubject, generateEnquiryEmail, generateConfirmationEmail, dateRoomChangeEmail } from '../utils/emailTemplates'
+import { generateSubject, generateEnquiryEmail, generateConfirmationEmail } from '../utils/emailTemplates'
 import PortalSync from './PortalSync'
 import RoutingPicker from './RoutingPicker'
 import NewLodgeModal from './NewLodgeModal'
@@ -27,7 +27,6 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
   const [metaTick, setMetaTick] = useState(0) // force re-render on meta saves
   const [bookingMeta, setBookingMeta] = useState({}) // { [bookingId]: { handledBy, notes } }
   const [newLodgeModal, setNewLodgeModal] = useState(null) // { prefill: name }
-  const [batchDateModal, setBatchDateModal] = useState(false)
 
   // Utility: date string math in UTC to avoid timezone off-by-one (ZA is UTC+2)
   const parseYMD = (s) => {
@@ -593,10 +592,7 @@ td { padding: 7px 5px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
             Enquire all ready ({readyToSend})
           </button>
         )}
-        <button className="btn" onClick={() => setBatchDateModal(true)} style={{ fontSize: 12, padding: '4px 10px' }} title="Send a date change email to multiple lodges on this tour">
-          Date change
-        </button>
-        {onRefresh && (
+{onRefresh && (
           <button
             className="btn"
             onClick={onRefresh}
@@ -2181,15 +2177,6 @@ function TourInbox({ tour, sorted, onSelectBooking, tours }) {
         onRoute={handleReroute}
       />
     )}
-    {batchDateModal && (
-      <BatchDateChangeModal
-        tour={tour}
-        bookings={sorted}
-        lodges={lodges}
-        sender={sender}
-        onClose={() => setBatchDateModal(false)}
-      />
-    )}
     </>
   )
 }
@@ -2366,261 +2353,3 @@ function InlineComposer({ toEmail, booking, tourName, sender, onSenderChange, on
   )
 }
 
-// ── BatchDateChangeModal ───────────────────────────────────────────────────
-// Lets Helen select which lodges to notify of a date change, compose a single
-// template and send individual emails per lodge.
-
-function BatchDateChangeModal({ tour, bookings, lodges, sender: initialSender, onClose }) {
-  const [sender, setSender] = React.useState(initialSender || 'Helen')
-  const [oldDates, setOldDates] = React.useState('')
-  const [newDates, setNewDates] = React.useState('')
-  const [roomingSummary, setRoomingSummary] = React.useState('')
-
-  // Build per-lodge list — deduplicated, one entry per unique lodge with email
-  const lodgeList = React.useMemo(() => {
-    const seen = new Set()
-    const result = []
-    for (const bk of bookings) {
-      const rawLodge = bk.Lodge_Name || bk.Name || ''
-      const lodgeName = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
-      if (!lodgeName || seen.has(lodgeName)) continue
-      seen.add(lodgeName)
-      // Find email
-      const lr = lodges ? lodges.find(l => {
-        const n = (l.Name || l.name || '').toLowerCase()
-        return n === lodgeName.toLowerCase() || n.includes(lodgeName.toLowerCase()) || lodgeName.toLowerCase().includes(n)
-      }) : null
-      const email = lr ? (lr.Preferred_Email || lr.Email || lr.email || '') : ''
-      const contactName = (bk.Contact_Name) || (lr ? lr.Contact_First_Name || '' : '') || ''
-      const bookingRef = bk.Lodge_Reference || bk.RDS_Reference || ''
-      const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
-      result.push({ lodgeName, email, contactName, bookingRef, checkIn, bkId: bk.id || bk['Record Id'] })
-    }
-    return result
-  }, [bookings, lodges])
-
-  const [selected, setSelected] = React.useState(() => {
-    const init = {}
-    // pre-select all that have an email
-    return init
-  })
-  // Default: all with email selected
-  React.useEffect(() => {
-    const init = {}
-    lodgeList.forEach(l => { if (l.email) init[l.lodgeName] = true })
-    setSelected(init)
-  }, [lodgeList])
-
-  const [sending, setSending] = React.useState(false)
-  const [results, setResults] = React.useState(null) // { sent: [], failed: [] }
-  const [error, setError] = React.useState(null)
-
-  const SIGNATURES = {
-    Helen: `Kind regards,\nHelen Baker\nLodge Bookings | Ride Down South\nbookings@ridedownsouth.com\nwww.ridedownsouth.com`,
-    Andrew: `Kind regards,\nAndrew Vaughan\nDirector | Ride Down South\nbookings@ridedownsouth.com\nwww.ridedownsouth.com`,
-  }
-
-  const buildBody = (lodge) => {
-    const contact = lodge.contactName || ''
-    const greeting = contact ? 'Hi ' + contact + ',' : 'Hi,'
-    const roomPart = roomingSummary.trim()
-      ? '\n\nThe room requirements are as follows:\n\n' + roomingSummary.trim()
-      : ''
-    return greeting + '\n\nI hope you\'re well. I\'m writing to let you know that the dates of our group booking have changed' +
-      (oldDates.trim() ? ' — we were originally booked in on ' + oldDates.trim() : '') +
-      ', and our new dates are ' + (newDates.trim() || '[new dates]') + '.' +
-      roomPart + '\n\nCould you please confirm whether these new dates work on your side? ' +
-      'We\'d also appreciate confirmation of availability.\n\nSorry for any inconvenience — ' +
-      'please let me know if you have any questions.\n\n' + SIGNATURES[sender]
-  }
-
-  const selectedCount = lodgeList.filter(l => selected[l.lodgeName] && l.email).length
-
-  const handleSend = async () => {
-    if (!newDates.trim()) { setError('Please enter the new dates'); return }
-    const targets = lodgeList.filter(l => selected[l.lodgeName] && l.email)
-    if (!targets.length) { setError('No lodges selected with email addresses'); return }
-    setSending(true)
-    setError(null)
-    const sent = []
-    const failed = []
-    for (const lodge of targets) {
-      const body = buildBody(lodge)
-      const subject = 'Date change — ' + tour.name + (lodge.bookingRef ? ' — ' + lodge.bookingRef : '')
-      try {
-        const res = await fetch('/api/send-enquiry', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: lodge.email,
-            subject,
-            body,
-            booking_ids: [lodge.bkId],
-            tour_name: tour.name,
-            lodge_name: lodge.lodgeName,
-            sender,
-            is_reply: true,
-          }),
-        })
-        const d = await res.json()
-        if (!d.email_sent) throw new Error(d.email_error || d.error || 'Send failed')
-        sent.push(lodge.lodgeName)
-      } catch (e) {
-        failed.push({ lodge: lodge.lodgeName, error: e.message })
-      }
-    }
-    setSending(false)
-    setResults({ sent, failed })
-  }
-
-  const inputStyle = {
-    width: '100%', fontSize: 12, padding: '5px 8px',
-    border: '0.5px solid var(--border-default)', borderRadius: 3,
-    background: 'var(--bg-primary)', color: 'var(--text-primary)',
-    fontFamily: 'var(--font-sans)', boxSizing: 'border-box',
-  }
-
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-    }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div style={{
-        background: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)',
-        border: '0.5px solid var(--border-default)', width: 580, maxWidth: '95vw',
-        maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-      }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '0.5px solid var(--border-default)' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Date change — {tour.name}</span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ display: 'flex', border: '0.5px solid var(--border-default)', borderRadius: 3, overflow: 'hidden' }}>
-              {['Helen', 'Andrew'].map(s => (
-                <button key={s} onClick={() => setSender(s)} style={{
-                  fontSize: 10, padding: '2px 10px', border: 'none', cursor: 'pointer',
-                  background: sender === s ? 'var(--blue-bg)' : 'transparent',
-                  color: sender === s ? 'var(--blue-text)' : 'var(--text-secondary)',
-                  fontWeight: sender === s ? 600 : 400,
-                }}>{s}</button>
-              ))}
-            </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, lineHeight: 1, padding: '0 2px' }}>×</button>
-          </div>
-        </div>
-
-        <div style={{ overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {results ? (
-            /* Results view */
-            <div>
-              {results.sent.length > 0 && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--green-text)', marginBottom: 6 }}>✓ Sent ({results.sent.length})</div>
-                  {results.sent.map(l => <div key={l} style={{ fontSize: 12, color: 'var(--text-secondary)', paddingLeft: 12 }}>{l}</div>)}
-                </div>
-              )}
-              {results.failed.length > 0 && (
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--red-text)', marginBottom: 6 }}>✗ Failed ({results.failed.length})</div>
-                  {results.failed.map(f => <div key={f.lodge} style={{ fontSize: 12, color: 'var(--text-secondary)', paddingLeft: 12 }}>{f.lodge} — {f.error}</div>)}
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-                <button onClick={onClose} className="btn btn-primary" style={{ fontSize: 12 }}>Done</button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Date fields */}
-              <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Original dates</label>
-                  <input value={oldDates} onChange={e => setOldDates(e.target.value)} placeholder="e.g. 5-19 September 2026" style={inputStyle} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>New dates <span style={{ color: 'var(--red-text)' }}>*</span></label>
-                  <input value={newDates} onChange={e => setNewDates(e.target.value)} placeholder="e.g. 12-26 September 2026" style={inputStyle} />
-                </div>
-              </div>
-
-              {/* Room summary */}
-              <div>
-                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Updated room requirements <span style={{ fontSize: 10 }}>(optional — leave blank to omit)</span></label>
-                <textarea
-                  value={roomingSummary}
-                  onChange={e => setRoomingSummary(e.target.value)}
-                  rows={3}
-                  placeholder={'e.g.\n8 pax in single rooms\n1 shared double room\n2 shared twin rooms\n3 guide rooms'}
-                  style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6, padding: '6px 8px' }}
-                />
-              </div>
-
-              {/* Lodge selection */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Send to ({selectedCount} of {lodgeList.filter(l => l.email).length} with email)</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => { const s = {}; lodgeList.forEach(l => { if (l.email) s[l.lodgeName] = true }); setSelected(s) }} style={{ fontSize: 10, color: 'var(--blue-text)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>All</button>
-                    <button onClick={() => setSelected({})} style={{ fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>None</button>
-                  </div>
-                </div>
-                <div style={{ border: '0.5px solid var(--border-default)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', maxHeight: 220, overflowY: 'auto' }}>
-                  {lodgeList.map((lodge, i) => (
-                    <div key={lodge.lodgeName} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px',
-                      borderBottom: i < lodgeList.length - 1 ? '0.5px solid var(--border-light, var(--border-default))' : 'none',
-                      background: selected[lodge.lodgeName] && lodge.email ? 'var(--bg-secondary)' : 'transparent',
-                      opacity: lodge.email ? 1 : 0.45,
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={!!(selected[lodge.lodgeName] && lodge.email)}
-                        disabled={!lodge.email}
-                        onChange={e => setSelected(prev => ({ ...prev, [lodge.lodgeName]: e.target.checked }))}
-                        style={{ margin: 0, cursor: lodge.email ? 'pointer' : 'not-allowed' }}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lodge.lodgeName}</div>
-                        <div style={{ fontSize: 10, color: lodge.email ? 'var(--text-muted)' : 'var(--red-text)' }}>{lodge.email || 'No email address'}</div>
-                      </div>
-                      {lodge.checkIn && (
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{lodge.checkIn}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Preview of generated email */}
-              {newDates.trim() && (
-                <div>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Preview (first selected lodge)</label>
-                  <pre style={{
-                    fontSize: 11, lineHeight: 1.6, color: 'var(--text-secondary)',
-                    background: 'var(--bg-secondary)', border: '0.5px solid var(--border-default)',
-                    borderRadius: 'var(--radius-sm)', padding: '10px 12px',
-                    whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 160, overflowY: 'auto', margin: 0,
-                    fontFamily: 'var(--font-sans)',
-                  }}>{buildBody(lodgeList.find(l => selected[l.lodgeName] && l.email) || lodgeList[0] || { contactName: '', bookingRef: '' })}</pre>
-                </div>
-              )}
-
-              {error && <div style={{ fontSize: 11, color: 'var(--red-text)' }}>{error}</div>}
-
-              {/* Footer */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4 }}>
-                <button onClick={onClose} className="btn btn-sm" style={{ fontSize: 12 }}>Cancel</button>
-                <button
-                  onClick={handleSend}
-                  disabled={sending || selectedCount === 0}
-                  className="btn btn-primary"
-                  style={{ fontSize: 12 }}
-                >{sending ? 'Sending…' : 'Send to ' + selectedCount + ' lodge' + (selectedCount !== 1 ? 's' : '')}</button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
