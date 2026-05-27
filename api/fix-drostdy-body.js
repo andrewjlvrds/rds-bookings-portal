@@ -1,4 +1,4 @@
-// ONE-SHOT: Search Gmail for Drostdy reply and write body to blob
+// ONE-SHOT: Find Drostdy reply by sender and write body to blob
 // DELETE AFTER USE
 import { list, put } from '@vercel/blob';
 import { getGmailToken, gmailApi } from './_gmail.js';
@@ -32,33 +32,31 @@ function extractBody(payload) {
 export default async function handler(req, res) {
   const log = [], errors = [];
 
-  // Find the Drostdy reply blob
   const blobs = await list({ prefix: 'emails/booking/' + DROSTDY_ID + '/' });
   const drostdyBlob = blobs.blobs.find(b => b.pathname.includes('19e68cee95d1f3c3'));
-  if (!drostdyBlob) return res.status(200).json({ error: 'Drostdy blob not found', blobs: blobs.blobs.map(b=>b.pathname) });
+  if (!drostdyBlob) return res.status(200).json({ error: 'blob not found' });
 
-  const r = await fetch(drostdyBlob.url);
-  const data = await r.json();
-  log.push('rfc_message_id: ' + data.rfc_message_id);
-
-  // Search Gmail for the Drostdy reply by label
   const token = await getGmailToken();
-  const query = 'label:eoa-jan-27-drostdy-hotel -from:bookings@ridedownsouth.com';
+
+  // Search by sender — reservations@drostdy.co.za
+  const query = 'from:reservations@drostdy.co.za newer_than:3d';
   const search = await gmailApi(token, 'messages?q=' + encodeURIComponent(query) + '&maxResults=5');
-  log.push('Gmail search found: ' + (search.messages || []).length + ' messages');
+  log.push('Found: ' + (search.messages || []).length + ' messages from drostdy');
 
   for (const msg of (search.messages || [])) {
     const full = await gmailApi(token, 'messages/' + msg.id + '?format=full');
     const body = extractBody(full.payload);
-    log.push('Message ' + msg.id + ' body length: ' + body.length);
+    log.push('Message ' + msg.id + ' body length: ' + body.length + ' preview: ' + body.substring(0, 80));
+
     if (body && body.length > 50) {
-      // This is the reply — update the blob
+      const r = await fetch(drostdyBlob.url);
+      const data = await r.json();
       data.body = body;
       data.email_content = body;
       data.gmail_message_id = msg.id;
       data.gmail_thread_id = full.threadId;
       await put(drostdyBlob.pathname, JSON.stringify(data), { access: 'public', addRandomSuffix: false });
-      log.push('Updated blob with body and gmail_message_id: ' + msg.id);
+      log.push('Updated Drostdy blob with body from message ' + msg.id);
       break;
     }
   }
