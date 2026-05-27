@@ -565,52 +565,18 @@ export default async function(req, res) {
         // Attachments from message payload
         var attachments = extractAttachments(msg.payload);
 
-        // Download and extract text from attachments (PDF, CSV, Excel, plain text)
-        // Size guard: skip attachments > 5MB (Claude API limit), limit 3 extractions per poll run
-        var MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024; // 5MB
+        // Skip attachment downloads in cron runs — a single large PDF can consume
+        // the entire 60s budget. Store metadata only; cron-reparse handles extraction.
         var attachmentTexts = [];
-        var attachmentsWithText = [];
-        for (var ai = 0; ai < attachments.length; ai++) {
-          var att = attachments[ai];
-          var attCopy = {
+        var attachmentsWithText = attachments.map(function(att) {
+          return {
             filename: att.filename,
             mimeType: att.mimeType,
             size: att.size,
             attachmentId: att.attachmentId,
             extractedText: null,
           };
-
-          if (att.attachmentId && isExtractable(att.mimeType) && att.size < MAX_ATTACHMENT_SIZE) {
-            try {
-              console.log('Downloading attachment:', att.filename, '(' + att.mimeType + ', ' + att.size + ' bytes)');
-              var attData = await downloadAttachment(token, msgId, att.attachmentId);
-
-              if (attData) {
-                var extractedText = null;
-                var mt = att.mimeType || '';
-
-                if (mt === 'text/csv' || mt === 'application/csv' || mt === 'text/plain') {
-                  extractedText = extractTextFromPlain(attData);
-                } else {
-                  extractedText = await extractTextFromAttachment(attData, att.filename, mt);
-                }
-
-                if (extractedText) {
-                  attCopy.extractedText = extractedText;
-                  attachmentTexts.push('--- ATTACHMENT: ' + att.filename + ' ---\n' + extractedText + '\n--- END ATTACHMENT ---');
-                  console.log('Extracted', extractedText.length, 'chars from', att.filename);
-                }
-              }
-
-              // Small delay between attachment downloads
-              await new Promise(function(r) { setTimeout(r, 300); });
-            } catch (attErr) {
-              console.error('Attachment extraction failed for', att.filename, attErr.message);
-            }
-          }
-
-          attachmentsWithText.push(attCopy);
-        }
+        });
 
         // Build full content: email body + attachment texts
         var fullContent = body || '';
