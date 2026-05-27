@@ -718,7 +718,8 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
         {/* Payment & cancellation panel */}
         <div className="panel">
           <div className="panel-head">Payments & cancellation</div>
-          <div className="panel-body">
+          <div className="panel-body" style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 0, alignItems: 'start' }}>
+          <div>{/* left col */}
 
             {/* AI parsed fields — shown when emails have extracted but unconfirmed data */}
             {Object.keys(aiParsedFields).filter(k => k !== 'suggested_status').length > 0 && (
@@ -789,7 +790,69 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
                 ]} />
               </div>
             )}
-          </div>
+          </div>{/* end left col */}
+
+          {/* Right col — proforma pricing from invoice/email */}
+          {(() => {
+            const sgl = parseFloat(booking.Single_Room_Price) || 0
+            const twin = parseFloat(booking.Shared_Twin_Room_Price) || 0
+            const dbl = parseFloat(booking.Shared_Double_Room_Price) || 0
+            const guide = parseFloat(booking.Guide_Room_Price) || 0
+            const hasRoomPrices = sgl || twin || dbl || guide
+            const nights = parseInt(booking.Nights) || 1
+            const paxSgl = tour ? (tour.pax_single || 0) : 0
+            const paxTwin = tour ? (tour.pax_twin || 0) : 0
+            const paxDbl = tour ? (tour.pax_double || 0) : 0
+            const guideRooms = tour ? (tour.guide_rooms || 0) : 0
+            const calcTotal = hasRoomPrices
+              ? (paxSgl * sgl + Math.ceil(paxTwin / 2) * twin + Math.ceil(paxDbl / 2) * dbl + guideRooms * guide) * nights
+              : 0
+            if (!hasRoomPrices && Object.keys(aiParsedFields).filter(k => !['suggested_status','total_amount','deposit_amount','deposit_due_date'].includes(k)).length === 0) return null
+            return (
+              <div style={{ minWidth: 200, maxWidth: 240, borderLeft: '0.5px solid var(--border-light)', paddingLeft: 16, marginLeft: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Proforma rates</div>
+                {hasRoomPrices ? (
+                  <>
+                    {[['Single', sgl, paxSgl], ['Twin (shared)', twin, Math.ceil(paxTwin/2)], ['Double (shared)', dbl, Math.ceil(paxDbl/2)], ['Guide room', guide, guideRooms]].map(([label, price, qty]) =>
+                      price > 0 ? (
+                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0', borderBottom: '0.5px solid var(--border-light)' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{label}{qty > 0 ? <span style={{ color: 'var(--text-muted)', fontSize: 10 }}> ×{qty}</span> : ''}</span>
+                          <span style={{ fontWeight: 500 }}>{fmtCurrency(price, currency)}</span>
+                        </div>
+                      ) : null
+                    )}
+                    {calcTotal > 0 && nights > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '5px 0', marginTop: 2 }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Est. total ({nights}N)</span>
+                        <span style={{ fontWeight: 600 }}>{fmtCurrency(calcTotal, currency)}</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handleSave('Single_Room_Price', sgl || null) && handleSave('Shared_Twin_Room_Price', twin || null)}
+                      style={{ display: 'none' }}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                      {[['Single_Room_Price','Single'], ['Shared_Twin_Room_Price','Twin'], ['Shared_Double_Room_Price','Double'], ['Guide_Room_Price','Guide']].map(([field, label]) =>
+                        <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 52 }}>{label}</span>
+                          <input
+                            type="number"
+                            defaultValue={parseFloat(booking[field]) || ''}
+                            placeholder="—"
+                            onBlur={e => { const v = parseFloat(e.target.value); handleSave(field, isNaN(v) ? null : v) }}
+                            style={{ width: 80, fontSize: 11, padding: '2px 5px', border: '0.5px solid var(--border-default)', borderRadius: 3, background: 'var(--bg-primary)' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No rates extracted yet</div>
+                )}
+              </div>
+            )
+          })()}
+          </div>{/* end panel-body grid */}
         </div>
 
         {/* Pax info panel */}

@@ -47,18 +47,20 @@ export default async function(req, res) {
     var bookingFields = [
       'Name','Lodge_Name','Check_in_Date','Check_out_Date','Nights','Status',
       'Sgl_Twin_Dbl_Guides','Meals','Total_Amount','Deposit_Amount',
-      'Lodge_Currency','Booking_Reference','Payment_Stage','Reservation_Comments',
+      'Lodge_Currency','Payment_Stage','Reservation_Comments',
       'Lodge','Tour',
       'RDS_Reference','Lodge_Reference','Cancel_Free_Before',
-      'Credit_Amount','Enquiry_Sent_Date','Last_Response_Date',
+      'Enquiry_Sent_Date','Last_Response_Date',
       'Follow_up_Date','Excursion','Excursion_booking_status','Excursion_Date','Excursion_notes',
       'Deposit_Due_Date','Second_Payment_Amount','Second_Payment_Due_Date',
       'Third_Payment_Amount','Third_Payment_Due_Date',
       'Deposit_Paid_Date','nd_Payment_Paid_Date','rd_Payment_Paid_Date','th_Payment_Paid_Date',
-      'Deposit_Paid_Amount','nd_Payment_Paid_Amount','rd_Payment_Paid_Amount','th_Payment_Paid_Amount',
+      'Deposit_Paid_Amount','nd_Payment_Paid_Amount',
       'Fourth_Payment_Amount','Fourth_Payment_Due_Date',
       'Email','Contact_Name','Payment_Note',
-      'Day_Description','Booking_Type','Lodge_Priority','New_Reply','id'
+      'Day_Description','Booking_Type','Lodge_Priority','New_Reply',
+      'Single_Room_Price','Shared_Twin_Room_Price','Shared_Double_Room_Price','Guide_Room_Price',
+      'id'
     ].join(',');
 
     var allBookings = [];

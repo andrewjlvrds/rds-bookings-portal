@@ -37,6 +37,10 @@ var SYSTEM_PROMPT = [
   '14. meals: "BB" | "HB" | "FB" | "DBB" | "AI" | "SC" | "RO" | null',
   '15. suggested_status: "Availability Confirmed" | "Not Available" | "Proforma Received" | "Waitlisted" | "Cancelled" | "Deposit Paid" | "Balance Paid" | null',
   '16. rooms_offered: Short summary of rooms actually offered by the lodge, e.g. "8 std, 1 honeymoon, 2 family" or "13 rooms confirmed". Only extract if the lodge specifies room types/counts.',
+  '17. single_room_price: Per-night rate for a single room (numeric, STO rate preferred over rack rate)',
+  '18. shared_twin_room_price: Per-night rate for a shared twin room (numeric, STO rate preferred)',
+  '19. shared_double_room_price: Per-night rate for a shared double room (numeric, STO rate preferred)',
+  '20. guide_room_price: Per-night rate for a guide room (numeric, STO rate preferred)',
   '',
   'PAYMENT RECEIPT FIELDS (extract when email confirms a payment was received):',
   '17. payment_received_amount: Amount received/paid (numeric)',
@@ -126,6 +130,10 @@ var FIELD_MAP = {
   meals: { zoho: 'Meals' },
   suggested_status: { zoho: 'Status' },
   rooms_offered: { zoho: 'Reservation_Comments', transform: function(v) { return 'Rooms: ' + v; } },
+  single_room_price: { zoho: 'Single_Room_Price' },
+  shared_twin_room_price: { zoho: 'Shared_Twin_Room_Price' },
+  shared_double_room_price: { zoho: 'Shared_Double_Room_Price' },
+  guide_room_price: { zoho: 'Guide_Room_Price' },
   // Receipt fields — mapped dynamically based on payment_slot
   balance_due: { zoho: 'Balance_Due' },
   receipt_reference: { zoho: 'Payment_Note', transform: function(v) { return 'Receipt: ' + v; } },
@@ -272,6 +280,10 @@ var PROTECTED_AMOUNT_FIELDS = new Set([
   'Second_Payment_Due_Date',
   'Third_Payment_Due_Date',
   'Fourth_Payment_Due_Date',
+  'Single_Room_Price',
+  'Shared_Twin_Room_Price',
+  'Shared_Double_Room_Price',
+  'Guide_Room_Price',
 ]);
 
 // Only includes fields with medium+ confidence.
