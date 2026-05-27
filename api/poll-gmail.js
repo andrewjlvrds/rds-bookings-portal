@@ -251,19 +251,33 @@ export default async function(req, res) {
 
     var token = await getGmailToken();
 
-    // Fetch Zoho bookings sequentially (parallel bursts trigger rate limiting)
+    // When a specific booking_id is provided (label-scoped lodge refresh),
+    // skip the full Zoho booking fetch — we already know the target booking.
+    var targetBookingId = (req.query && req.query.booking_id) || (req.body && req.body.booking_id) || null;
+
     var allBookings = [];
-    var bkPage = 1, bkHasMore = true;
-    while (bkHasMore && bkPage <= 5) {
-      var bkResult = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200&page=' + bkPage);
-      var bkData = (bkResult && bkResult.data) || [];
-      allBookings = allBookings.concat(bkData);
-      bkHasMore = bkResult && bkResult.info && bkResult.info.more_records;
-      bkPage++;
+    var allLodges = [];
+    if (targetBookingId) {
+      // Fetch just this one booking from Zoho
+      try {
+        var singleBk = await zohoApi('GET', 'Lodge_Bookings/' + targetBookingId + '?fields=' + bookingFields);
+        if (singleBk && singleBk.data) allBookings = [singleBk.data];
+      } catch(e) { console.error('Single booking fetch failed:', e.message); }
+      console.log('Label-scoped refresh for booking', targetBookingId, 'in', Date.now() - t0, 'ms');
+    } else {
+      // Full fetch for normal poll runs
+      var bkPage = 1, bkHasMore = true;
+      while (bkHasMore && bkPage <= 5) {
+        var bkResult = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200&page=' + bkPage);
+        var bkData = (bkResult && bkResult.data) || [];
+        allBookings = allBookings.concat(bkData);
+        bkHasMore = bkResult && bkResult.info && bkResult.info.more_records;
+        bkPage++;
+      }
+      var lodgeResult = await zohoApi('GET', 'Lodges?fields=Name,Email,Preferred_Email,Email_Reservations_2,Secondary_Email,Email_4,Email_Accounts&per_page=200');
+      allLodges = (lodgeResult && lodgeResult.data) || [];
+      console.log('Full setup in', Date.now() - t0, 'ms —', allBookings.length, 'bookings,', allLodges.length, 'lodges');
     }
-    var lodgeResult = await zohoApi('GET', 'Lodges?fields=Name,Email,Preferred_Email,Email_Reservations_2,Secondary_Email,Email_4,Email_Accounts&per_page=200');
-    var allLodges = (lodgeResult && lodgeResult.data) || [];
-    console.log('Setup in', Date.now() - t0, 'ms —', allBookings.length, 'bookings,', allLodges.length, 'lodges');
 
     // Build lookup maps
     var maps = buildMatchMaps(allBookings);

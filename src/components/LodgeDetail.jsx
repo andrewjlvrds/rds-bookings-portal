@@ -955,7 +955,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
                   try {
                     const gmailLabel = ((tour ? tour.name : '') + '/' + lodgeName)
                       .replace(/\s+/g, '-')
-                    await fetch('/api/poll-gmail?refetch=true&label=' + encodeURIComponent(gmailLabel), { method: 'POST' })
+                    await fetch('/api/poll-gmail?refetch=true&label=' + encodeURIComponent(gmailLabel) + '&booking_id=' + encodeURIComponent(bookingId), { method: 'POST' })
                   } catch(e) { console.error('poll-gmail refetch failed:', e) }
                   // 2. Re-parse attachments and fix empty bodies
                   await fetch('/api/reparse-email', {
