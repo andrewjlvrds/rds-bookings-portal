@@ -249,27 +249,21 @@ export default async function(req, res) {
     // 20-30s before the first message was processed.
     var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Check_out_Date,Nights,Lodge,Tour,id,Deposit_Amount,Second_Payment_Amount,Third_Payment_Amount,Fourth_Payment_Amount,Deposit_Paid_Date,nd_Payment_Paid_Date,rd_Payment_Paid_Date,th_Payment_Paid_Date,Sgl_Twin_Dbl_Guides,Guide_Rooms,Meals';
 
-    var [token, zohoInit] = await Promise.all([
-      getGmailToken(),
-      (async () => {
-        var allBk = [];
-        var pg = 1, hasMore = true;
-        while (hasMore && pg <= 5) {
-          var r = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200&page=' + pg);
-          var d = (r && r.data) || [];
-          allBk = allBk.concat(d);
-          hasMore = r && r.info && r.info.more_records;
-          pg++;
-        }
-        var lodgeRes = await zohoApi('GET', 'Lodges?fields=Name,Email,Preferred_Email,Email_Reservations_2,Secondary_Email,Email_4,Email_Accounts&per_page=200');
-        var lodges = (lodgeRes && lodgeRes.data) || [];
-        return { allBookings: allBk, allLodges: lodges };
-      })(),
-    ]);
+    var token = await getGmailToken();
 
-    var allBookings = zohoInit.allBookings;
-    var allLodges = zohoInit.allLodges;
-    console.log('Setup: token + Zoho fetched in', Date.now() - t0, 'ms —', allBookings.length, 'bookings,', allLodges.length, 'lodges');
+    // Fetch Zoho bookings sequentially (parallel bursts trigger rate limiting)
+    var allBookings = [];
+    var bkPage = 1, bkHasMore = true;
+    while (bkHasMore && bkPage <= 5) {
+      var bkResult = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200&page=' + bkPage);
+      var bkData = (bkResult && bkResult.data) || [];
+      allBookings = allBookings.concat(bkData);
+      bkHasMore = bkResult && bkResult.info && bkResult.info.more_records;
+      bkPage++;
+    }
+    var lodgeResult = await zohoApi('GET', 'Lodges?fields=Name,Email,Preferred_Email,Email_Reservations_2,Secondary_Email,Email_4,Email_Accounts&per_page=200');
+    var allLodges = (lodgeResult && lodgeResult.data) || [];
+    console.log('Setup in', Date.now() - t0, 'ms —', allBookings.length, 'bookings,', allLodges.length, 'lodges');
 
     // Build lookup maps
     var maps = buildMatchMaps(allBookings);
