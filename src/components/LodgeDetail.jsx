@@ -261,9 +261,17 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {booking.New_Reply === true && (
             <button
-              onClick={() => handleSave('New_Reply', false)}
+              onClick={() => {
+                handleSave('New_Reply', false)
+                // Also clear blob-based read state for all unread inbound emails
+                const unreadIds = emails
+                  .filter(em => em.direction !== 'outbound' && em.id && readState && !readState[em.id])
+                  .map(em => em.id)
+                unreadIds.forEach(id => { if (onMarkRead) onMarkRead(id) })
+                onMarkBookingDone && onMarkBookingDone(bookingId)
+              }}
               disabled={savingEdit}
-              title="Clear the new-reply flag on this booking"
+              title="Mark all replies as read and clear the unread flag"
               style={{
                 background: '#FFEBEE', border: '0.5px solid #C62828',
                 borderRadius: 4, fontSize: 11, padding: '3px 10px', cursor: 'pointer',
@@ -923,9 +931,16 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             {onMarkBookingDone && (
               <button
                 className="btn btn-sm"
-                onClick={() => onMarkBookingDone(bookingId)}
+                onClick={() => {
+                  // Mark all inbound emails in this thread as read
+                  const unreadIds = emails
+                    .filter(em => em.direction !== 'outbound' && em.id && readState && !readState[em.id])
+                    .map(em => em.id)
+                  unreadIds.forEach(id => { if (onMarkRead) onMarkRead(id) })
+                  onMarkBookingDone(bookingId)
+                }}
                 style={{ fontSize: 11, padding: '3px 10px', background: 'var(--green-bg)', color: 'var(--green-text)', border: '0.5px solid var(--green-border)' }}
-                title="Mark all emails in this booking as read — clears the unread badge"
+                title="Mark all emails in this thread as read"
               >✓ Mark done</button>
             )}
             <button
@@ -1344,6 +1359,17 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
         <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
           {date ? fmtDate(date) : ''}
         </span>
+        {!isOutbound && email.id && isUnread && onMarkRead && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onMarkRead(email.id) }}
+            style={{
+              fontSize: 10, padding: '2px 6px', border: '0.5px solid var(--green-border, #86EFAC)',
+              borderRadius: 3, background: 'var(--green-bg)', cursor: 'pointer',
+              color: 'var(--green-text)', flexShrink: 0, whiteSpace: 'nowrap',
+            }}
+            title="Mark this email as read"
+          >✓ Read</button>
+        )}
         {!isOutbound && tours && email.id && (
           <button
             onClick={(e) => { e.stopPropagation(); setReassignError(null); setReassigning(true) }}
