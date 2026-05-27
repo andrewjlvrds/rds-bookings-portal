@@ -750,6 +750,8 @@ export default async function(req, res) {
         if (precedenceHeader === 'auto_reply' || precedenceHeader === 'bulk') isAutoReply = true;
         if (xAutoResponse) isAutoReply = true;
         // Also check body patterns for common auto-reply phrases
+        // NOTE: keep this list tight — lodge humans use phrases like "thank you for contacting us"
+        // and "we will get back to you" in genuine replies. Only flag unambiguous machine-generated patterns.
         var bodyLower = (body || '').toLowerCase();
         if (!isAutoReply && (
           bodyLower.includes('this is an automated response') ||
@@ -758,9 +760,7 @@ export default async function(req, res) {
           bodyLower.includes('out of office') ||
           bodyLower.includes('auto-reply') ||
           bodyLower.includes('autoreply') ||
-          bodyLower.includes('we have received your email') ||
-          bodyLower.includes('thank you for contacting') ||
-          bodyLower.includes('we will get back to you')
+          bodyLower.includes('we have received your email and will respond')
         )) isAutoReply = true;
 
         // AI parse the email + attachment text to extract booking data (skip for auto-replies)
