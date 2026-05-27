@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { TEMPLATES, generateDates, generateRdsRef, getAllTemplates, saveCustomTemplate, deleteCustomTemplate } from '../utils/templates'
 import NewLodgeModal from './NewLodgeModal'
-import { fmtDate, fmtDateFull } from '../utils/helpers'
+import { fmtDate, fmtDateFull, getStatus } from '../utils/helpers'
 
 export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdateTour }) {
   // Cancelled Zoho bookings are preserved as an audit trail but must never be
@@ -733,8 +733,25 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
       ].filter(Boolean).join(', ')
       if (summary) alert('Sync complete: ' + summary + '.')
 
+      // Build list of bookings needing a date-change email:
+      // date shifted AND status was already Enquiry Sent or later.
+      const POST_ENQUIRY = new Set([
+        'Enquiry Sent', 'Availability Confirmed', 'Confirmed',
+        'Proforma Received', 'Deposit Paid', 'Balance Paid',
+      ])
+      const dateChangeBookings = updateBookings
+        .filter(u => u.fields.Check_in_Date && POST_ENQUIRY.has(getStatus(u.booking)))
+        .map(u => ({
+          booking: u.booking,
+          oldCheckIn:  u.booking.Check_in_Date  || u.booking['Check-in']  || '',
+          oldCheckOut: u.booking.Check_out_Date || u.booking['Check-out'] || '',
+          newCheckIn:  u.fields.Check_in_Date,
+          newCheckOut: u.fields.Check_out_Date || '',
+          night:       u.night,
+        }))
+
       // Return the Zoho tour id so the parent can switch activeTour to the new record
-      if (onSave) onSave({ ...(result || {}), tour_id: tourId, was_local: isLocalTour, cancelled: cancelledCount, updated: updatedCount })
+      if (onSave) onSave({ ...(result || {}), tour_id: tourId, was_local: isLocalTour, cancelled: cancelledCount, updated: updatedCount, dateChangeBookings })
     } catch (err) {
       alert('Error syncing to Zoho: ' + err.message)
     } finally {

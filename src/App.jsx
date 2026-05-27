@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
 import ItineraryEditor from './components/ItineraryEditor'
 import EnquiryPreview from './components/EnquiryPreview'
+import DateChangePreview from './components/DateChangePreview'
 import Payments from './components/Payments'
 import LodgeDetail from './components/LodgeDetail'
 import TourPanel from './components/TourPanel'
@@ -59,6 +60,7 @@ export default function App() {
 
   const [activeTour, setActiveTour] = useState(null)
   const [activeView, setActiveView] = useState('lodge-dashboard')
+  const [pendingDateChanges, setPendingDateChanges] = useState(null)
   const [activeBooking, setActiveBooking] = useState(null)
   // When a user opens LodgeDetail from inside the TourPanel, remember which
   // tab they came from so the Back button returns them there.
@@ -490,6 +492,18 @@ export default function App() {
       )
     }
 
+    if (activeTour && activeView === 'date-change-preview') {
+      return (
+        <DateChangePreview
+          tour={activeTour}
+          lodges={lodges}
+          dateChangeBookings={pendingDateChanges || []}
+          onBack={() => setActiveView('tour-panel')}
+          onDone={() => { setPendingDateChanges(null); setActiveView('tour-panel') }}
+        />
+      )
+    }
+
     if (activeTour && activeView === 'edit-itinerary') {
       return (
         <ItineraryEditor
@@ -507,7 +521,13 @@ export default function App() {
             // If this was a local tour that just got pushed to Zoho, the id has changed.
             // Refresh against the new Zoho id so activeTour reflects the real record.
             const freshId = (result && result.tour_id) || activeTour.id
-            setActiveView('tour-panel')
+            const dcb = result && result.dateChangeBookings
+            if (dcb && dcb.length > 0) {
+              setPendingDateChanges(dcb)
+              setActiveView('date-change-preview')
+            } else {
+              setActiveView('tour-panel')
+            }
             refreshData(freshId)
           }}
         />

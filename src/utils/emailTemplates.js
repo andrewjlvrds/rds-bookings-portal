@@ -515,3 +515,47 @@ export const LODGE_REPLY_TEMPLATES = [
     ],
   },
 ]
+
+// ── Date change notification ──────────────────────────────────────────────
+// Generated after a push that shifts check-in/out dates on an already-
+// enquired or confirmed booking. oldDate / newDate are YYYY-MM-DD strings.
+// newCheckOut is optional — shown if different from the day after newDate.
+export function generateDateChangeEmail(opts = {}) {
+  const {
+    sender = 'Helen',
+    contactName = '',
+    lodgeName = '',
+    bookingRef = '',
+    oldCheckIn = '',
+    oldCheckOut = '',
+    newCheckIn = '',
+    newCheckOut = '',
+    nights = 1,
+  } = opts
+
+  const fmt = (d) => {
+    if (!d) return ''
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
+    const t = new Date(d)
+    return t.getDate() + ' ' + months[t.getMonth()] + ' ' + t.getFullYear()
+  }
+
+  const oldIn  = fmt(oldCheckIn)
+  const oldOut = fmt(oldCheckOut)
+  const newIn  = fmt(newCheckIn)
+  const newOut = fmt(newCheckOut)
+
+  const refPart = bookingRef ? ' (ref: ' + bookingRef + ')' : ''
+  const nightsWord = nights === 1 ? '1 night' : nights + ' nights'
+  const greeting = replyGreeting(contactName)
+  const oldRange = oldOut ? oldIn + ' – ' + oldOut : oldIn
+  const newRange = newOut ? newIn + ' – ' + newOut : newIn
+
+  return greeting + '\n\n' +
+    'I hope you\'re well. I\'m writing to let you know that the dates of our group booking with you have changed' + refPart + '.\n\n' +
+    'Our original booking was ' + oldRange + ' (' + nightsWord + '). The new dates are ' + newRange + '.\n\n' +
+    'Everything else stays the same — same room configuration and meal basis.\n\n' +
+    'Could you please confirm whether the new dates work on your side? Sorry for the inconvenience.\n\n' +
+    'Kind regards\n\n' +
+    replySignature(sender)
+}
