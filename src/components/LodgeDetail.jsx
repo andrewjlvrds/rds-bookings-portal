@@ -954,7 +954,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
                   // refetch=true bypasses dedup so emails stored with empty body get re-fetched.
                   try {
                     const gmailLabel = ((tour ? tour.name : '') + '/' + lodgeName)
-                      .replace(/[/\s]+/g, '-').toLowerCase()
+                      .replace(/\s+/g, '-')
                     await fetch('/api/poll-gmail?refetch=true&label=' + encodeURIComponent(gmailLabel), { method: 'POST' })
                   } catch(e) { console.error('poll-gmail refetch failed:', e) }
                   // 2. Re-parse attachments and fix empty bodies
