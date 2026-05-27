@@ -6,9 +6,8 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
 
   try {
-    var base = process.env.VERCEL_URL
-      ? 'https://' + process.env.VERCEL_URL
-      : 'https://rds-bookings-portal.vercel.app';
+    // VERCEL_URL is the deployment URL (may be a preview) — always use production
+    var base = 'https://rds-bookings-portal.vercel.app';
 
     var r = await fetch(base + '/api/bulk-reparse', {
       method: 'POST',
