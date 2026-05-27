@@ -45,9 +45,6 @@
     },
     "api/bulk-reparse.js": {
       "maxDuration": 120
-    },
-    "api/backfill-sent-index.js": {
-      "maxDuration": 120
     }
   }
 }
