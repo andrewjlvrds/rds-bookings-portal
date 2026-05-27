@@ -276,7 +276,18 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             </button>
           )}
           <button
-            onClick={() => { if (onRefresh) onRefresh(); fetchEmails() }}
+            onClick={async () => {
+              fetchEmails()
+              try {
+                await fetch('/api/reparse-email', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ booking_id: bookingId }),
+                })
+              } catch (e) { console.error('Reparse error:', e) }
+              fetchEmails()
+              if (onRefresh) onRefresh()
+            }}
             style={{
               background: 'none', border: '0.5px solid var(--border-default)',
               borderRadius: 4, fontSize: 11, padding: '3px 10px', cursor: 'pointer',
