@@ -156,6 +156,26 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
     ? (inboxStats.unread || 0) + (inboxStats.unmatched || 0) + (inboxStats.tour_bucket || 0)
     : 0
 
+  // Global payment badge: overdue + due within 7 days, across all committed tours
+  const now = new Date().toISOString().slice(0, 10)
+  const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  let globalPaymentCount = 0
+  committedTours.forEach(tour => {
+    (tour.bookings || []).forEach(b => {
+      const status = b.Status || ''
+      if (status === 'Balance Paid' || status === 'Cancelled' || status === 'Not Available') return
+      const slots = [
+        [b.Deposit_Due_Date, b.Deposit_Amount, b.Deposit_Paid_Date],
+        [b.Second_Payment_Due_Date, b.Second_Payment_Amount, b.nd_Payment_Paid_Date],
+        [b.Third_Payment_Due_Date, b.Third_Payment_Amount, b.rd_Payment_Paid_Date],
+        [b.Fourth_Payment_Due_Date, b.Fourth_Payment_Amount, b.th_Payment_Paid_Date],
+      ]
+      slots.forEach(([due, amount, paid]) => {
+        if (due && !paid && parseFloat(amount) > 0 && due <= soon) globalPaymentCount++
+      })
+    })
+  })
+
   return (
     <nav style={{
       width: 240, flexShrink: 0, background: 'var(--bg-primary)',
@@ -176,7 +196,7 @@ function Sidebar({ section, tours, activeTour, onSelectTour, activeView, onSelec
             active={activeView === 'activity-log'}
             onClick={() => { onSelectTour(null); onSelectView('activity-log') }}
           />
-          <NavItem label="Payments" active={activeView === 'payments'} onClick={() => { onSelectTour(null); onSelectView('payments') }} />
+          <NavItem label="Payments" active={activeView === 'payments'} onClick={() => { onSelectTour(null); onSelectView('payments') }} badge={globalPaymentCount > 0 ? globalPaymentCount : null} />
           <NavItem label="Gmail import" active={activeView === 'gmail-import'} onClick={() => { onSelectTour(null); onSelectView('gmail-import') }} />
         </div>
       )}
@@ -402,22 +422,7 @@ function TourItem({ tour, active, onClick, dimmed, isDraft, unreadCounts, flagCo
     ? bookings.reduce((sum, b) => sum + (flagCounts[(b.id || b['Record Id'])] || 0), 0)
     : 0
 
-  // Count overdue payments across all bookings
-  const now = new Date().toISOString().slice(0, 10)
-  let overdueCount = 0
-  bookings.forEach(b => {
-    const status = (b.Status || '')
-    if (status === 'Balance Paid' || status === 'Cancelled' || status === 'Not Available') return
-    const slots = [
-      [b.Deposit_Due_Date, b.Deposit_Amount, b.Deposit_Paid_Date],
-      [b.Second_Payment_Due_Date, b.Second_Payment_Amount, b.nd_Payment_Paid_Date],
-      [b.Third_Payment_Due_Date, b.Third_Payment_Amount, b.rd_Payment_Paid_Date],
-      [b.Fourth_Payment_Due_Date, b.Fourth_Payment_Amount, b.th_Payment_Paid_Date],
-    ]
-    slots.forEach(([due, amount, paid]) => {
-      if (due && !paid && parseFloat(amount) > 0 && due < now) overdueCount++
-    })
-  })
+
 
   let hasDraft = false
   try {
@@ -471,19 +476,7 @@ function TourItem({ tour, active, onClick, dimmed, isDraft, unreadCounts, flagCo
             🚩{flaggedCount}
           </span>
         )}
-        {overdueCount > 0 && (
-          <span
-            title={overdueCount + ' overdue payment' + (overdueCount !== 1 ? 's' : '')}
-            style={{
-              fontSize: 10, fontWeight: 600,
-              background: '#C07A2A', color: '#fff',
-              padding: '1px 6px', borderRadius: 9, lineHeight: 1.3,
-              minWidth: 16, textAlign: 'center',
-            }}
-          >
-            {overdueCount}
-          </span>
-        )}
+
       </span>
     </button>
   )
