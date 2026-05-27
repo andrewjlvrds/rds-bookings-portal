@@ -1043,17 +1043,6 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             </div>
           )}
 
-          {/* Status set outside portal note */}
-          {!loadingEmails && !emails.some(e => e.direction !== 'outbound') &&
-            ['Availability Confirmed', 'Confirmed', 'Proforma Received', 'Deposit Paid', 'Balance Paid', 'Date Change Required', 'Date Change Requested'].includes(booking.Status) && (
-            <div style={{
-              fontSize: 12, color: 'var(--amber-text)', padding: '10px 14px',
-              background: 'var(--amber-bg, #FFFBEB)',
-              borderTop: '0.5px solid var(--border-default)',
-            }}>
-              Status is <strong>{booking.Status}</strong> but no reply on record — likely confirmed outside the portal (phone or WhatsApp).
-            </div>
-          )}
 
           <ReplyComposer
             bookingId={bookingId}

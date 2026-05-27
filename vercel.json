@@ -42,6 +42,9 @@
     },
     "api/reprocess-perfectstay.js": {
       "maxDuration": 120
+    },
+    "api/bulk-reparse.js": {
+      "maxDuration": 120
     }
   }
 }
