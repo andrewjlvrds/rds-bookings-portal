@@ -467,6 +467,18 @@ export default function Itinerary({ tour, lodges, onSelectBooking, onEditItinera
       }
     } catch (e) { console.error('Bulk reparse failed:', e) }
 
+    // Step 3: Reparse any inbound blobs with empty bodies for this tour's bookings
+    try {
+      const bookingIds = (tour.bookings || []).map(b => b.id || b['Record Id']).filter(Boolean)
+      await Promise.all(bookingIds.map(id =>
+        fetch('/api/reparse-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ booking_id: id }),
+        }).catch(() => {})
+      ))
+    } catch(e) { console.error('Reparse empty bodies failed:', e) }
+
     const statusUpdates = (parseResult?.results || []).filter(r => r.fields && r.fields.includes('Status')).length
     setCheckRepliesResult({
       new_emails: newEmails,
