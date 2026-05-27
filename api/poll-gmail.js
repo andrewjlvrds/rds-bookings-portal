@@ -233,14 +233,14 @@ export default async function(req, res) {
     var t0 = Date.now();
     var refetch = req.query && req.query.refetch === 'true';
     var labelFilter = (req.body && req.body.label) || (req.query && req.query.label) || null;
+    // isCron: true when called by the Vercel scheduler (no body, no refetch flag).
+    // Cron runs every 10 min so only needs a 20-minute window — keeps message
+    // volume tiny and avoids timeout. Manual refresh uses a wider window to
+    // recover emails that were missed during downtime or processing failures.
+    var isCron = !refetch && !labelFilter && !(req.body && Object.keys(req.body || {}).length);
     var token = await getGmailToken();
 
-    // Fetch recent messages — paginate fully, no arbitrary cap.
-    // A 3-day window can easily have 100+ messages; capping at 20 or 50
-    // silently dropped emails and was the root cause of missing correspondence.
-    // If a label is specified (e.g. from a booking-specific Refresh), search only
-    // that label — far fewer messages, avoids timeout on busy inboxes.
-    var searchWindow = refetch ? '14d' : '3d';
+    var searchWindow = refetch ? '14d' : isCron ? '20m' : '3d';
     var query = labelFilter
       ? 'label:' + labelFilter.replace(/[/\s]/g, '-').toLowerCase() + ' -from:bookings@ridedownsouth.com'
       : 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
@@ -311,6 +311,13 @@ export default async function(req, res) {
 
     // Process each message
     for (var i = 0; i < messages.length; i++) {
+      // Per-message deadline guard — stop gracefully before Vercel kills the function.
+      // 50s gives headroom for the current message to finish and the response to be sent.
+      if (Date.now() - t0 > 50000) {
+        console.log('poll-gmail: deadline reached after', i, 'messages — stopping gracefully');
+        break;
+      }
+
       var msgId = messages[i].id;
 
       try {
