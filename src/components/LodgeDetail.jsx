@@ -1835,6 +1835,11 @@ function ReplyComposer({ bookingId, lodgeEmail, lodgeName, rdsRef, lodgeRef, tou
           bookingRef: lodgeRef || rdsRef || '',
           lodgeName: lodgeName || '',
           sender,
+          oldDate: (() => {
+            const comments = booking.Reservation_Comments || ''
+            const m = comments.match(/Previous check-in: ([\d-]+)/)
+            return m ? m[1] : ''
+          })(),
         }}
         onInsert={handleTemplateInsert}
       />

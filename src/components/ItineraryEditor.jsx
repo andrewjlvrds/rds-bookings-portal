@@ -532,6 +532,12 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
           co.setDate(co.getDate() + 1)
           diff.Check_out_Date = co.toISOString().split('T')[0]
         } catch (e) {}
+        // Append old check-in to Reservation_Comments so date change emails can reference it
+        const existingComments = (bk.Reservation_Comments || '').trim()
+        const prevNote = 'Previous check-in: ' + zohoDate
+        if (!existingComments.includes(prevNote)) {
+          diff.Reservation_Comments = (existingComments ? existingComments + ' | ' : '') + prevNote
+        }
         diffSummary.push('date')
       }
 
