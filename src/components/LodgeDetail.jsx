@@ -950,9 +950,13 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
               onClick={async () => {
                 setPolling(true)
                 try {
-                  // 1. Poll Gmail with refetch=true — bypasses dedup, uses 14-day window
-                  // so recently-arrived emails that were missed on first pass get picked up.
-                  fetch('/api/poll-gmail?refetch=true', { method: 'POST' }).catch(() => {})
+                  // 1. Poll Gmail scoped to this booking's label — fast, targeted.
+                  // refetch=true bypasses dedup so emails stored with empty body get re-fetched.
+                  try {
+                    const gmailLabel = ((tour ? tour.name : '') + '/' + lodgeName)
+                      .replace(/[/\s]+/g, '-').toLowerCase()
+                    await fetch('/api/poll-gmail?refetch=true&label=' + encodeURIComponent(gmailLabel), { method: 'POST' })
+                  } catch(e) { console.error('poll-gmail refetch failed:', e) }
                   // 2. Re-parse attachments and fix empty bodies
                   await fetch('/api/reparse-email', {
                     method: 'POST',
