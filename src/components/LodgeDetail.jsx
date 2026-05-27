@@ -260,30 +260,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
           ← {backLabel || ('Back to ' + (tour ? tour.name : 'itinerary'))}
         </button>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {booking.New_Reply === true && (
-            <button
-              onClick={() => {
-                handleSave('New_Reply', false)
-                // Also clear blob-based read state for all unread inbound emails
-                const unreadIds = emails
-                  .filter(em => em.direction !== 'outbound' && em.id && readState && !readState[em.id])
-                  .map(em => em.id)
-                unreadIds.forEach(id => { if (onMarkRead) onMarkRead(id) })
-                onMarkBookingDone && onMarkBookingDone(bookingId)
-              }}
-              disabled={savingEdit}
-              title="Mark all replies as read and clear the unread flag"
-              style={{
-                background: '#FFEBEE', border: '0.5px solid #C62828',
-                borderRadius: 4, fontSize: 11, padding: '3px 10px', cursor: 'pointer',
-                color: '#C62828', fontWeight: 500,
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-              }}
-            >
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C62828' }} />
-              {savingEdit ? 'Marking...' : 'Mark actioned'}
-            </button>
-          )}
+
           <button
             disabled={polling}
             onClick={async () => {
@@ -929,21 +906,7 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
               {loadingEmails ? 'Loading...' : emails.length + ' email' + (emails.length !== 1 ? 's' : '')}
             </span>
-            {onMarkBookingDone && (
-              <button
-                className="btn btn-sm"
-                onClick={() => {
-                  // Mark all inbound emails in this thread as read
-                  const unreadIds = emails
-                    .filter(em => em.direction !== 'outbound' && em.id && readState && !readState[em.id])
-                    .map(em => em.id)
-                  unreadIds.forEach(id => { if (onMarkRead) onMarkRead(id) })
-                  onMarkBookingDone(bookingId)
-                }}
-                style={{ fontSize: 11, padding: '3px 10px', background: 'var(--green-bg)', color: 'var(--green-text)', border: '0.5px solid var(--green-border)' }}
-                title="Mark all emails in this thread as read"
-              >✓ Mark done</button>
-            )}
+
             <button
               className="btn btn-sm"
               disabled={polling || searchingGmail}
@@ -1175,7 +1138,7 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
   const isOutbound = email.direction === 'outbound'
   const isUnread = !isOutbound && email.id && readState && !readState[email.id]
 
-  // Mark handled — local state persisted to localStorage
+  // Reply sent — marks email as handled in read-state blob (shared across users)
   const handledKey = email.id ? 'rds_handled_' + email.id : null
   const [handled, setHandled] = useState(() => {
     if (!handledKey) return false
@@ -1186,8 +1149,15 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
     if (!handledKey) return
     try { localStorage.setItem(handledKey, new Date().toISOString()) } catch (e) {}
     setHandled(true)
-    // Also mark read if still unread
-    if (isUnread && onMarkRead && email.id) onMarkRead(email.id)
+    // Write to shared read-state blob to clear badge for all users
+    if (email.id) {
+      fetch('/api/mark-all-booking-emails-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_id: email.booking_id || '', email_ids: [email.id] }),
+      }).catch(() => {})
+      if (onMarkRead && email.id) onMarkRead(email.id)
+    }
   }
   const date = email.date || email.email_date || ''
   const from = email.from || email.email_from || ''
@@ -1396,7 +1366,7 @@ function EmailRow({ email, bookingId, onDelete, readState, onMarkRead, tours, on
                 color: 'var(--green-text)', flexShrink: 0, whiteSpace: 'nowrap',
               }}
               title="Mark as handled — we've responded to this"
-            >Mark handled</button>
+            >Reply sent</button>
           )
         )}
         {!isOutbound && tours && email.id && (
