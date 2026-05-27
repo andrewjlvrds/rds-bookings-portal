@@ -234,28 +234,56 @@ export default async function(req, res) {
     var t0 = Date.now();
     var refetch = req.query && req.query.refetch === 'true';
     var labelFilter = (req.body && req.body.label) || (req.query && req.query.label) || null;
-    // isCron: true when called by the Vercel scheduler (no body, no refetch flag).
-    // Cron runs every 10 min so only needs a 20-minute window — keeps message
-    // volume tiny and avoids timeout. Manual refresh uses a wider window to
-    // recover emails that were missed during downtime or processing failures.
-    // source='cron' is set by the Vercel scheduler via the cron config.
-    // Manual calls (Check replies button, Refresh) don't set source.
     var source = (req.query && req.query.source) || (req.body && req.body.source) || 'manual';
     var isCron = source === 'cron';
-    var token = await getGmailToken();
 
-    // Cron runs every 10 min — 20m window keeps volume tiny and avoids timeout.
-    // Manual "Check replies" uses 3d to catch emails missed during downtime.
-    // Refetch (lodge-level Refresh) uses 14d and bypasses dedup.
+    // Cron runs every 10 min — 20m window keeps volume tiny.
+    // Manual "Check replies" uses 3d. Refetch (lodge Refresh) uses 14d + bypass dedup.
     var searchWindow = refetch ? '14d' : isCron ? '20m' : '3d';
     var query = labelFilter
       ? 'label:' + labelFilter.replace(/[/\s]/g, '-').toLowerCase() + ' -from:bookings@ridedownsouth.com'
       : 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
+
+    // Run Gmail token fetch, Zoho bookings, and Zoho lodges in parallel to
+    // minimise setup time — previously these were sequential and consumed
+    // 20-30s before the first message was processed.
+    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Check_out_Date,Nights,Lodge,Tour,id,Deposit_Amount,Second_Payment_Amount,Third_Payment_Amount,Fourth_Payment_Amount,Deposit_Paid_Date,nd_Payment_Paid_Date,rd_Payment_Paid_Date,th_Payment_Paid_Date,Sgl_Twin_Dbl_Guides,Guide_Rooms,Meals';
+
+    var [token, zohoInit] = await Promise.all([
+      getGmailToken(),
+      (async () => {
+        var allBk = [];
+        var pg = 1, hasMore = true;
+        while (hasMore && pg <= 5) {
+          var r = await zohoApi('GET', 'Lodge_Bookings?fields=' + bookingFields + '&per_page=200&page=' + pg);
+          var d = (r && r.data) || [];
+          allBk = allBk.concat(d);
+          hasMore = r && r.info && r.info.more_records;
+          pg++;
+        }
+        var lodgeRes = await zohoApi('GET', 'Lodges?fields=Name,Email,Preferred_Email,Email_Reservations_2,Secondary_Email,Email_4,Email_Accounts&per_page=200');
+        var lodges = (lodgeRes && lodgeRes.data) || [];
+        return { allBookings: allBk, allLodges: lodges };
+      })(),
+    ]);
+
+    var allBookings = zohoInit.allBookings;
+    var allLodges = zohoInit.allLodges;
+    console.log('Setup: token + Zoho fetched in', Date.now() - t0, 'ms —', allBookings.length, 'bookings,', allLodges.length, 'lodges');
+
+    // Build lookup maps
+    var maps = buildMatchMaps(allBookings);
+    var refMap = maps.refMap;
+    var nameMap = maps.nameMap;
+    var emailMap = buildEmailMap(allLodges);
+    console.log('Built emailMap with', Object.keys(emailMap).length, 'email addresses (' + allLodges.length + ' lodges)');
+
+    // Now fetch Gmail message list
     var messages = [];
     var pageToken = null;
-    var pageLimit = 10; // max 10 pages × 100 = 1000 messages per run
+    var pageLimit = 10;
     for (var pg = 0; pg < pageLimit; pg++) {
-      if (Date.now() - t0 > 40000) break; // hard deadline — leave headroom for processing
+      if (Date.now() - t0 > 40000) break;
       var pageUrl = 'messages?q=' + encodeURIComponent(query) + '&maxResults=100';
       if (pageToken) pageUrl += '&pageToken=' + pageToken;
       var listResult = await gmailApi(token, pageUrl);
@@ -264,41 +292,11 @@ export default async function(req, res) {
       pageToken = listResult.nextPageToken || null;
       if (!pageToken || pageMsgs.length === 0) break;
     }
+    console.log('Gmail list: found', messages.length, 'messages in', Date.now() - t0, 'ms');
 
     if (messages.length === 0) {
       return res.status(200).json({ success: true, checked: 0, stored: 0, message: 'No new messages' });
     }
-
-    // Fetch all bookings with Enquiry Sent or later status to match against.
-    // Paginate — per_page=200 is Zoho's max, and we may have more than 200
-    // total bookings so the first page alone isn't safe.
-    var bookingFields = 'Name,Lodge_Name,RDS_Reference,Status,Check_in_Date,Check_out_Date,Nights,Lodge,Tour,id,Deposit_Amount,Second_Payment_Amount,Third_Payment_Amount,Fourth_Payment_Amount,Deposit_Paid_Date,nd_Payment_Paid_Date,rd_Payment_Paid_Date,th_Payment_Paid_Date,Sgl_Twin_Dbl_Guides,Guide_Rooms,Meals';
-    var allBookings = [];
-    var bkPage = 1;
-    var bkHasMore = true;
-    while (bkHasMore && bkPage <= 5) {
-      var bkResult = await zohoApi('GET',
-        'Lodge_Bookings?fields=' + bookingFields + '&per_page=200&page=' + bkPage
-      );
-      var bkData = (bkResult && bkResult.data) || [];
-      allBookings = allBookings.concat(bkData);
-      bkHasMore = bkResult && bkResult.info && bkResult.info.more_records;
-      bkPage++;
-    }
-
-    // Build lookup maps
-    var maps = buildMatchMaps(allBookings);
-    var refMap = maps.refMap;
-    var nameMap = maps.nameMap;
-
-    // Fetch lodges for sender-email matching (Tier 4) and Perfectstay routing.
-    var emailMap = {};
-    var allLodges = [];
-    try {
-      var lodgeResult = await zohoApi('GET', 'Lodges?fields=Name,Email,Preferred_Email,Email_Reservations_2,Secondary_Email,Email_4,Email_Accounts&per_page=200');
-      allLodges = (lodgeResult && lodgeResult.data) || [];
-      emailMap = buildEmailMap(allLodges);
-      console.log('Built emailMap with', Object.keys(emailMap).length, 'email addresses (' + allLodges.length + ' lodges)');
     } catch (lodgeErr) {
       console.error('Failed to fetch lodges for email matching:', lodgeErr.message);
     }
