@@ -779,6 +779,7 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
       const POST_ENQUIRY = new Set([
         'Enquiry Sent', 'Availability Confirmed', 'Confirmed',
         'Proforma Received', 'Deposit Paid', 'Balance Paid',
+        'Date Change Required', 'Date Change Requested',
       ])
       const dateChangeBookings = updateBookings
         .filter(u => u.fields.Check_in_Date && POST_ENQUIRY.has(getStatus(u.booking)))
@@ -790,6 +791,22 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
           newCheckOut: u.fields.Check_out_Date || '',
           night:       u.night,
         }))
+
+      // Set Date Change Required status on all bookings with a shifted date
+      if (dateChangeBookings.length) {
+        const statusRecords = dateChangeBookings.map(dc => ({
+          id: dc.booking.id || dc.booking['Record Id'],
+          Status: 'Date Change Required',
+        })).filter(r => r.id)
+        if (statusRecords.length) {
+          // Fire-and-forget — don't block the flow if this fails
+          fetch('/api/update-bookings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ records: statusRecords }),
+          }).catch(() => {})
+        }
+      }
 
       // Return the Zoho tour id so the parent can switch activeTour to the new record
       if (onSave) onSave({ ...(result || {}), tour_id: tourId, was_local: isLocalTour, cancelled: cancelledCount, updated: updatedCount, dateChangeBookings })
@@ -1751,7 +1768,7 @@ ${nights.map(n => {
                       }}>+</button>
                       {(() => {
                         // Show Cancel button if this night has an enquired+ Zoho booking
-                        const POST_ENQUIRY = new Set(['Enquiry Sent','Availability Confirmed','Confirmed','Proforma Received','Deposit Paid','Balance Paid'])
+                        const POST_ENQUIRY = new Set(['Enquiry Sent','Availability Confirmed','Confirmed','Proforma Received','Deposit Paid','Balance Paid','Date Change Required','Date Change Requested'])
                         const bk = n.zoho_id ? activeBookings.find(b => String(b.id || b['Record Id']) === String(n.zoho_id)) : null
                         if (bk && POST_ENQUIRY.has(getStatus(bk))) {
                           return (

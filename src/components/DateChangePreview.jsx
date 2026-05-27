@@ -111,6 +111,15 @@ export default function DateChangePreview({ tour, lodges, dateChangeBookings, on
         const d = await res.json()
         if (d.email_sent) {
           setSent(prev => ({ ...prev, [card.i]: d.update_errors?.length ? 'sent-warn' : 'sent' }))
+          // Update status to Date Change Requested
+          const bookingId = card.booking.id || card.booking['Record Id']
+          if (bookingId) {
+            fetch('/api/update-bookings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ records: [{ id: bookingId, Status: 'Date Change Requested' }] }),
+            }).catch(() => {})
+          }
         } else {
           setSent(prev => ({ ...prev, [card.i]: 'error: ' + (d.email_error || 'Send failed') }))
         }

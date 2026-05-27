@@ -53,6 +53,8 @@ const STATUS_MAP = {
   'Availability Confirmed': { cls: 'badge-confirmed', label: 'Available' },
   'Proforma Received': { cls: 'badge-confirmed', label: 'Proforma received' },
   'Enquiry Sent': { cls: 'badge-enquired', label: 'Enquired' },
+  'Date Change Required': { cls: 'badge-waiting', label: 'Date change required' },
+  'Date Change Requested': { cls: 'badge-waiting', label: 'Date change sent' },
   'Ready to send': { cls: 'badge-ready', label: 'Ready to send' },
   'Ready to Send': { cls: 'badge-ready', label: 'Ready to send' },
   'Not Started': { cls: 'badge-draft', label: 'Not started' },
