@@ -563,21 +563,30 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
       }
     })
 
-    // Zoho bookings with no matching draft row → cancel
+    // Zoho bookings with no matching draft row.
+    // Split into two buckets:
+    //   intentional  — id is in removedNights (user clicked Cancel) → cancel on push
+    //   orphan       — id not in draft and not in removedNights → surface to Helen, don't auto-cancel
+    const removedIds = new Set(removedNights.map(r => String(r.night.zoho_id || '')).filter(Boolean))
+    const toOrphan = []
     zohoBookings.forEach(bk => {
       const id = String(bk.id || bk['Record Id'] || '')
       if (!id) return
-      if (!draftIdsReferenced.has(id)) {
+      if (draftIdsReferenced.has(id)) return
+      if (removedIds.has(id)) {
         toCancel.push({ booking: bk, reason: 'removed' })
+      } else {
+        toOrphan.push({ booking: bk, reason: 'orphan' })
       }
     })
 
-    return { toCreate, toCancel, toUpdate, unchanged }
+    return { toCreate, toCancel, toUpdate, unchanged, toOrphan }
   })()
 
   const newNights = syncPlan.toCreate.map(c => c.night)
   const cancelBookings = syncPlan.toCancel
   const updateBookings = syncPlan.toUpdate
+  const orphanBookings = syncPlan.toOrphan || []
   const hasChanges = newNights.length > 0 || cancelBookings.length > 0 || updateBookings.length > 0
 
   const buildConfirmMessage = () => {
@@ -609,6 +618,17 @@ export default function ItineraryEditor({ tour, lodges, onBack, onSave, onUpdate
         const tag = c.reason === 'lodge_changed' ? ' (lodge changed)' : ' (night removed)'
         lines.push('  − ' + date + ' — ' + lodge + tag)
       })
+    }
+    if (orphanBookings.length) {
+      if (lines.length) lines.push('')
+      lines.push('⚠ ' + orphanBookings.length + ' Zoho booking' + (orphanBookings.length !== 1 ? 's' : '') + ' not in draft (will NOT be cancelled automatically):')
+      orphanBookings.forEach(o => {
+        const bk = o.booking
+        const lodge = (bk.Lodge_Name && typeof bk.Lodge_Name === 'object' ? bk.Lodge_Name.name : bk.Lodge_Name) || (bk.Name || '').split(' - ')[0] || 'Unknown'
+        const date = bk.Check_in_Date || bk['Check-in'] || ''
+        lines.push('  ? ' + date + ' — ' + lodge + ' (' + (bk.Status || 'unknown status') + ')')
+      })
+      lines.push('  Use the Cancel button on those rows if they need to be cancelled.')
     }
     lines.push('')
     lines.push(syncPlan.unchanged.length + ' unchanged.')
@@ -1840,6 +1860,62 @@ ${nights.map(n => {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Orphan Zoho bookings — active in Zoho but not matched to any draft night */}
+      {orphanBookings.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6,
+            fontSize: 11, fontWeight: 600, color: 'var(--amber-text, #92400E)',
+          }}>
+            <span>⚠ In Zoho but not in draft ({orphanBookings.length})</span>
+            <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>
+              — these bookings won't be touched unless you click Cancel
+            </span>
+          </div>
+          <div style={{
+            border: '0.5px solid var(--amber-border, #FCD34D)',
+            borderRadius: 'var(--radius-md)',
+            overflow: 'hidden',
+          }}>
+            {orphanBookings.map((entry, oi) => {
+              const bk = entry.booking
+              const rawLodge = bk.Lodge_Name || bk.Name || ''
+              const lodgeName = (typeof rawLodge === 'object' ? rawLodge.name || '' : rawLodge).split(' - ')[0]
+              const status = getStatus(bk)
+              const checkIn = bk.Check_in_Date || bk['Check-in'] || ''
+              const checkOut = bk.Check_out_Date || bk['Check-out'] || ''
+              return (
+                <div key={oi} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '9px 14px',
+                  borderBottom: oi < orphanBookings.length - 1 ? '0.5px solid var(--amber-border, #FCD34D)' : 'none',
+                  background: 'var(--amber-bg, #FFFBEB)',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                      {lodgeName || 'Unknown lodge'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 8 }}>
+                      <span>{checkIn}{checkOut ? ' – ' + checkOut : ''}</span>
+                      <span style={{ color: 'var(--amber-text, #92400E)', fontWeight: 500 }}>{status}</span>
+                      {bk.Lodge_Reference && <span>Ref: {bk.Lodge_Reference}</span>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setRemovedNights(prev => [...prev, { night: { zoho_id: bk.id || bk['Record Id'], lodge: lodgeName, day: '?', date: checkIn }, booking: bk }])}
+                    style={{
+                      fontSize: 11, padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+                      border: '0.5px solid var(--red-border, #FCA5A5)',
+                      background: 'var(--bg-primary)', color: 'var(--red-text)',
+                    }}
+                  >Cancel this</button>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
