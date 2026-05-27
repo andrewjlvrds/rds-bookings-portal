@@ -3,6 +3,7 @@ import { storeEmail, isEmailStored, lookupSentIndex, lookupSentIndexByThreadId, 
 import { zohoApi } from './_zoho.js';
 import { parseEmail, extractionToZohoFields } from './_ai-parse.js';
 import { tagReplyReceived } from './_activity-log.js';
+import { list } from '@vercel/blob';
 import { isPerfectstayEmail, routePerfectstayEmail } from './_perfectstay-router.js';
 import {
   extractRdsRef,
@@ -376,10 +377,19 @@ export default async function(req, res) {
                 match = { booking: bk0, method: 'message_id_header', all_booking_ids: idx.booking_ids };
                 tier0Hits++;
                 break;
+              } else {
+                // Sent-index found but booking not in allBookings snapshot —
+                // create a minimal stub so routing still works
+                console.log('Tier 0: sent-index hit for booking', idx.booking_ids[0], 'but not in allBookings — using stub');
+                match = { booking: { id: idx.booking_ids[0] }, method: 'message_id_header_stub', all_booking_ids: idx.booking_ids };
+                tier0Hits++;
+                break;
               }
+            } else if (idx === null) {
+              console.log('Tier 0: no sent-index entry for candidate', candidateIds[ci].substring(0, 40));
             }
           } catch (e) {
-            // Lookup failure is non-fatal — fall through to existing matchers
+            console.log('Tier 0: lookup error for', candidateIds[ci].substring(0, 40), e.message);
           }
         }
 
@@ -507,6 +517,17 @@ export default async function(req, res) {
         }
 
         if (!matchedBooking) {
+          // Dedup: skip if already in unmatched (avoids re-processing every cron run)
+          if (!refetch) {
+            var safeUnmatchedId = msgId.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
+            try {
+              var unmatchedCheck = await list({ prefix: 'emails/unmatched/' + safeUnmatchedId });
+              if (unmatchedCheck.blobs && unmatchedCheck.blobs.length > 0) {
+                skipped++;
+                continue;
+              }
+            } catch(e) { /* non-fatal */ }
+          }
           // Store in unmatched bucket so Helen/Andrew can route it manually.
           // storeEmail() routes to emails/unmatched/ automatically when no
           // booking_id or lodge_id is provided.
