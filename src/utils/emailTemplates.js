@@ -273,14 +273,31 @@ export function followUpNudgeEmail(opts = {}) {
     'Thanks so much\n\n' + replySignature(sender)
 }
 
-// 3. Date or room change request
-export function dateRoomChangeEmail(opts = {}) {
-  const { sender = 'Helen', contactName = '', originalDate = '', roomingSummary = '' } = opts
+// 3a. Date change request
+export function dateChangeEmail(opts = {}) {
+  const { sender = 'Helen', contactName = '', oldDate = '', newDate = '', bookingRef = '' } = opts
+  const refPart = bookingRef ? ' (' + bookingRef + ')' : ''
   return replyGreeting(contactName) + '\n\n' +
-    'I hope you\u2019re well. Would you be able to change our booking of ' + originalDate +
-    ' to the following?\n\n' + roomingSummary + '\n\n' +
+    'I hope you\u2019re well. We\u2019ve had a change to our itinerary and need to move our booking' + refPart +
+    ' from ' + oldDate + ' to ' + newDate + '. Everything else \u2014 room types, meal basis, and group size \u2014 stays the same.\n\n' +
+    'Please could you confirm the new date works on your side.\n\n' +
+    'Kind regards\n\n' + replySignature(sender)
+}
+
+// 3b. Room / rooming change request
+export function roomChangeEmail(opts = {}) {
+  const { sender = 'Helen', contactName = '', date = '', bookingRef = '', roomingSummary = '' } = opts
+  const refPart = bookingRef ? ' (' + bookingRef + ')' : ''
+  return replyGreeting(contactName) + '\n\n' +
+    'I hope you\u2019re well. We\u2019ve had some changes to the rooming for our ' + date + ' booking' + refPart +
+    ' and would like to update it to the following:\n\n' + roomingSummary + '\n\n' +
     'Let me know if that works on your side.\n\n' +
     'Kind regards\n\n' + replySignature(sender)
+}
+
+// 3c. Keep old combined fn for backwards compat
+export function dateRoomChangeEmail(opts = {}) {
+  return dateChangeEmail(opts)
 }
 
 // 4. Adding extra guests to confirmed booking
@@ -428,13 +445,25 @@ export const LODGE_REPLY_TEMPLATES = [
     ],
   },
   {
-    id: 'dateRoomChange',
-    label: 'Date / room change request',
-    fn: dateRoomChangeEmail,
+    id: 'dateChange',
+    label: 'Date change',
+    fn: dateChangeEmail,
     fields: [
       { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
-      { key: 'originalDate', label: 'Original booking date', type: 'text', required: true, autofillFrom: 'date', placeholder: 'e.g. 14 September 2026' },
-      { key: 'roomingSummary', label: 'New room requirements', type: 'rooming', required: true, helpText: 'Plain text, one room group per block. The format helpers expect lines like "8 pax in single rooms" + names below.' },
+      { key: 'oldDate', label: 'Old check-in date', type: 'text', required: true, autofillFrom: 'date', placeholder: 'e.g. 21 March 2027' },
+      { key: 'newDate', label: 'New check-in date', type: 'text', required: true, placeholder: 'e.g. 22 March 2027' },
+      { key: 'bookingRef', label: 'Lodge booking reference', type: 'text', autofillFrom: 'bookingRef', placeholder: 'optional' },
+    ],
+  },
+  {
+    id: 'roomChange',
+    label: 'Room change',
+    fn: roomChangeEmail,
+    fields: [
+      { key: 'contactName', label: 'Contact first name', type: 'text', autofillFrom: 'contactName' },
+      { key: 'date', label: 'Check-in date', type: 'text', required: true, autofillFrom: 'date', placeholder: 'e.g. 22 March 2027' },
+      { key: 'bookingRef', label: 'Lodge booking reference', type: 'text', autofillFrom: 'bookingRef', placeholder: 'optional' },
+      { key: 'roomingSummary', label: 'New room requirements', type: 'rooming', required: true },
     ],
   },
   {
