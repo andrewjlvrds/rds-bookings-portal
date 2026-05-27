@@ -241,7 +241,7 @@ export default async function(req, res) {
     // Manual "Check replies" uses 3d. Refetch (lodge Refresh) uses 14d + bypass dedup.
     var searchWindow = refetch ? '14d' : isCron ? '20m' : '3d';
     var query = labelFilter
-      ? 'label:' + labelFilter.replace(/\s+/g, '-') + ' -from:bookings@ridedownsouth.com'
+      ? 'label:' + labelFilter.replace(/[/\s]+/g, '-').toLowerCase() + ' -from:bookings@ridedownsouth.com'
       : 'newer_than:' + searchWindow + ' -from:bookings@ridedownsouth.com';
 
     // Run Gmail token fetch, Zoho bookings, and Zoho lodges in parallel to
