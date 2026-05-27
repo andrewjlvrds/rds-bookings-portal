@@ -276,7 +276,9 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
             </button>
           )}
           <button
+            disabled={polling}
             onClick={async () => {
+              setPolling(true)
               fetchEmails()
               try {
                 await fetch('/api/reparse-email', {
@@ -287,13 +289,14 @@ export default function LodgeDetail({ booking, tour, lodges, onBack, onRefresh, 
               } catch (e) { console.error('Reparse error:', e) }
               fetchEmails()
               if (onRefresh) onRefresh()
+              setPolling(false)
             }}
             style={{
               background: 'none', border: '0.5px solid var(--border-default)',
-              borderRadius: 4, fontSize: 11, padding: '3px 10px', cursor: 'pointer',
-              color: 'var(--text-muted)',
+              borderRadius: 4, fontSize: 11, padding: '3px 10px', cursor: polling ? 'default' : 'pointer',
+              color: 'var(--text-muted)', opacity: polling ? 0.5 : 1,
             }}
-          >↻ Refresh</button>
+          >{polling ? 'Refreshing...' : '↻ Refresh'}</button>
         </div>
       </div>
 
