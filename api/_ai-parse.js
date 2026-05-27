@@ -260,8 +260,8 @@ export async function parseEmail(emailBody, bookingContext) {
 // Financial amount fields that must NEVER be silently overwritten.
 // If a value already exists in Zoho, the parsed value is demoted to flagged
 // (shown in the UI for Helen to act on) rather than written automatically.
-// Total_Amount is always flagged regardless — a second invoice may be additive,
-// a correction, or wrong; Helen must decide.
+
+
 var PROTECTED_AMOUNT_FIELDS = new Set([
   'Total_Amount',
   'Deposit_Amount',
@@ -342,14 +342,14 @@ export function extractionToZohoFields(extraction, existingZohoValues) {
       var isProtected = PROTECTED_AMOUNT_FIELDS.has(zohoField);
       var existingVal = existing[zohoField];
       var existingIsSet = existingVal !== null && existingVal !== undefined && existingVal !== '' && existingVal !== 0;
-      if (isProtected && (zohoField === 'Total_Amount' || existingIsSet)) {
+      if (isProtected && existingIsSet) {
         // Demote to flagged — Helen will see the parsed value but it won't be written
         flagged[key] = {
           value: value,
           confidence: field.confidence,
           zoho_field: zohoField,
-          existing_value: existingIsSet ? existingVal : null,
-          reason: zohoField === 'Total_Amount' ? 'total_amount_always_manual' : 'field_already_set',
+          existing_value: existingVal,
+          reason: 'field_already_set',
         };
         continue;
       }
