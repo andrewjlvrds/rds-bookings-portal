@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/poll-gmail",
+      "path": "/api/poll-gmail?source=cron",
       "schedule": "*/10 * * * *"
     },
     {

@@ -237,9 +237,15 @@ export default async function(req, res) {
     // Cron runs every 10 min so only needs a 20-minute window — keeps message
     // volume tiny and avoids timeout. Manual refresh uses a wider window to
     // recover emails that were missed during downtime or processing failures.
-    var isCron = !refetch && !labelFilter && !(req.body && Object.keys(req.body || {}).length);
+    // source='cron' is set by the Vercel scheduler via the cron config.
+    // Manual calls (Check replies button, Refresh) don't set source.
+    var source = (req.query && req.query.source) || (req.body && req.body.source) || 'manual';
+    var isCron = source === 'cron';
     var token = await getGmailToken();
 
+    // Cron runs every 10 min — 20m window keeps volume tiny and avoids timeout.
+    // Manual "Check replies" uses 3d to catch emails missed during downtime.
+    // Refetch (lodge-level Refresh) uses 14d and bypasses dedup.
     var searchWindow = refetch ? '14d' : isCron ? '20m' : '3d';
     var query = labelFilter
       ? 'label:' + labelFilter.replace(/[/\s]/g, '-').toLowerCase() + ' -from:bookings@ridedownsouth.com'
