@@ -54,6 +54,9 @@ class ErrorBoundary extends Component {
 export default function App() {
   const [tours, setTours] = useState([])
   const [allBookings, setAllBookings] = useState([])
+  // Selected lodge in the Lodges drill-down — held at App level so it
+  // survives navigating into a booking and back.
+  const [lodgesSelectedId, setLodgesSelectedId] = useState(null)
   const [lodges, setLodges] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -283,6 +286,7 @@ export default function App() {
   const handleSelectBooking = (bk, fromTab, opts) => {
     setActiveBooking(bk)
     if (fromTab) setReturnToTourTab(fromTab)
+    if (opts && opts.tour) setActiveTour(opts.tour)
     if (opts && opts.origin) setLodgeDetailOrigin(opts.origin)
     else setLodgeDetailOrigin('tour-panel')
     setFocusEmailId(opts && opts.focusEmailId ? opts.focusEmailId : null)
@@ -366,8 +370,13 @@ export default function App() {
     }
 
     if (activeView === 'lodge-detail' && activeBooking) {
-      const backToInbox = lodgeDetailOrigin === 'inbox'
-      const backLabel = backToInbox ? 'Back to inbox' : ('Back to ' + (activeTour ? activeTour.name : 'itinerary'))
+      const origin = lodgeDetailOrigin
+      const backView = origin === 'inbox' ? 'inbox' : origin === 'lodges' ? 'lodges' : 'tour-panel'
+      const backLabel = origin === 'inbox'
+        ? 'Back to inbox'
+        : origin === 'lodges'
+        ? 'Back to lodge'
+        : ('Back to ' + (activeTour ? activeTour.name : 'itinerary'))
       return (
         <LodgeDetail
           booking={activeBooking}
@@ -377,7 +386,7 @@ export default function App() {
           onBack={() => {
             setActiveBooking(null)
             setFocusEmailId(null)
-            setActiveView(backToInbox ? 'inbox' : 'tour-panel')
+            setActiveView(backView)
           }}
           backLabel={backLabel}
           focusEmailId={focusEmailId}
@@ -446,7 +455,17 @@ export default function App() {
     }
 
     if (activeView === 'lodges') {
-      return <Lodges lodges={lodges} onRefresh={() => refreshData()} />
+      return (
+        <Lodges
+          lodges={lodges}
+          allBookings={allBookings}
+          tours={tours}
+          onSelectBooking={handleSelectBooking}
+          selectedId={lodgesSelectedId}
+          onSelectId={setLodgesSelectedId}
+          onRefresh={() => refreshData()}
+        />
+      )
     }
 
     if (activeView === 'transfers') {

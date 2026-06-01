@@ -1,6 +1,34 @@
 import React, { useState, useMemo } from 'react'
+import LodgeView, { bookingsForLodge } from './LodgeView'
+import { isActiveBooking } from '../utils/helpers'
 
-export default function Lodges({ lodges, onRefresh }) {
+export default function Lodges({ lodges, allBookings, tours, onSelectBooking, selectedId, onSelectId, onRefresh }) {
+  // Active-booking count per lodge id, for the directory rows
+  const bookingCounts = useMemo(() => {
+    const counts = {}
+    ;(lodges || []).forEach(l => {
+      counts[l.id] = bookingsForLodge(allBookings, l).filter(isActiveBooking).length
+    })
+    return counts
+  }, [lodges, allBookings])
+
+  // Drill-down: a lodge is selected
+  const selectedLodge = useMemo(
+    () => (selectedId ? (lodges || []).find(l => l.id === selectedId) : null),
+    [selectedId, lodges]
+  )
+  if (selectedLodge) {
+    return (
+      <LodgeView
+        lodge={selectedLodge}
+        allBookings={allBookings}
+        tours={tours}
+        onSelectBooking={onSelectBooking}
+        onBack={() => onSelectId && onSelectId(null)}
+      />
+    )
+  }
+
   const [search, setSearch] = useState('')
   const [expandedCountry, setExpandedCountry] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -194,21 +222,34 @@ export default function Lodges({ lodges, onRefresh }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {lodgeList.map(l => (
-                      <tr key={l.id} style={{ borderBottom: '0.5px solid var(--border-light)' }}>
+                    {lodgeList.map(l => {
+                      const count = bookingCounts[l.id] || 0
+                      return (
+                      <tr
+                        key={l.id}
+                        onClick={() => onSelectId && onSelectId(l.id)}
+                        style={{ borderBottom: '0.5px solid var(--border-light)', cursor: onSelectId ? 'pointer' : 'default' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-secondary)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                      >
                         <td style={{ padding: '8px 14px', fontSize: 13, fontWeight: 500 }}>
                           {l.name}
+                          {count > 0 && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8, fontWeight: 400 }}>
+                              {count} booking{count !== 1 ? 's' : ''}
+                            </span>
+                          )}
                           {l.status && l.status !== 'Active' && (
                             <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>{l.status}</span>
                           )}
                         </td>
                         <td style={{ padding: '8px 14px', fontSize: 12 }}>
                           {l.email ? (
-                            <a href={'mailto:' + l.email} style={{ color: 'var(--blue-text)' }}>{l.email}</a>
+                            <a href={'mailto:' + l.email} onClick={e => e.stopPropagation()} style={{ color: 'var(--blue-text)' }}>{l.email}</a>
                           ) : '—'}
                           {l.email2 && (
                             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              <a href={'mailto:' + l.email2} style={{ color: 'var(--text-muted)' }}>{l.email2}</a>
+                              <a href={'mailto:' + l.email2} onClick={e => e.stopPropagation()} style={{ color: 'var(--text-muted)' }}>{l.email2}</a>
                             </div>
                           )}
                         </td>
@@ -217,7 +258,7 @@ export default function Lodges({ lodges, onRefresh }) {
                         <td style={{ padding: '8px 14px', fontSize: 12, color: 'var(--text-muted)' }}>{l.sto_discount || '—'}</td>
                         <td style={{ padding: '8px 14px', fontSize: 12, color: 'var(--text-muted)' }}>{l.guide_room_policy || '—'}</td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
