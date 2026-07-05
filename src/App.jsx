@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Component } from 'react'
 import Layout from './components/Layout'
 import Dashboard from './components/Dashboard'
+import CorrespondenceHome from './components/CorrespondenceHome'
 import ItineraryEditor from './components/ItineraryEditor'
 import EnquiryPreview from './components/EnquiryPreview'
 import DateChangePreview from './components/DateChangePreview'
@@ -62,7 +63,7 @@ export default function App() {
   const [error, setError] = useState(null)
 
   const [activeTour, setActiveTour] = useState(null)
-  const [activeView, setActiveView] = useState('lodge-dashboard')
+  const [activeView, setActiveView] = useState('correspondence')
   const [pendingDateChanges, setPendingDateChanges] = useState(null)
   const [activeBooking, setActiveBooking] = useState(null)
   // When a user opens LodgeDetail from inside the TourPanel, remember which
@@ -436,6 +437,16 @@ export default function App() {
 
     if (activeView === 'payments') {
       return <Payments allBookings={allBookings} tours={tours} onSelectBooking={handleSelectBooking} onRefresh={() => refreshData()} />
+    }
+
+    if (activeView === 'correspondence') {
+      return (
+        <CorrespondenceHome
+          tours={tours}
+          allBookings={allBookings}
+          onSelectBooking={handleSelectBooking}
+        />
+      )
     }
 
     if (activeView === 'lodge-dashboard') {

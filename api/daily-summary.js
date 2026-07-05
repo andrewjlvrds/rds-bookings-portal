@@ -54,6 +54,8 @@ export default async function handler(req, res) {
 
   try {
     const days = Math.min(parseInt(req.query.days, 10) || 7, 30);
+    const includeEmails = req.query.include === 'emails';
+    const emailLists = { came_in: [], auto_filed: [], manual: [], needs_routing: [] };
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
     const [bookingBlobs, unmatchedBlobs, tourBucketBlobs] = await Promise.all([
@@ -97,7 +99,20 @@ export default async function handler(req, res) {
         const k = dayKey(blob.uploadedAt);
         if (!perDay[k]) continue;
         perDay[k].inbound++;
-        perDay[k][classify(rec.match_method)]++;
+        const cls = classify(rec.match_method);
+        perDay[k][cls]++;
+        if (includeEmails) {
+          const light = {
+            id: rec.id,
+            subject: rec.subject || '',
+            from: rec.from || '',
+            date: rec.date || blob.uploadedAt,
+            booking_id: rec.booking_id || null,
+            match_method: rec.match_method || null,
+          };
+          emailLists.came_in.push(light);
+          emailLists[cls === 'manual' ? 'manual' : 'auto_filed'].push(light);
+        }
       }
     }
 
@@ -123,6 +138,16 @@ export default async function handler(req, res) {
           if (!inbound || readState[rec.id]) continue;
           n++;
           if (blob.uploadedAt && new Date(blob.uploadedAt).getTime() >= cutoff) recent++;
+          if (includeEmails) {
+            emailLists.needs_routing.push({
+              id: rec.id,
+              subject: rec.subject || '',
+              from: rec.from || '',
+              date: rec.date || blob.uploadedAt,
+              match_hints: rec.match_hints || null,
+              blob_path: blob.pathname,
+            });
+          }
         }
       }
       return { n, recent };
@@ -156,6 +181,8 @@ export default async function handler(req, res) {
         tour_bucket: tbC.n,
       },
       per_day: daysArr.map(k => ({ day: k, ...perDay[k] })),
+      emails: includeEmails ? Object.fromEntries(Object.entries(emailLists).map(([k, arr]) => [k,
+        arr.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 200)])) : undefined,
       scanned: { in_window: recent.length, fetched },
     });
   } catch (err) {

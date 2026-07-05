@@ -41,11 +41,13 @@ const LODGE_VIEWS = ['lodge-dashboard', 'lodge-detail', 'payments', 'lodges', 't
 const GUEST_VIEWS = ['guest-dashboard', 'guest-tour', 'guest-detail', 'transfers', 'guest-excursions', 'guest-accommodation', 'guest-payments', 'guest-bikes']
 
 function getSection(activeView) {
+  if (activeView === 'correspondence') return 'correspondence'
   if (GUEST_VIEWS.includes(activeView)) return 'guests'
   return 'lodges'
 }
 
 const TABS = [
+  { id: 'correspondence', label: 'Correspondence', defaultView: 'correspondence' },
   { id: 'lodges', label: 'Lodge bookings', defaultView: 'lodge-dashboard' },
   { id: 'guests', label: 'Guest bookings', defaultView: 'guest-dashboard' },
 ]
@@ -69,7 +71,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
         background: 'var(--bg-primary)', flexShrink: 0,
       }}>
         <span
-          onClick={() => { onSelectTour(null); onSelectView('lodge-dashboard') }}
+          onClick={() => { onSelectTour(null); onSelectView('correspondence') }}
           style={{
             fontSize: 15, fontWeight: 500, padding: '12px 12px 12px 0',
             color: 'var(--text-primary)', letterSpacing: -0.3,
@@ -117,7 +119,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
 
       {/* ═══ SIDEBAR + MAIN ═══ */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <Sidebar
+        {currentSection !== 'correspondence' && <Sidebar
           section={currentSection}
           tours={tours}
           activeTour={activeTour}
@@ -128,7 +130,7 @@ export default function Layout({ tours, activeTour, onSelectTour, activeView, on
           inboxStats={inboxStats}
           unreadCounts={unreadCounts}
           flagCounts={flagCounts}
-        />
+        />}
         <main style={{ flex: 1, padding: '20px 24px', overflow: 'auto', minWidth: 0, boxSizing: 'border-box' }}>
           {children}
         </main>
