@@ -139,6 +139,13 @@ export default async function handler(req, res) {
           n++;
           if (blob.uploadedAt && new Date(blob.uploadedAt).getTime() >= cutoff) recent++;
           if (includeEmails) {
+            if (blob.uploadedAt && new Date(blob.uploadedAt).getTime() >= cutoff) {
+              emailLists.came_in.push({
+                id: rec.id, subject: rec.subject || '', from: rec.from || '',
+                date: rec.date || blob.uploadedAt, booking_id: null,
+                match_method: 'needs_routing',
+              });
+            }
             emailLists.needs_routing.push({
               id: rec.id,
               subject: rec.subject || '',
