@@ -318,7 +318,7 @@ function GuestDetail({ guest: g, onBack }) {
         </div>
         <div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>Transfers</div>
-          <div style={{ fontSize: 13, whiteSpace: 'pre-line' }}>{[g.capey_arrival && 'Capey arrival: ' + g.capey_arrival, g.capey_departure && 'Capey departure: ' + g.capey_departure, g.capey_home && 'Capey home: ' + g.capey_home, g.transfer_hotel && 'Hotel: ' + g.transfer_hotel, g.additional_transfers && 'Other: ' + g.additional_transfers].filter(Boolean).join('\n') || '—'}</div>
+          <div style={{ fontSize: 13, whiteSpace: 'pre-line' }}>{[g.capey_arrival && 'Capey arrival requested', g.capey_departure && 'Capey departure requested', g.capey_home && 'Capey home leg requested', g.transfer_hotel && 'Hotel: ' + g.transfer_hotel, g.additional_transfers && 'Other: ' + g.additional_transfers].filter(Boolean).join('\n') || '—'}</div>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '0.5px solid var(--border-default)' }}>
