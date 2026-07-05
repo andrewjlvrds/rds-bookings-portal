@@ -1,10 +1,52 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { fmtDate, fmtDateFull, fmtCurrency, getStatusBadge, isConfirmed, isActiveBooking, today, daysBetween, getTourName, getStatus } from '../utils/helpers'
 import { categorizeTours } from './Layout'
 
+function FlowSummary({ onSelectView }) {
+  const [data, setData] = useState(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    fetch('/api/daily-summary?days=7')
+      .then(r => r.json())
+      .then(d => { if (d.success) setData(d); else setFailed(true) })
+      .catch(() => setFailed(true))
+  }, [])
+  if (failed) return null
+  const t = data ? data.totals : null
+  const q = data ? data.queues : null
+  const cell = (label, value, color, onClick) => (
+    <div onClick={onClick} style={{ flex: 1, background: 'var(--surface, #fff)', border: '1px solid var(--border-color, #E5E5E5)', borderRadius: 10, padding: '14px 16px', cursor: onClick ? 'pointer' : 'default' }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 600, color: color || 'var(--text-primary, #222)' }}>{value == null ? '—' : value}</div>
+    </div>
+  )
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>Correspondence — last 7 days</div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {cell('Came in', t && t.came_in)}
+        {cell('Auto-filed', t && t.auto_filed, '#0F6E56')}
+        {cell('Routed by hand', t && t.manually_routed)}
+        {cell('Needs routing now', q && (q.unmatched + q.tour_bucket), q && (q.unmatched + q.tour_bucket) > 0 ? '#BA7517' : '#0F6E56', () => onSelectView && onSelectView('inbox'))}
+      </div>
+      {data && (
+        <div style={{ display: 'flex', gap: 4, marginTop: 10, alignItems: 'flex-end', height: 42 }}>
+          {data.per_day.map(d => {
+            const max = Math.max(1, ...data.per_day.map(x => x.inbound))
+            return (
+              <div key={d.day} title={d.day + ': ' + d.inbound + ' in, ' + d.auto + ' auto-filed'} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 2 }}>
+                <div style={{ height: Math.max(3, Math.round((d.inbound / max) * 34)), background: d.inbound ? '#9FE1CB' : '#EEE', borderRadius: 3 }} />
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center' }}>{d.day.slice(8)}</div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Dashboard({ tours, allBookings, onSelectTour, onSelectView, onSelectBooking }) {
-  const [showReplies, setShowReplies] = useState(false)
-  const [showAttention, setShowAttention] = useState(false)
   const { newBuild, drafts, yearGroups, years, past } = categorizeTours(tours)
   const now = today()
 
@@ -51,6 +93,7 @@ export default function Dashboard({ tours, allBookings, onSelectTour, onSelectVi
 
   return (
     <div>
+      <FlowSummary onSelectView={onSelectView} />
       {/* Hero */}
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 6 }}>Lodge Bookings</h1>

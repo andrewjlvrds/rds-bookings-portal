@@ -303,6 +303,24 @@ function GuestDetail({ guest: g, onBack }) {
           </div>
         </div>
       </div>
+      <div style={{ background: 'var(--surface, #fff)', border: '1px solid var(--border-default, #E5E5E5)', borderRadius: 10, padding: '14px 16px', marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px 24px' }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>Room</div>
+          <div style={{ fontSize: 13 }}>{g.room_type || '—'}{g.roommate ? ' · with ' + g.roommate : ''}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>Excursions</div>
+          <div style={{ fontSize: 13 }}>{g.excursions || 'None booked'}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>Flights</div>
+          <div style={{ fontSize: 13, whiteSpace: 'pre-line' }}>{[g.arrival_flight && 'In: ' + g.arrival_flight, g.departure_flight && 'Out: ' + g.departure_flight, g.departure_flight_home && 'Home: ' + g.departure_flight_home].filter(Boolean).join('\n') || '—'}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>Transfers</div>
+          <div style={{ fontSize: 13, whiteSpace: 'pre-line' }}>{[g.capey_arrival && 'Capey arrival: ' + g.capey_arrival, g.capey_departure && 'Capey departure: ' + g.capey_departure, g.capey_home && 'Capey home: ' + g.capey_home, g.transfer_hotel && 'Hotel: ' + g.transfer_hotel, g.additional_transfers && 'Other: ' + g.additional_transfers].filter(Boolean).join('\n') || '—'}</div>
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '0.5px solid var(--border-default)' }}>
         {['readiness', 'details', 'logistics', 'correspondence'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}

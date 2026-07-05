@@ -129,3 +129,22 @@ export async function markUnread(emailId) {
   }
   return { removed: emailId };
 }
+
+// Bulk one-shot: merge thousands of ids into the legacy blob in a single
+// put. Only for cutover/backlog drainage endpoints — the per-email
+// tombstone path stays the rule for interactive dismissals.
+export async function markManyReadBulk(emailIds) {
+  const stamp = new Date().toISOString();
+  const legacy = await loadLegacyState();
+  let added = 0;
+  for (const id of emailIds || []) {
+    if (id && !legacy[id]) { legacy[id] = stamp; added++; }
+  }
+  await put(LEGACY_PATH, JSON.stringify(legacy), {
+    access: 'public',
+    contentType: 'application/json',
+    addRandomSuffix: false,
+    allowOverwrite: true,
+  });
+  return { added, total: Object.keys(legacy).length };
+}

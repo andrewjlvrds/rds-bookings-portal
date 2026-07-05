@@ -1,5 +1,5 @@
 import { list } from '@vercel/blob';
-import { loadReadState, markManyRead } from './_read-state.js';
+import { loadReadState, markManyRead, markManyReadBulk } from './_read-state.js';
 
 /*
  * /api/mark-all-booking-emails-read
@@ -93,7 +93,7 @@ export default async function handler(req, res) {
     const newIds = ids.filter(id => !existing[id]);
 
     if (!dryRun && newIds.length > 0) {
-      await markManyRead(newIds);
+      await markManyReadBulk(newIds);
     }
 
     return res.status(200).json({
