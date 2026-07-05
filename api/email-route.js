@@ -1,7 +1,15 @@
 import { put, del, list } from '@vercel/blob';
 import { reassignEmailLinks } from './_activity-log.js';
 import { zohoApi } from './_zoho.js';
-import { getGmailToken, gmailApi } from './_gmail.js';
+import { getGmailToken, gmailApi, getOrCreateLabel, tourLabelName } from './_gmail.js';
+
+// A label counts as ours (safe to strip on reroute) when it lives under the
+// tour tree: 'INBOX/...' nested label or a tour-shaped top-level label.
+function l_isCustomTourLabel(name) {
+  if (!name) return false;
+  if (name.startsWith('INBOX/')) return true;
+  return /\//.test(name) && !name.startsWith('CATEGORY_') && !['CHAT','SENT','SPAM','TRASH','DRAFT','STARRED','UNREAD','IMPORTANT'].includes(name);
+}
 import { safeMessageIdKey, normalizeMessageId } from './_email-store.js';
 
 /*
@@ -395,6 +403,7 @@ export default async function handler(req, res) {
       }
     }
 
+    let routedBooking = null;
     // 6. Auto-add sender email to lodge record if not already registered.
     // When Helen manually routes an email, we learn which lodge it came from.
     // Add the sender address to Email_Reservations_2 so future emails auto-match.
@@ -406,8 +415,9 @@ export default async function handler(req, res) {
 
       if (senderAddr && !senderAddr.includes('ridedownsouth.com')) {
         // Find the booking to get the lodge ID
-        const bkResult = await zohoApi('GET', 'Lodge_Bookings/' + bookingId + '?fields=id,Lodge,Lodge_Name');
+        const bkResult = await zohoApi('GET', 'Lodge_Bookings/' + bookingId + '?fields=id,Lodge,Lodge_Name,Tour,Name');
         const lodgeId = bkResult?.data?.Lodge?.id;
+        routedBooking = bkResult?.data || null;
 
         if (lodgeId) {
           // Fetch lodge record to check existing emails
@@ -444,6 +454,63 @@ export default async function handler(req, res) {
       console.error('email-route: auto-add sender email failed:', emailErr.message);
     }
 
+
+    // 7. Gmail label sync — keep the Gmail folder in step with the reroute.
+    // Applies the destination booking's tour/lodge label to the message and
+    // strips any other custom INBOX/ labels (the misfiled folder). Without
+    // this, the portal and Gmail disagree after every manual route (Helen's
+    // Chipata-in-Thornicroft-folder report). Non-fatal on failure.
+    const labelSync = { applied: null, removed: [] };
+    try {
+      if (record.gmail_message_id) {
+        if (!routedBooking) {
+          try {
+            const bk2 = await zohoApi('GET', 'Lodge_Bookings/' + bookingId + '?fields=id,Lodge,Lodge_Name,Tour,Name');
+            routedBooking = bk2?.data || null;
+          } catch (e) { /* label step degraded */ }
+        }
+        const tourNm = routedBooking && routedBooking.Tour &&
+          (typeof routedBooking.Tour === 'object' ? routedBooking.Tour.name : routedBooking.Tour);
+        let lodgeNm = routedBooking && (routedBooking.Lodge_Name || routedBooking.Name) || '';
+        if (typeof lodgeNm === 'object' && lodgeNm !== null) lodgeNm = lodgeNm.name || '';
+        lodgeNm = String(lodgeNm).split(' - ')[0].trim();
+        if (tourNm) {
+          const token3 = await getGmailToken();
+          const newLabelName = tourLabelName(tourNm, lodgeNm);
+          const newLabelId = await getOrCreateLabel(token3, newLabelName);
+          // Current labels on the message -> find wrong custom labels to strip
+          let removeIds = [];
+          try {
+            const liveMin = await gmailApi(token3, 'messages/' + record.gmail_message_id + '?format=minimal');
+            const currentIds = liveMin.labelIds || [];
+            const allLabels = (await gmailApi(token3, 'labels')).labels || [];
+            const byId = {};
+            allLabels.forEach(l => { byId[l.id] = l.name; });
+            removeIds = currentIds.filter(id => {
+              const nm = byId[id] || '';
+              return l_isCustomTourLabel(nm) && id !== newLabelId;
+            });
+          } catch (e) { /* strip step degraded — still apply the new label */ }
+          if (newLabelId) {
+            const mod = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/' + record.gmail_message_id + '/modify', {
+              method: 'POST',
+              headers: { 'Authorization': 'Bearer ' + token3, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ addLabelIds: [newLabelId], removeLabelIds: removeIds }),
+            });
+            if (mod.ok) {
+              labelSync.applied = newLabelName;
+              labelSync.removed = removeIds.length;
+            } else {
+              labelSync.error = 'modify ' + mod.status;
+            }
+          }
+        }
+      }
+    } catch (lsErr) {
+      labelSync.error = lsErr.message;
+      console.error('email-route: label sync failed:', lsErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       mode: isReassignment ? 'reassign' : 'initial_route',
@@ -454,6 +521,7 @@ export default async function handler(req, res) {
       log_entries_updated: logEntriesUpdated,
       sender_email_added: emailAdded,
       anchor_repair: anchorRepair,
+      label_sync: labelSync,
     });
   } catch (err) {
     console.error('email-route error:', err);

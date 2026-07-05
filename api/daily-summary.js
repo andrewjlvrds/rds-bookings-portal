@@ -1,4 +1,5 @@
 import { list } from '@vercel/blob';
+import { loadReadState } from './_read-state.js';
 
 /*
  * /api/daily-summary?days=7
@@ -100,11 +101,38 @@ export default async function handler(req, res) {
       }
     }
 
-    // Queue arrivals inside the window (path counts only)
-    const recentUnmatched = unmatchedBlobs.filter(b =>
-      b.uploadedAt && new Date(b.uploadedAt).getTime() >= cutoff).length;
-    const recentTourBucket = tourBucketBlobs.filter(b =>
-      b.uploadedAt && new Date(b.uploadedAt).getTime() >= cutoff).length;
+    // Queue counts use the inbox's definition — inbound and not dismissed —
+    // so the landing card and the inbox badge always agree.
+    const readState = await loadReadState();
+    async function countActionable(blobs) {
+      let n = 0, recent = 0;
+      for (let i = 0; i < blobs.length; i += 25) {
+        const batch = blobs.slice(i, i + 25);
+        const rows = await Promise.all(batch.map(async (b) => {
+          try {
+            const r = await fetch(b.url, { cache: 'no-store' });
+            if (!r.ok) return null;
+            return { blob: b, rec: await r.json() };
+          } catch (e) { return null; }
+        }));
+        for (const row of rows) {
+          if (!row) continue;
+          const { blob, rec } = row;
+          const inbound = rec.direction === 'inbound' ||
+            rec.type === 'lodge_inbound' || rec.type === 'lodge_reply';
+          if (!inbound || readState[rec.id]) continue;
+          n++;
+          if (blob.uploadedAt && new Date(blob.uploadedAt).getTime() >= cutoff) recent++;
+        }
+      }
+      return { n, recent };
+    }
+    const [umC, tbC] = await Promise.all([
+      countActionable(unmatchedBlobs),
+      countActionable(tourBucketBlobs),
+    ]);
+    const recentUnmatched = umC.recent;
+    const recentTourBucket = tbC.recent;
 
     const totals = { inbound: 0, auto: 0, manual: 0 };
     daysArr.forEach(k => {
@@ -124,8 +152,8 @@ export default async function handler(req, res) {
         new_needs_routing: recentUnmatched + recentTourBucket,
       },
       queues: {
-        unmatched: unmatchedBlobs.length,
-        tour_bucket: tourBucketBlobs.length,
+        unmatched: umC.n,
+        tour_bucket: tbC.n,
       },
       per_day: daysArr.map(k => ({ day: k, ...perDay[k] })),
       scanned: { in_window: recent.length, fetched },

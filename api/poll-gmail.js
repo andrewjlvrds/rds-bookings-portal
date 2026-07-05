@@ -567,6 +567,7 @@ export default async function(req, res) {
               email_date: date,
               attachments: extractAttachments(msg.payload),
               ai_flags: [{ unmatched_reason: match.reason || 'no_match', ambiguous_lodge: match.lodge || null }],
+              match_hints: match.hints || (match.suggested_booking ? [{ id: match.suggested_booking.id, lodge: match.fuzzy_lodge || '', tour: '', check_in: match.suggested_booking.Check_in_Date || '', score: 0 }] : null),
             });
           } catch (e) {
             console.error('Failed to store unmatched email:', msgId, e.message);

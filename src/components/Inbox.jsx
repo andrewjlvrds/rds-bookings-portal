@@ -377,6 +377,7 @@ export default function Inbox({
                 email={email}
                 sourcePath={email._blob_path}
                 onRoute={() => setRoutingEmail({ email, sourcePath: email._blob_path })}
+                onRouteDirect={(bookingId) => handleRoute(email, email._blob_path, bookingId, false)}
                 onDismiss={() => handleDismiss(email)}
               />
             ))}
@@ -554,6 +555,33 @@ function UnreadRow({ email, tours, allBookings, onOpen, onDismiss, onReassign })
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {subject}
         </div>
+        {hints.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Looks like:</span>
+            {hints.map(h => (
+              <button
+                key={h.id}
+                onClick={() => onRouteDirect && onRouteDirect(h.id)}
+                title={'File to this booking' + (h.check_in ? ' — check-in ' + h.check_in : '')}
+                style={{
+                  fontSize: 12, padding: '3px 10px', borderRadius: 12, cursor: 'pointer',
+                  background: h.confident ? 'var(--blue-bg, #E6F1FB)' : 'var(--bg-primary, #fff)',
+                  color: h.confident ? 'var(--blue-text, #185FA5)' : 'var(--text-secondary)',
+                  border: '0.5px solid ' + (h.confident ? 'var(--blue-mid, #85B7EB)' : 'var(--border-default, #DDD)'),
+                }}
+              >
+                {h.lodge}{h.tour ? ' · ' + h.tour : ''}{h.check_in ? ' · ' + h.check_in.slice(5) : ''}
+              </button>
+            ))}
+            <button
+              onClick={() => onRoute && onRoute()}
+              style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, cursor: 'pointer', background: 'none', border: '0.5px dashed var(--border-default, #CCC)', color: 'var(--text-muted)' }}
+            >
+              Someone else…
+            </button>
+          </div>
+        )}
+
         {snippet && (
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {snippet}
@@ -588,7 +616,8 @@ function UnreadRow({ email, tours, allBookings, onOpen, onDismiss, onReassign })
   )
 }
 
-function UnmatchedRow({ email, sourcePath, onRoute, onDismiss }) {
+function UnmatchedRow({ email, sourcePath, onRoute, onRouteDirect, onDismiss }) {
+  const hints = Array.isArray(email.match_hints) ? email.match_hints.filter(h => h && h.id) : []
   const [expanded, setExpanded] = useState(false)
   const subject = email.subject || email.email_subject || '(no subject)'
   const from = email.from || email.email_from || ''

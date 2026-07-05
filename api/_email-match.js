@@ -95,6 +95,29 @@ export function dateMatchScore(emailDates, checkIn, checkOut) {
 
 // Build the refMap + nameMap used for matching. Caller passes in the
 // full bookings array (paginated fetch done elsewhere).
+
+// Build routing hints for the manual-triage UI: top candidates for an
+// identified-but-unresolvable lodge, date-scored. Attached to the
+// unmatched blob so the inbox can render one-tap routing chips.
+export function buildHints(candidates, emailDates) {
+  var out = [];
+  (candidates || []).forEach(function(c) {
+    var lodge = c.Lodge_Name || c.Name || '';
+    if (typeof lodge === 'object' && lodge !== null) lodge = lodge.name || '';
+    var tour = c.Tour;
+    if (typeof tour === 'object' && tour !== null) tour = tour.name || '';
+    out.push({
+      id: c.id,
+      lodge: String(lodge).split(' - ')[0].trim(),
+      tour: tour || '',
+      check_in: c.Check_in_Date || '',
+      score: dateMatchScore(emailDates, c.Check_in_Date, c.Check_out_Date),
+    });
+  });
+  out.sort(function(a, b) { return b.score - a.score; });
+  return out.slice(0, 3);
+}
+
 export function buildMatchMaps(allBookings) {
   var refMap = {};
   var nameMap = {};
@@ -356,6 +379,7 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailM
           method: 'unmatched',
           reason: 'sender_email_matched_lodge_but_ambiguous_date',
           lodge: lodgeName,
+          hints: buildHints(senderCandidates, emailDates),
         };
       }
     }
@@ -367,6 +391,7 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailM
       method: 'unmatched',
       reason: 'lodge_name_ambiguous_no_date_match',
       lodge: ambiguousLodge,
+      hints: buildHints(nameMap[ambiguousLodge], emailDates),
     };
   }
 
@@ -419,6 +444,7 @@ export function matchEmailToBooking(subject, body, from, refMap, nameMap, emailM
             fuzzy_lodge: bestFuzzyLodge,
             fuzzy_score: bestFuzzyScore,
             suggested_booking: fuzzyBest || (fuzzyCandidates.length === 1 ? fuzzyCandidates[0] : null),
+            hints: buildHints(fuzzyCandidates, emailDates),
           };
         }
       }
