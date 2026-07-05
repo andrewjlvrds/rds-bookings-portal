@@ -379,8 +379,12 @@ export default async function(req, res) {
         var candidateIds = [];
         if (inReplyToHdr) candidateIds.push(normalizeMessageId(inReplyToHdr));
         if (referencesHdr) {
-          // References is a whitespace-separated list of Message-IDs
-          var refs = referencesHdr.split(/\s+/);
+          // References is a whitespace-separated list of Message-IDs,
+          // oldest-first per RFC 5322. Reverse so we consult the NEWEST
+          // anchors first — after a manual reroute repairs recent entries,
+          // a stale entry for the thread's first message must not outrank
+          // them.
+          var refs = referencesHdr.split(/\s+/).reverse();
           for (var rf = 0; rf < refs.length; rf++) {
             var nn = normalizeMessageId(refs[rf]);
             if (nn) candidateIds.push(nn);

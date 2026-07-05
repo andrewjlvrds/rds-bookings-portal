@@ -1,6 +1,8 @@
 import { put, del, list } from '@vercel/blob';
 import { reassignEmailLinks } from './_activity-log.js';
 import { zohoApi } from './_zoho.js';
+import { getGmailToken, gmailApi } from './_gmail.js';
+import { safeMessageIdKey } from './_email-store.js';
 
 /*
  * /api/email-route
@@ -100,6 +102,7 @@ export default async function handler(req, res) {
       access: 'public',
       contentType: 'application/json',
       addRandomSuffix: false,
+      allowOverwrite: true,
     });
 
     // 4. Delete the original. Non-fatal if it fails — dest write
@@ -121,6 +124,97 @@ export default async function handler(req, res) {
         logEntriesUpdated = updated.length;
       } catch (logErr) {
         console.error('email-route: activity log update failed:', logErr.message);
+      }
+    }
+
+
+    // 5b. Anchor repair — the fix for thread poisoning (Jul 2026).
+    //
+    // Tier 0 / 0.5 matching trusts the sent-index: one wrong entry and every
+    // future reply in the thread chains onto the wrong booking via
+    // message_id_header / thread_backfill (Chipata->Thornicroft, Pioneer->
+    // Drostdy Jan27). A manual reroute is ground truth, so use it to rewrite
+    // the index for this thread:
+    //   - overwrite (or create) the thread-key entry -> Tier 0.5 now correct
+    //   - walk the Gmail thread, and for every message whose Message-ID has
+    //     an existing sent-index entry, point it at the corrected booking ->
+    //     Tier 0 now correct (References chains never leave the thread, so
+    //     this covers every id a future reply can cite)
+    // Only pre-existing Message-ID entries are rewritten; we never invent new
+    // ones. Failures are non-fatal — the reroute itself already succeeded.
+    const anchorRepair = { thread_index: false, message_ids_repaired: 0 };
+    const threadId = record.gmail_thread_id || null;
+    if (threadId) {
+      const stampISO = new Date().toISOString();
+      const indexOpts = {
+        access: 'public',
+        contentType: 'application/json',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+      };
+      // Thread-key entry — write unconditionally: even a thread with no prior
+      // portal-sent mail now Tier-0.5 matches to the corrected booking.
+      try {
+        const threadKeyPath = 'emails/sent-index/thread-' + threadId + '.json';
+        let threadRec = {
+          gmail_thread_id: threadId,
+          rfc_message_id: record.rfc_message_id || null,
+          to: record.to || record.email_to || null,
+          subject: record.subject || record.email_subject || null,
+        };
+        try {
+          const existing = await list({ prefix: threadKeyPath, limit: 1 });
+          if (existing.blobs && existing.blobs.length > 0) {
+            const rr = await fetch(existing.blobs[0].url, { cache: 'no-store' });
+            if (rr.ok) threadRec = await rr.json();
+          }
+        } catch (e) { /* start fresh */ }
+        threadRec.booking_ids = [bookingId];
+        threadRec.corrected = true;
+        threadRec.corrected_at = stampISO;
+        threadRec.corrected_from = oldBookingId || null;
+        await put(threadKeyPath, JSON.stringify(threadRec), indexOpts);
+        anchorRepair.thread_index = true;
+      } catch (tErr) {
+        anchorRepair.thread_index_error = tErr.message;
+        console.error('email-route: thread-index repair failed:', tErr.message);
+      }
+      // Message-ID entries — walk the live Gmail thread.
+      try {
+        const token = await getGmailToken();
+        const thread = await gmailApi(token,
+          'threads/' + threadId + '?format=metadata&metadataHeaders=Message-ID');
+        for (const m of (thread.messages || [])) {
+          const hdrs = (m.payload && m.payload.headers) || [];
+          const h = hdrs.find(x => (x.name || '').toLowerCase() === 'message-id');
+          if (!h || !h.value) continue;
+          const key = safeMessageIdKey(h.value);
+          if (!key) continue;
+          const idxPath = 'emails/sent-index/' + key + '.json';
+          try {
+            const ex = await list({ prefix: idxPath, limit: 1 });
+            if (!ex.blobs || ex.blobs.length === 0) continue;
+            let idxRec = {};
+            try {
+              const rr2 = await fetch(ex.blobs[0].url, { cache: 'no-store' });
+              if (rr2.ok) idxRec = await rr2.json();
+            } catch (e) { /* rewrite minimal */ }
+            if (Array.isArray(idxRec.booking_ids) &&
+                idxRec.booking_ids.length === 1 &&
+                idxRec.booking_ids[0] === bookingId) continue; // already correct
+            idxRec.booking_ids = [bookingId];
+            idxRec.corrected = true;
+            idxRec.corrected_at = stampISO;
+            idxRec.corrected_from = oldBookingId || null;
+            await put(idxPath, JSON.stringify(idxRec), indexOpts);
+            anchorRepair.message_ids_repaired++;
+          } catch (oneErr) {
+            console.error('email-route: message-id repair failed for', key, oneErr.message);
+          }
+        }
+      } catch (gErr) {
+        anchorRepair.gmail_error = gErr.message;
+        console.error('email-route: gmail thread walk failed:', gErr.message);
       }
     }
 
@@ -182,6 +276,7 @@ export default async function handler(req, res) {
       delete_error: deleteError,
       log_entries_updated: logEntriesUpdated,
       sender_email_added: emailAdded,
+      anchor_repair: anchorRepair,
     });
   } catch (err) {
     console.error('email-route error:', err);
