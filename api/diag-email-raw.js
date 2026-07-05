@@ -1,5 +1,6 @@
 import { list } from '@vercel/blob';
 import { getGmailToken, gmailApi } from './_gmail.js';
+import { normalizeMessageId, safeMessageIdKey } from './_email-store.js';
 
 /*
  * /api/diag-email-raw?gmail_message_id=XXX  → dumps the stored blob
@@ -136,17 +137,70 @@ export default async function handler(req, res) {
     if (liveGmail && liveGmail.payload && liveGmail.payload.headers) {
       for (const h of liveGmail.payload.headers) {
         const n = h.name.toLowerCase();
-        if (['from', 'to', 'subject', 'date', 'message-id', 'content-type'].includes(n)) {
+        if (['from', 'to', 'subject', 'date', 'message-id', 'content-type', 'in-reply-to', 'references'].includes(n)) {
           headers[n] = h.value;
         }
       }
     }
+
+
+    // Sent-index probe — for each Message-ID this message could cite
+    // (In-Reply-To + References, newest first, matching poll-gmail Tier 0),
+    // report whether a sent-index entry exists and where it points.
+    const sentIndexLookup = [];
+    try {
+      const candidates = [];
+      if (headers['in-reply-to']) candidates.push(normalizeMessageId(headers['in-reply-to']));
+      if (headers['references']) {
+        for (const rf of headers['references'].split(/\s+/).reverse()) {
+          const nn = normalizeMessageId(rf);
+          if (nn && !candidates.includes(nn)) candidates.push(nn);
+        }
+      }
+      for (const cid of candidates.slice(0, 15)) {
+        const key = safeMessageIdKey(cid);
+        if (!key) continue;
+        const entry = { candidate: cid.substring(0, 60), key: key.substring(0, 60), exists: false };
+        try {
+          const ex = await list({ prefix: 'emails/sent-index/' + key + '.json', limit: 1 });
+          if (ex.blobs && ex.blobs.length > 0) {
+            entry.exists = true;
+            const rr = await fetch(ex.blobs[0].url, { cache: 'no-store' });
+            if (rr.ok) {
+              const rec = await rr.json();
+              entry.booking_ids = rec.booking_ids;
+              entry.lodge_name = rec.lodge_name || null;
+              entry.corrected = rec.corrected || false;
+            }
+          }
+        } catch (e) { entry.error = e.message; }
+        sentIndexLookup.push(entry);
+      }
+      // Thread-key entry too
+      if (liveGmail && liveGmail.threadId) {
+        const tk = { candidate: 'thread-' + liveGmail.threadId, exists: false };
+        try {
+          const ex2 = await list({ prefix: 'emails/sent-index/thread-' + liveGmail.threadId + '.json', limit: 1 });
+          if (ex2.blobs && ex2.blobs.length > 0) {
+            tk.exists = true;
+            const rr2 = await fetch(ex2.blobs[0].url, { cache: 'no-store' });
+            if (rr2.ok) {
+              const rec2 = await rr2.json();
+              tk.booking_ids = rec2.booking_ids;
+              tk.corrected = rec2.corrected || false;
+            }
+          }
+        } catch (e) { tk.error = e.message; }
+        sentIndexLookup.push(tk);
+      }
+    } catch (probeErr) { /* diagnostic only */ }
 
     return res.status(200).json({
       success: true,
       mode: 'single',
       gmail_message_id,
       blob_found: !!blobMatch,
+      sent_index_lookup: sentIndexLookup,
       blob_path: blobMatch ? blobMatch.blob_path : null,
       stored: blobMatch ? {
         id: blobMatch.blob.id,

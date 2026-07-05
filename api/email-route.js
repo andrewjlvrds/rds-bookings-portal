@@ -2,7 +2,7 @@ import { put, del, list } from '@vercel/blob';
 import { reassignEmailLinks } from './_activity-log.js';
 import { zohoApi } from './_zoho.js';
 import { getGmailToken, gmailApi } from './_gmail.js';
-import { safeMessageIdKey } from './_email-store.js';
+import { safeMessageIdKey, normalizeMessageId } from './_email-store.js';
 
 /*
  * /api/email-route
@@ -212,9 +212,186 @@ export default async function handler(req, res) {
             console.error('email-route: message-id repair failed for', key, oneErr.message);
           }
         }
-      } catch (gErr) {
+  
+      // Candidate-based repair — the precise kill. The thread walk above
+      // assumes the poisoned entries are keyed by Message-IDs inside this
+      // Gmail thread; in practice References can cite ids the walk misses.
+      // Fetch the routed message's own In-Reply-To + References and repair
+      // every existing sent-index entry those candidates point at — the
+      // exact set Tier 0 would consult for a reply to this message's thread.
+      try {
+        if (record.gmail_message_id) {
+          const token2 = await getGmailToken();
+          const liveMsg = await gmailApi(token2,
+            'messages/' + record.gmail_message_id +
+            '?format=metadata&metadataHeaders=In-Reply-To&metadataHeaders=References&metadataHeaders=Message-ID');
+          const lh = {};
+          for (const h of ((liveMsg.payload && liveMsg.payload.headers) || [])) {
+            lh[(h.name || '').toLowerCase()] = h.value;
+          }
+          const cands = [];
+          if (lh['in-reply-to']) cands.push(normalizeMessageId(lh['in-reply-to']));
+          if (lh['references']) {
+            for (const rf of lh['references'].split(/\s+/)) {
+              const nn = normalizeMessageId(rf);
+              if (nn && !cands.includes(nn)) cands.push(nn);
+            }
+          }
+          if (lh['message-id']) {
+            const own = normalizeMessageId(lh['message-id']);
+            if (own && !cands.includes(own)) cands.push(own);
+          }
+          for (const cid of cands) {
+            const key2 = safeMessageIdKey(cid);
+            if (!key2) continue;
+            const idxPath2 = 'emails/sent-index/' + key2 + '.json';
+            try {
+              const ex3 = await list({ prefix: idxPath2, limit: 1 });
+              if (!ex3.blobs || ex3.blobs.length === 0) continue;
+              let idxRec2 = {};
+              try {
+                const rr3 = await fetch(ex3.blobs[0].url, { cache: 'no-store' });
+                if (rr3.ok) idxRec2 = await rr3.json();
+              } catch (e) { /* rewrite minimal */ }
+              if (Array.isArray(idxRec2.booking_ids) &&
+                  idxRec2.booking_ids.length === 1 &&
+                  idxRec2.booking_ids[0] === bookingId) continue;
+              idxRec2.booking_ids = [bookingId];
+              idxRec2.corrected = true;
+              idxRec2.corrected_at = stampISO;
+              idxRec2.corrected_from = oldBookingId || null;
+              await put(idxPath2, JSON.stringify(idxRec2), indexOpts);
+              anchorRepair.message_ids_repaired++;
+            } catch (candErr) {
+              console.error('email-route: candidate repair failed for', key2, candErr.message);
+            }
+          }
+        }
+      } catch (cErr) {
+        anchorRepair.candidate_error = cErr.message;
+        console.error('email-route: candidate-based repair failed:', cErr.message);
+      }
+    } catch (gErr) {
         anchorRepair.gmail_error = gErr.message;
         console.error('email-route: gmail thread walk failed:', gErr.message);
+  
+      // Candidate-based repair — the precise kill. The thread walk above
+      // assumes the poisoned entries are keyed by Message-IDs inside this
+      // Gmail thread; in practice References can cite ids the walk misses.
+      // Fetch the routed message's own In-Reply-To + References and repair
+      // every existing sent-index entry those candidates point at — the
+      // exact set Tier 0 would consult for a reply to this message's thread.
+      try {
+        if (record.gmail_message_id) {
+          const token2 = await getGmailToken();
+          const liveMsg = await gmailApi(token2,
+            'messages/' + record.gmail_message_id +
+            '?format=metadata&metadataHeaders=In-Reply-To&metadataHeaders=References&metadataHeaders=Message-ID');
+          const lh = {};
+          for (const h of ((liveMsg.payload && liveMsg.payload.headers) || [])) {
+            lh[(h.name || '').toLowerCase()] = h.value;
+          }
+          const cands = [];
+          if (lh['in-reply-to']) cands.push(normalizeMessageId(lh['in-reply-to']));
+          if (lh['references']) {
+            for (const rf of lh['references'].split(/\s+/)) {
+              const nn = normalizeMessageId(rf);
+              if (nn && !cands.includes(nn)) cands.push(nn);
+            }
+          }
+          if (lh['message-id']) {
+            const own = normalizeMessageId(lh['message-id']);
+            if (own && !cands.includes(own)) cands.push(own);
+          }
+          for (const cid of cands) {
+            const key2 = safeMessageIdKey(cid);
+            if (!key2) continue;
+            const idxPath2 = 'emails/sent-index/' + key2 + '.json';
+            try {
+              const ex3 = await list({ prefix: idxPath2, limit: 1 });
+              if (!ex3.blobs || ex3.blobs.length === 0) continue;
+              let idxRec2 = {};
+              try {
+                const rr3 = await fetch(ex3.blobs[0].url, { cache: 'no-store' });
+                if (rr3.ok) idxRec2 = await rr3.json();
+              } catch (e) { /* rewrite minimal */ }
+              if (Array.isArray(idxRec2.booking_ids) &&
+                  idxRec2.booking_ids.length === 1 &&
+                  idxRec2.booking_ids[0] === bookingId) continue;
+              idxRec2.booking_ids = [bookingId];
+              idxRec2.corrected = true;
+              idxRec2.corrected_at = stampISO;
+              idxRec2.corrected_from = oldBookingId || null;
+              await put(idxPath2, JSON.stringify(idxRec2), indexOpts);
+              anchorRepair.message_ids_repaired++;
+            } catch (candErr) {
+              console.error('email-route: candidate repair failed for', key2, candErr.message);
+            }
+          }
+        }
+      } catch (cErr) {
+        anchorRepair.candidate_error = cErr.message;
+        console.error('email-route: candidate-based repair failed:', cErr.message);
+      }
+    }
+
+      // Candidate-based repair — the precise kill. The thread walk above
+      // assumes the poisoned entries are keyed by Message-IDs inside this
+      // Gmail thread; in practice References can cite ids the walk misses.
+      // Fetch the routed message's own In-Reply-To + References and repair
+      // every existing sent-index entry those candidates point at — the
+      // exact set Tier 0 would consult for a reply to this message's thread.
+      try {
+        if (record.gmail_message_id) {
+          const token2 = await getGmailToken();
+          const liveMsg = await gmailApi(token2,
+            'messages/' + record.gmail_message_id +
+            '?format=metadata&metadataHeaders=In-Reply-To&metadataHeaders=References&metadataHeaders=Message-ID');
+          const lh = {};
+          for (const h of ((liveMsg.payload && liveMsg.payload.headers) || [])) {
+            lh[(h.name || '').toLowerCase()] = h.value;
+          }
+          const cands = [];
+          if (lh['in-reply-to']) cands.push(normalizeMessageId(lh['in-reply-to']));
+          if (lh['references']) {
+            for (const rf of lh['references'].split(/\s+/)) {
+              const nn = normalizeMessageId(rf);
+              if (nn && !cands.includes(nn)) cands.push(nn);
+            }
+          }
+          if (lh['message-id']) {
+            const own = normalizeMessageId(lh['message-id']);
+            if (own && !cands.includes(own)) cands.push(own);
+          }
+          for (const cid of cands) {
+            const key2 = safeMessageIdKey(cid);
+            if (!key2) continue;
+            const idxPath2 = 'emails/sent-index/' + key2 + '.json';
+            try {
+              const ex3 = await list({ prefix: idxPath2, limit: 1 });
+              if (!ex3.blobs || ex3.blobs.length === 0) continue;
+              let idxRec2 = {};
+              try {
+                const rr3 = await fetch(ex3.blobs[0].url, { cache: 'no-store' });
+                if (rr3.ok) idxRec2 = await rr3.json();
+              } catch (e) { /* rewrite minimal */ }
+              if (Array.isArray(idxRec2.booking_ids) &&
+                  idxRec2.booking_ids.length === 1 &&
+                  idxRec2.booking_ids[0] === bookingId) continue;
+              idxRec2.booking_ids = [bookingId];
+              idxRec2.corrected = true;
+              idxRec2.corrected_at = stampISO;
+              idxRec2.corrected_from = oldBookingId || null;
+              await put(idxPath2, JSON.stringify(idxRec2), indexOpts);
+              anchorRepair.message_ids_repaired++;
+            } catch (candErr) {
+              console.error('email-route: candidate repair failed for', key2, candErr.message);
+            }
+          }
+        }
+      } catch (cErr) {
+        anchorRepair.candidate_error = cErr.message;
+        console.error('email-route: candidate-based repair failed:', cErr.message);
       }
     }
 
