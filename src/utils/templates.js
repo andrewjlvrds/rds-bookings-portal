@@ -114,50 +114,6 @@ export const TEMPLATES = {
     ]
   },
 
-  'bon-15': {
-    name: 'Best of Namibia (15-day)',
-    code: 'BoN',
-    tour_type: 'BoN 15',
-    // Route settled by Andrew 2026-08-04 (HQ chat, from Best of Nam 15-day My Maps).
-    // Windhoek loop. Quivertree, Luderitz, Henties Bay are waypoints/day-visits, not nights.
-    nights: [
-      { day: 1, route: 'Arrive Windhoek', region: 'Namibia', meals: 'D', km: 0,
-        lodges: ['Hohewarte Guest Farm'] },
-      { day: 2, route: 'Windhoek to the Kalahari', region: 'Namibia', meals: 'DBB', km: 255,
-        lodges: ['Suricate Tented Lodge'] },
-      { day: 3, route: 'Kalahari to Fish River Canyon', region: 'Namibia', meals: 'DBB', km: 450,
-        lodges: ['Canyon Village', 'Canyon Roadhouse', 'Canyon Lodge'],
-        notes: 'Quivertree Forest stop en route' },
-      { day: 4, route: 'Fish River Canyon to Aus', region: 'Namibia', meals: 'DBB', km: 375,
-        lodges: ['Klein Aus Vista Desert Horse Inn', 'Bahnhof Hotel'] },
-      { day: 5, route: 'Aus rest day, or day visit to Luderitz', region: 'Namibia', meals: 'DBB', km: 0,
-        lodges: ['Klein Aus Vista Desert Horse Inn', 'Bahnhof Hotel'],
-        notes: 'Same lodge as Day 4. Luderitz option: Kolmanskop + Nest Hotel lunch' },
-      { day: 6, route: 'Aus to Kanaan', region: 'Namibia', meals: 'DBB', km: 150,
-        lodges: ['Kanaan Desert Retreat'] },
-      { day: 7, route: 'Kanaan to Sossusvlei', region: 'Namibia', meals: 'DBB', km: 200,
-        lodges: ['Desert Quiver Camp', 'Desert Camp', 'Elegant Desert Lodge'] },
-      { day: 8, route: 'Sossusvlei & Deadvlei, then to Rostock', region: 'Namibia', meals: 'DBB', km: 135,
-        lodges: ['Rostock Ritz'] },
-      { day: 9, route: 'Rostock to Swakopmund', region: 'Namibia', meals: 'DBB', km: 360,
-        lodges: ['Desert Sands', 'Delight Hotel Swakopmund'] },
-      { day: 10, route: 'Swakopmund to Spitzkoppe', region: 'Namibia', meals: 'DBB', km: 180,
-        lodges: ['Spitzkoppe Tented Camp', 'Spitzkoppe Cabin Camp', 'Spitzkoppen Lodge'],
-        notes: 'Coast road via Henties Bay' },
-      { day: 11, route: 'Spitzkoppe to Twyfelfontein', region: 'Namibia', meals: 'DBB', km: 260,
-        lodges: ['Twyfelfontein Adventure Camp'] },
-      { day: 12, route: 'Twyfelfontein to Vingerklip', region: 'Namibia', meals: 'DBB', km: 120,
-        lodges: ['Vingerklip Lodge'] },
-      { day: 13, route: 'Vingerklip to Okonjima', region: 'Namibia', meals: 'DBB', km: 265,
-        lodges: ['Okonjima Plains Camp'],
-        notes: 'Included 3-hr safari' },
-      { day: 14, route: 'Okonjima to Windhoek', region: 'Namibia', meals: 'DBB', km: 220,
-        lodges: ['Hohewarte Guest Farm'] },
-      { day: 15, route: 'Depart Windhoek (WDH)', region: 'Namibia', meals: 'B', km: 0,
-        lodges: [] },
-    ]
-  },
-
   'sst-14': {
     name: 'Southern Sweep (14-day)',
     code: 'SST',
